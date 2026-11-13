@@ -9,13 +9,13 @@ Plataforma ciudadana para reportar emergencias a las policías municipales de Qu
 | Carpeta | Qué es | Estado |
 | --- | --- | --- |
 | `packages/shared` | Tipos, catálogo semilla, folio, máquina de estados, geocercas, contrato de eventos CAD y firma HMAC | Con pruebas |
-| `services/api` | API NestJS: registro con aceptación legal, reportes, evidencia con hash, webhooks CAD, escalamiento al C5, seguimiento por WebSocket | Con pruebas de punta a punta; almacén en memoria |
+| `services/api` | API NestJS: registro con OTP por SMS y aceptación legal, reportes, evidencia con hash, webhooks CAD, escalamiento al C5, seguimiento por WebSocket, avisos por SMS | Con pruebas de punta a punta en memoria y en PostgreSQL |
 | `services/cad-simulator` | CAD simulado: acusa, asigna unidad, la mueve y cierra el reporte | Listo para demos |
-| `apps/ciudadano` | App Expo (Android/iOS): registro, botón de pánico, catálogo, foto con hash, seguimiento y chat | Scaffold; compila el bundle de Android |
+| `apps/ciudadano` | App Expo (Android/iOS/Web): registro, botón de pánico, catálogo, foto con hash, seguimiento con mapa de la unidad en vivo y chat | Scaffold; compila Android y web |
 | `apps/web` | Next.js: publica el Aviso de Privacidad y los Términos; consola de operador en construcción | Scaffold |
 | `docs/api` | `openapi.yaml` (API pública) y `asyncapi.yaml` (contrato de eventos con los CAD) | v0.1 |
 | `docs/legal` | Aviso de Privacidad integral y simplificado, Términos y Condiciones | Borradores para revisión jurídica |
-| `services/api/db/esquema.sql` | Esquema PostgreSQL + PostGIS para la fase 1 | Propuesta |
+| `services/api/db/migraciones` | Esquema PostgreSQL + PostGIS; el API aplica las migraciones al arrancar | En uso |
 
 ## Requisitos
 
@@ -27,6 +27,7 @@ Node.js 22 y pnpm 10 (`corepack enable`).
 pnpm install
 pnpm build
 cp services/api/.env.example services/api/.env
+docker compose up -d postgres   # PostgreSQL + PostGIS; el API crea las tablas al arrancar
 
 pnpm dev:api        # API en http://localhost:3000
 pnpm dev:cad        # CAD simulado en http://localhost:4000
@@ -34,7 +35,9 @@ pnpm dev:web        # Avisos legales en http://localhost:3001
 pnpm dev:ciudadano  # App: abre con Expo Go
 ```
 
-En un teléfono físico usa la IP de tu computadora: `EXPO_PUBLIC_API_URL=http://192.168.x.x:3000 EXPO_PUBLIC_WEB_URL=http://192.168.x.x:3001 pnpm dev:ciudadano`. En desarrollo el código SMS es siempre `000000`.
+En un teléfono físico usa la IP de tu computadora: `EXPO_PUBLIC_API_URL=http://192.168.x.x:3000 EXPO_PUBLIC_WEB_URL=http://192.168.x.x:3001 pnpm dev:ciudadano`. En desarrollo el SMS es simulado (se imprime en el log del API) y además se acepta el código fijo `000000` (`OTP_DEV`). Sin `DATABASE_URL` el API usa un almacén en memoria que se borra al reiniciar.
+
+En web (`pnpm --filter @pol-iaq/ciudadano web`) el mapa usa Leaflet con OpenStreetMap; en Android e iOS usa `react-native-maps` (Apple Maps en iOS; para un build de Android define `GOOGLE_MAPS_ANDROID_API_KEY`).
 
 Prueba rápida sin la app:
 
@@ -50,14 +53,20 @@ curl -s localhost:3000/v1/reportes -H "authorization: Bearer $TOKEN" -H 'content
 
 ```bash
 pnpm build && pnpm typecheck && pnpm test
+# También contra PostgreSQL (la base se borra en cada corrida; usa una exclusiva para pruebas):
+TEST_DATABASE_URL=postgres://poliaq:poliaq-dev@localhost:5432/poliaq_test pnpm test
 ```
+
+## SMS
+
+`SMS_PROVIDER=simulado` (por defecto) o `twilio` con `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` y `TWILIO_FROM` (número o Messaging Service `MG…`). En producción el API no arranca con el simulado. Para otro proveedor implementa `ProveedorSms` en `services/api/src/sms/sms.ts`.
 
 ## Pendientes antes del piloto
 
 - Cargar los códigos oficiales del Catálogo Nacional de Incidentes de Emergencia (`codigoCnie` está en `null` a propósito).
 - Sustituir las geocercas aproximadas por los polígonos oficiales de INEGI.
-- Persistencia en PostgreSQL + PostGIS, colas con outbox y Redis para WebSocket.
-- Proveedor de SMS, Keycloak/OIDC, almacén de objetos con WORM y URLs prefirmadas.
+- Trabajador de colas para la bandeja de salida y los temporizadores de acuse; Redis para WebSocket con varias instancias.
+- Contratar el proveedor de SMS (cuenta, remitente y registro de plantillas), Keycloak/OIDC, almacén de objetos con WORM y URLs prefirmadas (hoy la evidencia va en PostgreSQL).
 - mTLS y lista de IPs con cada CAD; adaptadores reales para los CAD de los tres municipios y el C5.
 - Revisión jurídica de `docs/legal` y convenios con cada municipio.
-- Mapa con la unidad en tiempo real en la app y consola de operador.
+- Llave de Google Maps para Android, proveedor de teselas para web y consola de operador.

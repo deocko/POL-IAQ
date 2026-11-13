@@ -11,7 +11,7 @@ export function vistaCiudadano(r: Reporte) {
     ubicacion: r.ubicacion,
     municipioClave: r.municipioClave,
     esPanico: r.esPanico,
-    unidad: r.unidad ? { etiqueta: r.unidad.etiqueta, corporacion: r.unidad.corporacion, etaMinutos: r.unidad.etaMinutos, lat: r.unidad.lat, lng: r.unidad.lng, actualizadoEn: r.unidad.actualizadoEn } : null,
+    unidad: r.unidad ? { etiqueta: r.unidad.etiqueta, corporacion: r.unidad.corporacion, etaMinutos: r.unidad.etaMinutos, lat: r.unidad.lat, lng: r.unidad.lng, rumbo: r.unidad.rumbo, actualizadoEn: r.unidad.actualizadoEn } : null,
     evidencias: r.evidencias.map((e) => ({ id: e.id, tipo: e.tipo, estado: e.estado })),
     mensajes: r.mensajes,
     historial: r.historial,

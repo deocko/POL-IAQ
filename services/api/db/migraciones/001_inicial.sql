@@ -1,6 +1,6 @@
--- Esquema inicial de Pol-IAQ para PostgreSQL 16 + PostGIS.
--- El scaffold usa un almacén en memoria (src/almacen); este esquema es la
--- base para la fase 1. Ejecutar: psql "$DATABASE_URL" -f db/esquema.sql
+-- 001: esquema inicial de Pol-IAQ para PostgreSQL 16 + PostGIS.
+-- Las migraciones se aplican solas al arrancar el API (o con `pnpm db:migrar`).
+-- No edites una migración ya aplicada: agrega una nueva.
 
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

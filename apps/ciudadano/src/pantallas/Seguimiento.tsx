@@ -1,20 +1,40 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ESTADOS_FINALES, ETIQUETAS_CIUDADANO, type EstadoIncidente } from '@pol-iaq/shared/movil';
 import { api, seguir, type ReporteVista } from '../api';
+import { MapaSeguimiento } from '../componentes/MapaSeguimiento';
+import type { Punto } from '../componentes/tipos-mapa';
 import { tomarYSubirFoto } from '../evidencia';
 import { colores, e } from '../estilos';
 
 const PASOS: EstadoIncidente[] = ['recibido', 'validado', 'asignado', 'en_camino', 'en_sitio', 'cerrado'];
+const MAX_RECORRIDO = 60;
 
 /**
- * Seguimiento tipo app de entregas: pasos, unidad asignada con tiempo
- * estimado y chat con el operador, todo bajo el folio unificado.
- * TODO(fase 2): mapa con la posición de la unidad (react-native-maps o expo-maps).
+ * Seguimiento tipo app de entregas: mapa con la unidad en vivo, pasos,
+ * tiempo estimado y chat con el operador, todo bajo el folio unificado.
  */
 export function Seguimiento({ token, folio, alSalir }: { token: string; folio: string; alSalir: () => void }) {
   const [r, setR] = useState<ReporteVista | null>(null);
   const [texto, setTexto] = useState('');
+  const [recorrido, setRecorrido] = useState<Punto[]>([]);
+  const unidadDelRecorrido = useRef<string | null>(null);
+
+  // Acumula las posiciones que llegan por el socket para dibujar el trayecto.
+  const u = r?.unidad;
+  useEffect(() => {
+    if (!u || u.lat === undefined || u.lng === undefined) return;
+    if (unidadDelRecorrido.current !== u.etiqueta) {
+      unidadDelRecorrido.current = u.etiqueta;
+      setRecorrido([{ lat: u.lat, lng: u.lng }]);
+      return;
+    }
+    setRecorrido((prev) => {
+      const ultimo = prev.at(-1);
+      if (ultimo && ultimo.lat === u.lat && ultimo.lng === u.lng) return prev;
+      return [...prev, { lat: u.lat!, lng: u.lng! }].slice(-MAX_RECORRIDO);
+    });
+  }, [u?.etiqueta, u?.lat, u?.lng]);
 
   useEffect(() => {
     api.reporte(token, folio).then(setR).catch(() => undefined);
@@ -50,10 +70,20 @@ export function Seguimiento({ token, folio, alSalir }: { token: string; folio: s
       <Text style={[e.titulo, { fontVariant: ['tabular-nums'] }]}>{r.folio}</Text>
       <Text style={[e.texto, { fontSize: 18, fontWeight: '600' }]}>{r.estadoTexto}</Text>
 
+      {!finalizado && (
+        <MapaSeguimiento
+          reporte={r.ubicacion}
+          unidad={r.unidad && r.unidad.lat !== undefined && r.unidad.lng !== undefined ? { lat: r.unidad.lat, lng: r.unidad.lng, rumbo: r.unidad.rumbo, etiqueta: r.unidad.etiqueta } : undefined}
+          recorrido={recorrido}
+        />
+      )}
+
       {r.unidad && (
         <View style={[e.tarjeta, { marginTop: 12 }]}>
           <Text style={[e.texto, { fontWeight: '600' }]}>{r.unidad.etiqueta}</Text>
-          {r.unidad.etaMinutos !== undefined && r.estado === 'en_camino' && <Text style={e.texto}>Llega en unos {r.unidad.etaMinutos} min</Text>}
+          {r.unidad.etaMinutos !== undefined && r.estado === 'en_camino' && <Text style={e.texto}>Llega en unos {Math.round(r.unidad.etaMinutos)} min</Text>}
+          {r.unidad.lat === undefined && !finalizado && <Text style={e.suave}>Esperando la ubicación de la unidad…</Text>}
+          {r.unidad.actualizadoEn && !finalizado && <Text style={e.suave}>Ubicación actualizada a las {new Date(r.unidad.actualizadoEn).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</Text>}
         </View>
       )}
 
