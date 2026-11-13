@@ -322,11 +322,82 @@ paths:
           description: Archivo original; encabezado `x-sha256` con su hash
           content: { '*/*': { schema: { type: string, format: binary } } }
         '401': { description: '`enlace_invalido_o_vencido`' }
+  /v1/operador/sesion:
+    post:
+      tags: [Consola de operador]
+      summary: Inicia sesión de operador (token de 12 h). 5 claves incorrectas bloquean 15 min.
+      operationId: sesionOperador
+      security: []
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [usuario, clave], properties: { usuario: { type: string }, clave: { type: string } } } } }
+      responses:
+        '200': { description: 'Token, operador, CAD visibles (con su modo) y versión del protocolo' }
+        '401': { description: '`credenciales_invalidas`' }
+        '429': { description: '`demasiados_intentos`' }
+  /v1/operador/yo:
+    get:
+      tags: [Consola de operador]
+      summary: Operador, CAD que ve y su modo (consola o webhook)
+      operationId: operadorActual
+      security: [{ operador: [] }]
+      responses: { '200': { description: OK } }
+  /v1/operador/reportes:
+    get:
+      tags: [Consola de operador]
+      summary: Bandeja de los CAD del operador (activos; `todos=1` incluye cerrados). Tiempo real en el namespace socket.io `/operacion`.
+      operationId: bandejaOperador
+      security: [{ operador: [] }]
+      parameters: [{ name: todos, in: query, schema: { type: string, enum: ['1'] } }]
+      responses: { '200': { description: '`{ reportes: VistaOperador[] }` con reportante, transcripción, canalización, evidencias firmadas, `operable`, `transiciones` y `escalaAlC5En`' } }
+  /v1/operador/reportes/{folio}:
+    get:
+      tags: [Consola de operador]
+      summary: Detalle de un reporte (queda en la auditoría)
+      operationId: reporteOperador
+      security: [{ operador: [] }]
+      parameters: [{ name: folio, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: VistaOperador }, '404': { description: '`folio_no_encontrado` (o de un CAD que no ve)' } }
+  /v1/operador/reportes/{folio}/acciones:
+    post:
+      tags: [Consola de operador]
+      summary: Despacha desde la consola (solo CAD en modo consola)
+      description: Cada acción se aplica como el evento equivalente de un CAD (incidente.recibido, unidad.asignada, incidente.estado, mensaje.operador, incidente.transferido). Una transferencia envía el alta completa al CAD destino.
+      operationId: accionOperador
+      security: [{ operador: [] }]
+      parameters: [{ name: folio, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - { type: object, required: [accion], properties: { accion: { const: recibir } } }
+                - { type: object, required: [accion, unidadId], properties: { accion: { const: asignar }, unidadId: { type: string }, etaMinutos: { type: integer, minimum: 0, maximum: 240 } } }
+                - { type: object, required: [accion, estado], properties: { accion: { const: estado }, estado: { type: string, enum: [en_camino, en_sitio, cerrado, improcedente] }, nota: { type: string } } }
+                - { type: object, required: [accion, texto], properties: { accion: { const: mensaje }, texto: { type: string, maxLength: 1000 } } }
+                - { type: object, required: [accion, cadDestinoId], properties: { accion: { const: transferir }, cadDestinoId: { type: string }, motivo: { type: string } } }
+      responses:
+        '200': { description: VistaOperador actualizada }
+        '400': { description: '`unidad_desconocida`, `cad_destino_invalido` o `datos_invalidos`' }
+        '404': { description: '`folio_no_encontrado`' }
+        '409': { description: '`cad_con_sistema_propio`, `reporte_cerrado`, `ya_recibido` o `transicion_invalida`' }
+  /v1/operador/unidades:
+    get:
+      tags: [Consola de operador]
+      summary: Unidades de los CAD del operador, con `ocupadaEn` (folio que atienden)
+      operationId: unidadesOperador
+      security: [{ operador: [] }]
+      responses: { '200': { description: OK } }
 components:
   securitySchemes:
     ciudadano:
       type: http
       scheme: bearer
+    operador:
+      type: http
+      scheme: bearer
+      description: Token de `POST /v1/operador/sesion`. No sirve para los endpoints del ciudadano ni al revés.
     cadFirma:
       type: apiKey
       in: header

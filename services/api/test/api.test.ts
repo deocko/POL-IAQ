@@ -6,7 +6,8 @@ import { io as ioClient } from 'socket.io-client';
 import type { INestApplication } from '@nestjs/common';
 import { AVISO_PRIVACIDAD_VERSION, TERMINOS_VERSION, firmar } from '@pol-iaq/shared';
 import { crearApp } from '../src/main';
-import { cargarConfig } from '../src/config';
+import { cargarConfig, hashClave } from '../src/config';
+import { emitirSesion } from '../src/auth/tokens';
 import { DespachadorCadService } from '../src/cad/despachador.service';
 import type { Almacen } from '../src/almacen/almacen';
 import { AlmacenMemoria } from '../src/almacen/almacen-memoria';
@@ -318,6 +319,136 @@ describe.each(ALMACENES)('API con almacén en %s', (_nombre, nuevoAlmacen) => {
       expect(despues.unidad).toMatchObject({ etiqueta: 'Patrulla 3', lat: 20.5412, lng: -100.4401, rumbo: 180, etaMinutos: 3 });
       expect(despues.ubicacion).toEqual({ lat: 20.539, lng: -100.442, precisionMetros: 12, referencia: 'Frente a la farmacia' });
       expect((await almacen.auditoria(folio)).map((a) => a.accion)).toEqual(['reporte_creado', 'unidad.asignada', 'unidad.posicion']);
+    });
+  });
+
+  describe('consola del operador', () => {
+    let appOp: INestApplication;
+    let httpOp: ReturnType<typeof request>;
+    let urlOp: string;
+
+    beforeAll(async () => {
+      // El Marqués despacha desde la consola; Corregidora tiene CAD propio (webhook).
+      appOp = await crearApp({
+        ...config,
+        esperaAcuseSeg: 60,
+        cads: { ...config.cads, 'cad-el-marques': { ...config.cads['cad-el-marques'], modo: 'consola' } },
+        operadores: [
+          { usuario: 'ana', nombre: 'Ana · CAD El Marqués', cadIds: ['cad-el-marques'], claveHash: hashClave('clave-de-ana-123') },
+          { usuario: 'sup', nombre: 'Supervisión', cadIds: ['*'], claveHash: hashClave('clave-de-sup-123') },
+        ],
+      }, { almacen, sms });
+      await appOp.listen(0);
+      urlOp = await appOp.getUrl();
+      httpOp = request(appOp.getHttpServer());
+    });
+    afterAll(async () => appOp?.close());
+
+    async function entrar(usuario: string, clave: string) {
+      const res = await httpOp.post('/v1/operador/sesion').send({ usuario, clave });
+      expect(res.status).toBe(200);
+      return { authorization: `Bearer ${res.body.token as string}` };
+    }
+    const crear = async (token: string, lat: number, lng: number, extra: Record<string, unknown> = {}) =>
+      (await httpOp.post('/v1/reportes').set({ authorization: `Bearer ${token}` }).send({ incidenteId: 'emergencia-medica', ubicacion: { lat, lng }, ...extra })).body.folio as string;
+    const accion = (auth: Record<string, string>, folio: string, body: object) => httpOp.post(`/v1/operador/reportes/${folio}/acciones`).set(auth).send(body);
+
+    it('autentica operadores y no mezcla sus tokens con los del ciudadano', async () => {
+      expect((await httpOp.post('/v1/operador/sesion').send({ usuario: 'ana', clave: 'mala' })).status).toBe(401);
+      expect((await httpOp.post('/v1/operador/sesion').send({ usuario: 'nadie', clave: 'x' })).status).toBe(401);
+      const op = await entrar('ana', 'clave-de-ana-123');
+      const yo = await httpOp.get('/v1/operador/yo').set(op);
+      expect(yo.body.operador).toMatchObject({ usuario: 'ana', cads: ['cad-el-marques'] });
+      expect(yo.body.cads.find((c: { id: string }) => c.id === 'cad-el-marques')).toMatchObject({ modo: 'consola', mio: true });
+
+      const ciudadano = await registrar('+524427770001');
+      expect((await httpOp.get('/v1/operador/reportes').set({ authorization: `Bearer ${ciudadano}` })).status).toBe(401);
+      expect((await httpOp.get('/v1/reportes').set(op)).status).toBe(401);
+    });
+
+    it('bloquea la cuenta tras 5 claves incorrectas', async () => {
+      for (let i = 0; i < 5; i++) await httpOp.post('/v1/operador/sesion').send({ usuario: 'sup', clave: 'mala' });
+      expect((await httpOp.post('/v1/operador/sesion').send({ usuario: 'sup', clave: 'clave-de-sup-123' })).status).toBe(429);
+    });
+
+    it('despacha desde la consola y el ciudadano lo ve en tiempo real', async () => {
+      const token = await registrar('+524427770002');
+      const folio = await crear(token, 20.61, -100.32, { cuestionario: { entradas: [{ preguntaId: 'consciente', respuesta: false }] } });
+      const op = await entrar('ana', 'clave-de-ana-123');
+
+      const socketOp = ioClient(`${urlOp}/operacion`, { transports: ['websocket'] });
+      expect((await socketOp.emitWithAck('suscribir', { token: 'falso' })).ok).toBe(false);
+      expect((await socketOp.emitWithAck('suscribir', { token: op.authorization.slice(7) })).ok).toBe(true);
+      const enConsola: { folio: string; estado: string }[] = [];
+      socketOp.on('reporte.actualizado', (v) => enConsola.push(v));
+      const socketCiu = ioClient(`${urlOp}/seguimiento`, { transports: ['websocket'] });
+      expect((await socketCiu.emitWithAck('suscribir', { token, folio })).ok).toBe(true);
+      const enApp: { estado: string; mensajes: { texto: string }[] }[] = [];
+      socketCiu.on('reporte.actualizado', (r) => enApp.push(r));
+
+      const bandeja = await httpOp.get('/v1/operador/reportes').set(op);
+      const v = bandeja.body.reportes.find((x: { folio: string }) => x.folio === folio);
+      expect(v).toMatchObject({ cadId: 'cad-el-marques', operable: true, prioridad: 'alta', reportante: { telefono: '+524427770002' } });
+      expect(v.cuestionario.transcripcion).toContain('PROVISIONAL');
+      expect(v.escalaAlC5En).toBeTruthy();
+      expect(app.get(DespachadorCadService).bandeja.some((e) => e.evento.folio === folio)).toBe(false);
+      expect(appOp.get(DespachadorCadService).bandeja.find((e) => e.evento.folio === folio)?.estado).toBe('consola');
+
+      expect((await accion(op, folio, { accion: 'recibir' })).body).toMatchObject({ estado: 'validado', folioCad: folio, escalaAlC5En: null });
+      expect((await accion(op, folio, { accion: 'recibir' })).status).toBe(409);
+      expect((await accion(op, folio, { accion: 'asignar', unidadId: 'P-101' })).status).toBe(400);
+      const unidades = (await httpOp.get('/v1/operador/unidades').set(op)).body.unidades as { unidadId: string; cadId: string; ocupadaEn: string | null }[];
+      expect(new Set(unidades.map((u) => u.cadId))).toEqual(new Set(['cad-el-marques']));
+      const amb = unidades.find((u) => u.unidadId.startsWith('A-'))!;
+      expect((await accion(op, folio, { accion: 'asignar', unidadId: amb.unidadId, etaMinutos: 6 })).body).toMatchObject({ estado: 'asignado', unidad: { unidadId: amb.unidadId, etaMinutos: 6 } });
+      expect((await httpOp.get('/v1/operador/unidades').set(op)).body.unidades.find((u: { unidadId: string }) => u.unidadId === amb.unidadId).ocupadaEn).toBe(folio);
+      expect((await accion(op, folio, { accion: 'mensaje', texto: 'La ambulancia va en camino, no lo mueva.' })).status).toBe(200);
+      for (const estado of ['en_camino', 'en_sitio', 'cerrado']) expect((await accion(op, folio, { accion: 'estado', estado })).body.estado).toBe(estado);
+      expect((await accion(op, folio, { accion: 'mensaje', texto: 'otro' })).body.codigo).toBe('reporte_cerrado');
+
+      await new Promise((r) => setTimeout(r, 150));
+      expect(enConsola.filter((x) => x.folio === folio).map((x) => x.estado)).toEqual(expect.arrayContaining(['validado', 'asignado', 'cerrado']));
+      expect(enApp.at(-1)?.estado).toBe('cerrado');
+      expect(enApp.flatMap((r) => r.mensajes.map((m) => m.texto))).toContain('La ambulancia va en camino, no lo mueva.');
+      socketOp.close();
+      socketCiu.close();
+
+      const ciudadano = (await httpOp.get(`/v1/reportes/${folio}`).set({ authorization: `Bearer ${token}` })).body;
+      expect(ciudadano.historial.map((h: { estado: string }) => h.estado)).toEqual(['recibido', 'validado', 'asignado', 'en_camino', 'en_sitio', 'cerrado']);
+      expect(ciudadano.unidad.etiqueta).toBe(amb.unidadId.replace('A-', 'Ambulancia '));
+      const audit = await almacen.auditoria(folio);
+      expect(audit.filter((a) => a.actor === 'operador:ana').map((a) => a.accion)).toEqual(expect.arrayContaining(['incidente.recibido', 'unidad.asignada', 'mensaje.operador']));
+      expect((await httpOp.get('/v1/operador/reportes').set(op)).body.reportes.some((x: { folio: string }) => x.folio === folio)).toBe(false);
+      expect((await httpOp.get('/v1/operador/reportes?todos=1').set(op)).body.reportes.some((x: { folio: string }) => x.folio === folio)).toBe(true);
+    });
+
+    it('limita al operador a sus CAD y deja en solo lectura los CAD con sistema propio', async () => {
+      const token = await registrar('+524427770003');
+      const deCorregidora = await crear(token, 20.539, -100.442);
+      const ana = await entrar('ana', 'clave-de-ana-123');
+      expect((await httpOp.get(`/v1/operador/reportes/${deCorregidora}`).set(ana)).status).toBe(404);
+      expect((await accion(ana, deCorregidora, { accion: 'recibir' })).status).toBe(404);
+
+      // Con OPERADORES_JSON no existe el usuario de desarrollo.
+      expect((await httpOp.post('/v1/operador/sesion').send({ usuario: 'operador', clave: 'operador' })).status).toBe(401);
+      // `sup` quedó bloqueado en la prueba anterior: se usa un token emitido directamente.
+      const supToken = { authorization: `Bearer ${emitirSesion(config.secretoTokens, { sub: 'sup', rol: 'operador', nombre: 'Supervisión', cads: ['*'] }, 60)}` };
+      const vista = await httpOp.get(`/v1/operador/reportes/${deCorregidora}`).set(supToken);
+      expect(vista.body).toMatchObject({ cadId: 'cad-corregidora', operable: false, transiciones: [] });
+      expect((await accion(supToken, deCorregidora, { accion: 'recibir' })).body.codigo).toBe('cad_con_sistema_propio');
+    });
+
+    it('transfiere al C5 y saca el reporte de la bandeja del CAD de origen', async () => {
+      const token = await registrar('+524427770004');
+      const folio = await crear(token, 20.61, -100.32);
+      const ana = await entrar('ana', 'clave-de-ana-123');
+      expect((await accion(ana, folio, { accion: 'transferir', cadDestinoId: 'cad-el-marques' })).status).toBe(400);
+      const t = await accion(ana, folio, { accion: 'transferir', cadDestinoId: 'c5-queretaro', motivo: 'Rebasa capacidad municipal' });
+      expect(t.body).toMatchObject({ cadId: 'c5-queretaro', estado: 'transferido', operable: false });
+      // El C5 tiene sistema propio: recibe el alta por webhook.
+      const alta = appOp.get(DespachadorCadService).bandeja.find((e) => e.evento.folio === folio && e.cadId === 'c5-queretaro');
+      expect(alta?.evento.tipo).toBe('incidente.creado');
+      expect((await httpOp.get(`/v1/operador/reportes/${folio}`).set(ana)).status).toBe(404);
     });
   });
 

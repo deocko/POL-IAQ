@@ -11,7 +11,7 @@ export default function Inicio() {
         <li><Link href="/legal/aviso-privacidad">Aviso de Privacidad Integral</Link></li>
         <li><Link href="/legal/aviso-simplificado">Aviso de Privacidad Simplificado</Link></li>
         <li><Link href="/legal/terminos">Términos y Condiciones</Link></li>
-        <li><Link href="/consola">Consola de operador (en construcción)</Link></li>
+        <li><Link href="/consola">Consola de operador</Link></li>
       </ul>
     </main>
   );

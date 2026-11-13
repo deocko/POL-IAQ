@@ -86,6 +86,7 @@ export class ReportesService {
       const r = (await this.almacen.reporte(folio))!;
       await this.despachador.enviarCreado(r, ciudadano, escenario);
       await this.almacen.guardarReporte(r);
+      this.bus.reporteCambio(r);
       return r;
     });
   }
@@ -201,10 +202,10 @@ export class ReportesService {
     return res.evidencia;
   }
 
-  /** Guarda el reporte y avisa en tiempo real al ciudadano. */
-  async tocar(r: Reporte) {
+  /** Guarda el reporte y avisa en tiempo real al ciudadano y a la consola. */
+  async tocar(r: Reporte, cadAnterior?: string) {
     r.actualizadoEn = new Date().toISOString();
     await this.almacen.guardarReporte(r);
-    this.bus.reporteCambio(r);
+    this.bus.reporteCambio(r, cadAnterior !== r.cadId ? cadAnterior : undefined);
   }
 }
