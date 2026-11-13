@@ -1,0 +1,17 @@
+{
+  "name": "@pol-iaq/cad-simulator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CAD simulado para probar Pol-IAQ de punta a punta sin un CAD real.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx --env-file-if-exists=../api/.env src/main.ts",
+    "test": "vitest run --passWithNoTests",
+    "start": "node --env-file-if-exists=../api/.env dist/main.js"
+  },
+  "dependencies": {
+    "@pol-iaq/shared": "workspace:*"
+  }
+}

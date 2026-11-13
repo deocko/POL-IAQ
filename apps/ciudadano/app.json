@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Pol-IAQ",
+    "slug": "pol-iaq",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "mx.poliaq.ciudadano",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Pol-IAQ usa tu ubicación para enviar a la unidad de emergencia al lugar exacto del reporte.",
+        "NSCameraUsageDescription": "Pol-IAQ usa la cámara para adjuntar fotos y videos como evidencia de tu reporte.",
+        "NSMicrophoneUsageDescription": "Pol-IAQ usa el micrófono para grabar audio o video como evidencia de tu reporte."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "mx.poliaq.ciudadano",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Pol-IAQ usa tu ubicación para enviar a la unidad de emergencia al lugar exacto del reporte."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Pol-IAQ usa la cámara para adjuntar fotos y videos como evidencia de tu reporte.",
+          "microphonePermission": "Pol-IAQ usa el micrófono para grabar audio o video como evidencia de tu reporte."
+        }
+      ]
+    ]
+  }
+}
