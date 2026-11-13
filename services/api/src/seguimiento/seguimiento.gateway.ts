@@ -1,7 +1,7 @@
 import { Inject, Logger, OnModuleInit } from '@nestjs/common';
 import { ConnectedSocket, MessageBody, SubscribeMessage, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
-import { AlmacenService } from '../almacen/almacen.service';
+import { Almacen } from '../almacen/almacen';
 import type { Reporte } from '../almacen/modelos';
 import { leerToken } from '../auth/tokens';
 import { BusService } from '../comun/bus.service';
@@ -21,7 +21,7 @@ export class SeguimientoGateway implements OnModuleInit {
 
   constructor(
     @Inject(CONFIG) private readonly config: Config,
-    @Inject(AlmacenService) private readonly almacen: AlmacenService,
+    @Inject(Almacen) private readonly almacen: Almacen,
     @Inject(BusService) private readonly bus: BusService,
   ) {}
 
@@ -30,9 +30,9 @@ export class SeguimientoGateway implements OnModuleInit {
   }
 
   @SubscribeMessage('suscribir')
-  suscribir(@ConnectedSocket() socket: Socket, @MessageBody() body: { token?: string; folio?: string }) {
+  async suscribir(@ConnectedSocket() socket: Socket, @MessageBody() body: { token?: string; folio?: string }) {
     const sesion = body?.token ? leerToken(this.config.secretoTokens, body.token) : null;
-    const r = body?.folio ? this.almacen.reporte(body.folio) : undefined;
+    const r = sesion && body?.folio ? await this.almacen.reporte(body.folio) : undefined;
     if (!sesion || !r || r.ciudadanoId !== sesion.sub) return { ok: false, codigo: 'no_autorizado' };
     void socket.join(`folio:${r.folio}`);
     this.log.debug(`socket ${socket.id} sigue ${r.folio}`);

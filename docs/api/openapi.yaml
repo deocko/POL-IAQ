@@ -28,6 +28,7 @@ paths:
     post:
       tags: [Autenticación]
       summary: Solicita un código por SMS
+      description: Código de 6 dígitos con vigencia de 5 minutos y 5 intentos. Máximo 3 códigos por número cada 15 minutos.
       operationId: solicitarOtp
       security: []
       requestBody:
@@ -42,7 +43,8 @@ paths:
       responses:
         '202': { description: Código enviado }
         '400': { $ref: '#/components/responses/DatosInvalidos' }
-        '501': { description: 'Proveedor de SMS no configurado (producción, pendiente)' }
+        '429': { description: 'Demasiados códigos para este número (codigo limite_otp)' }
+        '503': { description: 'El proveedor de SMS no aceptó el envío (codigo sms_no_enviado)' }
   /v1/auth/verificar:
     post:
       tags: [Autenticación]
@@ -358,6 +360,7 @@ components:
             etaMinutos: { type: number }
             lat: { type: number }
             lng: { type: number }
+            rumbo: { type: number, description: Grados desde el norte }
             actualizadoEn: { type: string, format: date-time }
         evidencias:
           type: array

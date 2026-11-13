@@ -1,4 +1,4 @@
-import type { Corporacion, EstadoIncidente, Prioridad, Ubicacion } from '@pol-iaq/shared';
+import type { Corporacion, EstadoIncidente, EventoHaciaCad, Prioridad, Ubicacion } from '@pol-iaq/shared';
 
 export interface Ciudadano {
   id: string;
@@ -79,4 +79,23 @@ export interface Auditoria {
   accion: string;
   folio?: string;
   detalle?: Record<string, unknown>;
+}
+
+/** Código de verificación enviado por SMS (solo se guarda su HMAC). */
+export interface Otp {
+  id: string;
+  telefono: string;
+  codigoHash: string;
+  expiraEn: string;
+  intentos: number;
+  usado: boolean;
+  creadoEn: string;
+}
+
+/** Evento en la bandeja de salida hacia un CAD (patrón outbox). */
+export interface Envio {
+  cadId: string;
+  evento: EventoHaciaCad;
+  intentos: number;
+  estado: 'pendiente' | 'entregado' | 'fallido' | 'sin_configuracion';
 }

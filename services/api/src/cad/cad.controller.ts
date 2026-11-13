@@ -2,9 +2,11 @@ import { BadRequestException, Controller, ForbiddenException, Get, Headers, Http
 import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { EventoDesdeCadSchema, verificarFirma, type EventoDesdeCad } from '@pol-iaq/shared';
-import { AlmacenService } from '../almacen/almacen.service';
+import { Almacen } from '../almacen/almacen';
+import type { Reporte } from '../almacen/modelos';
 import { CONFIG, type Config } from '../config';
 import { ReportesService } from '../reportes/reportes.service';
+import { AvisosSmsService } from '../sms/avisos-sms.service';
 import { DespachadorCadService } from './despachador.service';
 
 /**
@@ -15,14 +17,15 @@ import { DespachadorCadService } from './despachador.service';
 export class CadController {
   constructor(
     @Inject(CONFIG) private readonly config: Config,
-    @Inject(AlmacenService) private readonly almacen: AlmacenService,
+    @Inject(Almacen) private readonly almacen: Almacen,
     @Inject(ReportesService) private readonly reportes: ReportesService,
     @Inject(DespachadorCadService) private readonly despachador: DespachadorCadService,
+    @Inject(AvisosSmsService) private readonly avisos: AvisosSmsService,
   ) {}
 
   @Post('eventos')
   @HttpCode(202)
-  recibir(
+  async recibir(
     @Param('cadId') cadId: string,
     @Headers('x-poliaq-timestamp') ts: string,
     @Headers('x-poliaq-firma') firma: string,
@@ -38,35 +41,40 @@ export class CadController {
     if (!p.success) throw new BadRequestException({ codigo: 'evento_invalido', errores: p.error.issues });
     const ev = p.data;
 
-    const r = this.almacen.reporte(ev.folio);
-    if (!r) throw new NotFoundException({ codigo: 'folio_no_encontrado' });
-    if (r.cadId !== cadId) throw new ForbiddenException({ codigo: 'folio_de_otra_jurisdiccion' });
-    if (!this.almacen.marcarEventoProcesado(ev.eventoId)) return { aceptado: true, duplicado: true };
-    // Las posiciones pueden llegar desordenadas: se descartan las viejas sin error.
-    if (ev.secuencia <= r.secuenciaEntrada) return { aceptado: true, descartado: 'secuencia_antigua' };
+    return this.almacen.conReporte(ev.folio, async () => {
+      const r = await this.almacen.reporte(ev.folio);
+      if (!r) throw new NotFoundException({ codigo: 'folio_no_encontrado' });
+      if (r.cadId !== cadId) throw new ForbiddenException({ codigo: 'folio_de_otra_jurisdiccion' });
+      if (!(await this.almacen.marcarEventoProcesado(ev.eventoId, cadId, ev.folio))) return { aceptado: true, duplicado: true };
+      // Las posiciones pueden llegar desordenadas: se descartan las viejas sin error.
+      if (ev.secuencia <= r.secuenciaEntrada) return { aceptado: true, descartado: 'secuencia_antigua' };
 
-    this.aplicar(cadId, ev);
-    // Tras una transferencia, el CAD destino empieza su propia secuencia.
-    if (ev.tipo !== 'incidente.transferido') r.secuenciaEntrada = ev.secuencia;
-    this.almacen.auditar({ actor: `cad:${cadId}`, accion: ev.tipo, folio: ev.folio });
-    this.reportes.tocar(r);
-    return { aceptado: true };
+      const unidadAntes = r.unidad?.unidadId;
+      await this.aplicar(cadId, r, ev);
+      // Tras una transferencia, el CAD destino empieza su propia secuencia.
+      if (ev.tipo !== 'incidente.transferido') r.secuenciaEntrada = ev.secuencia;
+      await this.almacen.auditar({ actor: `cad:${cadId}`, accion: ev.tipo, folio: ev.folio });
+      await this.reportes.tocar(r);
+
+      if (ev.tipo === 'unidad.asignada' && r.unidad && r.unidad.unidadId !== unidadAntes) this.avisos.unidadAsignada(r);
+      if (ev.tipo === 'incidente.transferido') this.avisos.transferido(r);
+      return { aceptado: true };
+    });
   }
 
   @Get('evidencias/:id')
-  evidencia(@Param('cadId') cadId: string, @Param('id') id: string, @Query('exp') exp: string, @Query('firma') firma: string, @Res() res: Response) {
+  async evidencia(@Param('cadId') cadId: string, @Param('id') id: string, @Query('exp') exp: string, @Query('firma') firma: string, @Res() res: Response) {
     if (!this.despachador.firmaEnlaceValida(id, cadId, Number(exp), firma)) throw new UnauthorizedException({ codigo: 'enlace_invalido_o_vencido' });
-    const contenido = this.almacen.contenido(id);
-    const evidencia = this.almacen.todosLosReportes().flatMap((r) => r.evidencias).find((e) => e.id === id);
+    const contenido = await this.almacen.contenido(id);
+    const evidencia = (await this.almacen.evidencia(id))?.evidencia;
     if (!contenido || !evidencia) throw new NotFoundException({ codigo: 'evidencia_no_encontrada' });
-    this.almacen.auditar({ actor: `cad:${cadId}`, accion: 'evidencia_descargada', detalle: { evidenciaId: id } });
+    await this.almacen.auditar({ actor: `cad:${cadId}`, accion: 'evidencia_descargada', detalle: { evidenciaId: id } });
     res.setHeader('content-type', evidencia.mimeType);
     res.setHeader('x-sha256', evidencia.sha256Servidor ?? '');
     res.send(contenido);
   }
 
-  private aplicar(cadId: string, ev: EventoDesdeCad) {
-    const r = this.almacen.reporte(ev.folio)!;
+  private async aplicar(cadId: string, r: Reporte, ev: EventoDesdeCad) {
     const ahora = new Date().toISOString();
     switch (ev.tipo) {
       case 'incidente.recibido':
@@ -91,7 +99,7 @@ export class CadController {
         r.cadId = ev.datos.cadDestinoId;
         r.unidad = undefined;
         r.secuenciaEntrada = 0;
-        this.almacen.auditar({ actor: `cad:${cadId}`, accion: 'transferencia', folio: r.folio, detalle: { destino: ev.datos.cadDestinoId } });
+        await this.almacen.auditar({ actor: `cad:${cadId}`, accion: 'transferencia', folio: r.folio, detalle: { destino: ev.datos.cadDestinoId } });
         break;
       case 'mensaje.operador':
         r.mensajes.push({ id: randomUUID(), autor: 'operador', nombreAutor: ev.datos.autor, texto: ev.datos.texto, en: ahora });

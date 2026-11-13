@@ -18,7 +18,7 @@ export interface ReporteVista {
   estado: EstadoIncidente;
   estadoTexto: string;
   ubicacion: { lat: number; lng: number };
-  unidad: { etiqueta: string; corporacion: string; etaMinutos?: number; lat?: number; lng?: number } | null;
+  unidad: { etiqueta: string; corporacion: string; etaMinutos?: number; lat?: number; lng?: number; rumbo?: number; actualizadoEn?: string } | null;
   mensajes: { id: string; autor: string; nombreAutor?: string; texto: string; en: string }[];
   historial: { estado: EstadoIncidente; en: string; nota?: string }[];
   evidencias: { id: string; tipo: string; estado: string }[];
