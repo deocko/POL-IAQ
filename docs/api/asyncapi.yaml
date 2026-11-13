@@ -1,0 +1,201 @@
+asyncapi: 3.0.0
+info:
+  title: API Pol-IAQ CAD v1
+  version: 1.0.0
+  description: |
+    Contrato de eventos entre Pol-IAQ y los CAD municipales (Querétaro, Corregidora,
+    El Marqués) y el C5 del Estado de Querétaro.
+
+    Transporte en el piloto: webhooks HTTPS en ambos sentidos.
+    - Pol-IAQ -> CAD: POST al `webhookUrl` del adaptador del CAD.
+    - CAD -> Pol-IAQ: POST /v1/cad/{cadId}/eventos.
+
+    Reglas comunes:
+    - Firma: encabezados `x-poliaq-timestamp` (epoch s) y `x-poliaq-firma: v1=<hex>`,
+      HMAC-SHA256 de `${timestamp}.${cuerpo}` con el secreto compartido del CAD.
+      Ventana de 300 s. En producción, además, mTLS y lista de IPs permitidas.
+    - Idempotencia: `eventoId` (UUID) único; el receptor ignora repetidos. También va en `idempotency-key`.
+    - Orden: `secuencia` crece por folio y por emisor; se descartan eventos con secuencia vieja.
+    - Entrega: el emisor reintenta con espera exponencial (0, 1, 2, 4, 8, 16 s) hasta recibir 2xx.
+    - Acuse: el CAD debe enviar `incidente.recibido` en menos de 30 s; si no, Pol-IAQ escala al C5.
+    - Evidencia: nunca va embebida; se envían enlaces firmados con vigencia de 15 minutos y su SHA-256.
+channels:
+  haciaCad:
+    address: '{webhookUrl}'
+    description: Webhook del adaptador de cada CAD
+    parameters:
+      webhookUrl: { description: URL configurada por CAD }
+    messages:
+      incidenteCreado: { $ref: '#/components/messages/incidenteCreado' }
+      incidenteActualizado: { $ref: '#/components/messages/incidenteActualizado' }
+  desdeCad:
+    address: /v1/cad/{cadId}/eventos
+    parameters:
+      cadId: { enum: [cad-queretaro, cad-corregidora, cad-el-marques, c5-queretaro] }
+    messages:
+      incidenteRecibido: { $ref: '#/components/messages/incidenteRecibido' }
+      unidadAsignada: { $ref: '#/components/messages/unidadAsignada' }
+      unidadPosicion: { $ref: '#/components/messages/unidadPosicion' }
+      incidenteEstado: { $ref: '#/components/messages/incidenteEstado' }
+      incidenteTransferido: { $ref: '#/components/messages/incidenteTransferido' }
+      mensajeOperador: { $ref: '#/components/messages/mensajeOperador' }
+operations:
+  enviarAlCad:
+    action: send
+    channel: { $ref: '#/channels/haciaCad' }
+  recibirDelCad:
+    action: receive
+    channel: { $ref: '#/channels/desdeCad' }
+components:
+  messages:
+    incidenteCreado:
+      summary: Nuevo reporte ciudadano
+      payload: { $ref: '#/components/schemas/IncidenteCreado' }
+    incidenteActualizado:
+      summary: Nueva evidencia, mensaje del ciudadano, nueva ubicación o cancelación
+      payload: { $ref: '#/components/schemas/IncidenteActualizado' }
+    incidenteRecibido:
+      summary: Acuse del CAD con su folio interno (pasa a "validado")
+      payload: { $ref: '#/components/schemas/IncidenteRecibido' }
+    unidadAsignada:
+      summary: Unidad despachada (pasa a "asignado")
+      payload: { $ref: '#/components/schemas/UnidadAsignada' }
+    unidadPosicion:
+      summary: Posición de la unidad cada 5 a 10 s (la primera pasa a "en_camino")
+      payload: { $ref: '#/components/schemas/UnidadPosicion' }
+    incidenteEstado:
+      summary: Cambio de estado (en_sitio, cerrado, improcedente)
+      payload: { $ref: '#/components/schemas/IncidenteEstado' }
+    incidenteTransferido:
+      summary: Canalizado a otro CAD o corporación; el folio no cambia
+      payload: { $ref: '#/components/schemas/IncidenteTransferido' }
+    mensajeOperador:
+      summary: Mensaje del operador al ciudadano
+      payload: { $ref: '#/components/schemas/MensajeOperador' }
+  schemas:
+    Base:
+      type: object
+      required: [eventoId, folio, secuencia, ocurridoEn, tipo, datos]
+      properties:
+        eventoId: { type: string, format: uuid }
+        folio: { type: string, pattern: '^QRO-\d{3}-\d{4}-\d{6}$' }
+        secuencia: { type: integer, minimum: 0 }
+        ocurridoEn: { type: string, format: date-time }
+    Ubicacion:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat: { type: number }
+        lng: { type: number }
+        precisionMetros: { type: number }
+        referencia: { type: string }
+    EnlaceEvidencia:
+      type: object
+      properties:
+        id: { type: string }
+        tipo: { type: string, enum: [foto, video, audio] }
+        url: { type: string, format: uri }
+        sha256: { type: string }
+        expiraEn: { type: string, format: date-time }
+    IncidenteCreado:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        - type: object
+          properties:
+            tipo: { const: incidente.creado }
+            datos:
+              type: object
+              properties:
+                incidenteId: { type: string }
+                codigoCnie: { type: [string, 'null'], description: Código del Catálogo Nacional de Incidentes de Emergencia }
+                prioridad: { type: string, enum: [alta, media, baja] }
+                corporacionSugerida: { type: string }
+                ubicacion: { $ref: '#/components/schemas/Ubicacion' }
+                municipioClave: { type: [string, 'null'] }
+                descripcion: { type: string }
+                respuestas: { type: object }
+                esPanico: { type: boolean }
+                reportante:
+                  type: object
+                  properties:
+                    nombre: { type: string }
+                    telefono: { type: string }
+                    confiabilidad: { type: number, minimum: 0, maximum: 1 }
+                evidencias: { type: array, items: { $ref: '#/components/schemas/EnlaceEvidencia' } }
+    IncidenteActualizado:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        - type: object
+          properties:
+            tipo: { const: incidente.actualizado }
+            datos:
+              type: object
+              properties:
+                ubicacion: { $ref: '#/components/schemas/Ubicacion' }
+                nuevaEvidencia: { type: array, items: { $ref: '#/components/schemas/EnlaceEvidencia' } }
+                mensajeCiudadano: { type: string }
+                cancelado: { type: boolean }
+    IncidenteRecibido:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        - type: object
+          properties:
+            tipo: { const: incidente.recibido }
+            datos: { type: object, required: [folioCad], properties: { folioCad: { type: string }, operador: { type: string } } }
+    UnidadAsignada:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        - type: object
+          properties:
+            tipo: { const: unidad.asignada }
+            datos:
+              type: object
+              required: [unidadId, corporacion, etiqueta]
+              properties: { unidadId: { type: string }, corporacion: { type: string }, etiqueta: { type: string }, etaMinutos: { type: number } }
+    UnidadPosicion:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        - type: object
+          properties:
+            tipo: { const: unidad.posicion }
+            datos:
+              type: object
+              required: [unidadId, lat, lng]
+              properties: { unidadId: { type: string }, lat: { type: number }, lng: { type: number }, rumbo: { type: number }, etaMinutos: { type: number } }
+    IncidenteEstado:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        - type: object
+          properties:
+            tipo: { const: incidente.estado }
+            datos:
+              type: object
+              required: [estado]
+              properties:
+                estado: { type: string, enum: [validado, asignado, en_camino, en_sitio, cerrado, improcedente] }
+                nota: { type: string }
+    IncidenteTransferido:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        - type: object
+          properties:
+            tipo: { const: incidente.transferido }
+            datos:
+              type: object
+              required: [cadDestinoId]
+              properties: { cadDestinoId: { type: string }, corporacionDestino: { type: string }, motivo: { type: string } }
+    MensajeOperador:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        - type: object
+          properties:
+            tipo: { const: mensaje.operador }
+            datos: { type: object, required: [texto, autor], properties: { texto: { type: string, maxLength: 1000 }, autor: { type: string } } }
+    EventoDesdeCad:
+      oneOf:
+        - $ref: '#/components/schemas/IncidenteRecibido'
+        - $ref: '#/components/schemas/UnidadAsignada'
+        - $ref: '#/components/schemas/UnidadPosicion'
+        - $ref: '#/components/schemas/IncidenteEstado'
+        - $ref: '#/components/schemas/IncidenteTransferido'
+        - $ref: '#/components/schemas/MensajeOperador'

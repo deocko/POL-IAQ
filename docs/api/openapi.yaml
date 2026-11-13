@@ -1,0 +1,372 @@
+openapi: 3.1.0
+info:
+  title: API Pol-IAQ
+  version: 0.1.0
+  description: |
+    API pública de Pol-IAQ para la App Ciudadano (Android, iOS y Web) y API de
+    integración con los CAD municipales (Querétaro, Corregidora, El Marqués) y el C5.
+
+    Convenciones:
+    - JSON en UTF-8; fechas en ISO 8601 UTC; coordenadas WGS84 (lat, lng).
+    - Errores: `{ "codigo": "<texto_estable>", ... }` con el código HTTP adecuado.
+    - Autenticación del ciudadano: `Authorization: Bearer <token>`.
+    - Autenticación de los CAD: firma HMAC-SHA256 (ver `CadFirma`), más mTLS en producción.
+    - Folio unificado: `QRO-<clave municipio INEGI>-<año>-<consecutivo de 6 dígitos>`; clave `000` = estatal.
+security:
+  - ciudadano: []
+servers:
+  - url: http://localhost:3000
+    description: Desarrollo local
+tags:
+  - name: Autenticación
+  - name: Catálogo
+  - name: Reportes
+  - name: Evidencia
+  - name: Integración CAD
+paths:
+  /v1/auth/otp:
+    post:
+      tags: [Autenticación]
+      summary: Solicita un código por SMS
+      operationId: solicitarOtp
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [telefono]
+              properties:
+                telefono: { $ref: '#/components/schemas/Telefono' }
+      responses:
+        '202': { description: Código enviado }
+        '400': { $ref: '#/components/responses/DatosInvalidos' }
+        '501': { description: 'Proveedor de SMS no configurado (producción, pendiente)' }
+  /v1/auth/verificar:
+    post:
+      tags: [Autenticación]
+      summary: Verifica el código, registra la aceptación legal y entrega un token
+      operationId: verificarOtp
+      security: []
+      description: |
+        El ciudadano debe enviar las versiones del Aviso de Privacidad y de los
+        Términos que aceptó en pantalla; deben coincidir con las vigentes
+        (`GET /v1/legal/versiones`). Se guarda versión y fecha de aceptación.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [telefono, codigo, nombre, aceptaAvisoPrivacidad, aceptaTerminos]
+              properties:
+                telefono: { $ref: '#/components/schemas/Telefono' }
+                codigo: { type: string, pattern: '^\d{6}$' }
+                nombre: { type: string, minLength: 2, maxLength: 120 }
+                aceptaAvisoPrivacidad: { type: string, example: '2026-11-13' }
+                aceptaTerminos: { type: string, example: '2026-11-13' }
+      responses:
+        '201':
+          description: Sesión creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  ciudadano: { type: object, properties: { id: { type: string, format: uuid }, nombre: { type: string } } }
+        '400': { description: '`datos_invalidos` o `version_legal_desactualizada`' }
+        '401': { description: '`otp_invalido`' }
+  /v1/legal/versiones:
+    get:
+      tags: [Catálogo]
+      summary: Versiones vigentes de los documentos legales
+      operationId: versionesLegales
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, properties: { avisoPrivacidad: { type: string }, terminos: { type: string } } }
+  /v1/catalogo:
+    get:
+      tags: [Catálogo]
+      summary: Catálogo de incidentes en lenguaje ciudadano
+      operationId: catalogo
+      security: []
+      description: Cada opción se mapea a un código del Catálogo Nacional de Incidentes de Emergencia (CNIE), que no se expone al ciudadano.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: { type: string }
+                  incidentes: { type: array, items: { $ref: '#/components/schemas/IncidenteCatalogo' } }
+  /v1/municipios:
+    get:
+      tags: [Catálogo]
+      summary: Municipios participantes
+      operationId: municipios
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, properties: { claveInegi: { type: string, example: '014' }, nombre: { type: string }, piloto: { type: boolean } } }
+  /v1/reportes:
+    post:
+      tags: [Reportes]
+      summary: Crea un reporte de emergencia
+      operationId: crearReporte
+      description: |
+        Asigna el folio unificado y enruta por geocerca al CAD del municipio o al C5.
+        Si el CAD no acusa recibo en 30 s, el reporte se escala al C5 conservando el folio.
+        Límite: 5 reportes por ciudadano por hora (configurable).
+      security: [{ ciudadano: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearReporte' }
+      responses:
+        '201': { description: Creado, content: { application/json: { schema: { $ref: '#/components/schemas/Reporte' } } } }
+        '400': { $ref: '#/components/responses/DatosInvalidos' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { description: '`cuenta_suspendida` o `aceptacion_legal_pendiente`' }
+        '429': { description: '`limite_reportes`' }
+    get:
+      tags: [Reportes]
+      summary: Lista los reportes del ciudadano
+      operationId: listarReportes
+      security: [{ ciudadano: [] }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Reporte' } } } } }
+  /v1/reportes/{folio}:
+    parameters: [{ $ref: '#/components/parameters/Folio' }]
+    get:
+      tags: [Reportes]
+      summary: Detalle y seguimiento de un reporte
+      operationId: detalleReporte
+      security: [{ ciudadano: [] }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Reporte' } } } }
+        '403': { description: '`folio_ajeno`' }
+        '404': { description: '`folio_no_encontrado`' }
+  /v1/reportes/{folio}/cancelar:
+    parameters: [{ $ref: '#/components/parameters/Folio' }]
+    post:
+      tags: [Reportes]
+      summary: Cancela un reporte activo
+      operationId: cancelarReporte
+      security: [{ ciudadano: [] }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Reporte' } } } }
+        '409': { description: '`reporte_finalizado`' }
+  /v1/reportes/{folio}/mensajes:
+    parameters: [{ $ref: '#/components/parameters/Folio' }]
+    post:
+      tags: [Reportes]
+      summary: Envía un mensaje al operador
+      operationId: enviarMensaje
+      security: [{ ciudadano: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [texto], properties: { texto: { type: string, minLength: 1, maxLength: 1000 } } }
+      responses:
+        '201': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Reporte' } } } }
+  /v1/reportes/{folio}/evidencias:
+    parameters: [{ $ref: '#/components/parameters/Folio' }]
+    post:
+      tags: [Evidencia]
+      summary: Registra una evidencia y obtiene la URL de subida
+      operationId: registrarEvidencia
+      description: El teléfono calcula el SHA-256 del archivo antes de subirlo; el servidor lo recalcula y rechaza el archivo si no coincide.
+      security: [{ ciudadano: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tipo, mimeType, bytes, sha256, capturadoEn]
+              properties:
+                tipo: { type: string, enum: [foto, video, audio] }
+                mimeType: { type: string, example: image/jpeg }
+                bytes: { type: integer, maximum: 209715200 }
+                sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+                capturadoEn: { type: string, format: date-time }
+                ubicacion: { $ref: '#/components/schemas/Ubicacion' }
+      responses:
+        '201':
+          description: Registrada
+          content:
+            application/json:
+              schema: { type: object, properties: { evidenciaId: { type: string }, subirA: { type: string, format: uri }, metodo: { type: string, enum: [PUT] } } }
+  /v1/reportes/{folio}/evidencias/{evidenciaId}/contenido:
+    parameters:
+      - { $ref: '#/components/parameters/Folio' }
+      - { name: evidenciaId, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [Evidencia]
+      summary: Sube el archivo (en producción, URL prefirmada del almacén de objetos)
+      operationId: subirEvidencia
+      security: [{ ciudadano: [] }]
+      requestBody:
+        required: true
+        content:
+          '*/*': { schema: { type: string, format: binary } }
+      responses:
+        '200': { description: Verificada, content: { application/json: { schema: { type: object, properties: { evidenciaId: { type: string }, estado: { type: string }, sha256: { type: string } } } } } }
+        '400': { description: '`hash_no_coincide`' }
+        '409': { description: '`evidencia_ya_recibida`' }
+  /v1/cad/{cadId}/eventos:
+    parameters: [{ $ref: '#/components/parameters/CadId' }]
+    post:
+      tags: [Integración CAD]
+      summary: Recibe eventos del CAD (webhook)
+      operationId: recibirEventoCad
+      description: |
+        Eventos definidos en `asyncapi.yaml`. Idempotente por `eventoId`; los eventos
+        con `secuencia` menor o igual a la última aceptada se descartan sin error.
+        El CAD solo puede actuar sobre folios de su jurisdicción.
+      security: [{ cadFirma: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: './asyncapi.yaml#/components/schemas/EventoDesdeCad' }
+      responses:
+        '202':
+          description: Aceptado (incluye `duplicado` o `descartado` cuando aplica)
+          content:
+            application/json:
+              schema: { type: object, properties: { aceptado: { type: boolean }, duplicado: { type: boolean }, descartado: { type: string } } }
+        '400': { description: '`evento_invalido` o `json_invalido`' }
+        '401': { description: '`firma_invalida`' }
+        '403': { description: '`folio_de_otra_jurisdiccion`' }
+        '404': { description: '`folio_no_encontrado`' }
+  /v1/cad/{cadId}/evidencias/{evidenciaId}:
+    parameters:
+      - { $ref: '#/components/parameters/CadId' }
+      - { name: evidenciaId, in: path, required: true, schema: { type: string } }
+      - { name: exp, in: query, required: true, schema: { type: integer } }
+      - { name: firma, in: query, required: true, schema: { type: string } }
+    get:
+      tags: [Integración CAD]
+      summary: Descarga una evidencia mediante enlace firmado (vigencia 15 min)
+      operationId: descargarEvidenciaCad
+      security: []
+      responses:
+        '200':
+          description: Archivo original; encabezado `x-sha256` con su hash
+          content: { '*/*': { schema: { type: string, format: binary } } }
+        '401': { description: '`enlace_invalido_o_vencido`' }
+components:
+  securitySchemes:
+    ciudadano:
+      type: http
+      scheme: bearer
+    cadFirma:
+      type: apiKey
+      in: header
+      name: x-poliaq-firma
+      description: |
+        `v1=` + HMAC-SHA256 hex de `${x-poliaq-timestamp}.${cuerpo}` con el secreto del CAD.
+        Se rechazan timestamps con más de 300 s de diferencia. En producción, además, mTLS y lista de IPs.
+  parameters:
+    Folio:
+      name: folio
+      in: path
+      required: true
+      schema: { type: string, pattern: '^QRO-\d{3}-\d{4}-\d{6}$', example: QRO-006-2026-000123 }
+    CadId:
+      name: cadId
+      in: path
+      required: true
+      schema: { type: string, enum: [cad-queretaro, cad-corregidora, cad-el-marques, c5-queretaro] }
+  responses:
+    DatosInvalidos:
+      description: '`datos_invalidos`'
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              codigo: { type: string }
+              errores: { type: array, items: { type: object, properties: { campo: { type: string }, mensaje: { type: string } } } }
+    NoAutenticado:
+      description: '`no_autenticado`'
+  schemas:
+    Telefono: { type: string, pattern: '^\+52\d{10}$', example: '+524421234567' }
+    Ubicacion:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lng: { type: number, minimum: -180, maximum: 180 }
+        precisionMetros: { type: number }
+        referencia: { type: string, maxLength: 280 }
+    Estado:
+      type: string
+      enum: [recibido, validado, asignado, en_camino, en_sitio, cerrado, improcedente, transferido, cancelado]
+    IncidenteCatalogo:
+      type: object
+      properties:
+        id: { type: string, example: robo-en-curso }
+        categoria: { type: string, enum: [seguridad, medico, proteccion_civil, servicios_publicos] }
+        nombreCiudadano: { type: string }
+        prioridad: { type: string, enum: [alta, media, baja] }
+        corporacionSugerida: { type: string }
+        preguntasGuia:
+          type: array
+          items: { type: object, properties: { id: { type: string }, texto: { type: string }, tipo: { type: string, enum: [si_no, numero, texto] } } }
+    CrearReporte:
+      type: object
+      required: [incidenteId, ubicacion]
+      properties:
+        incidenteId: { type: string }
+        ubicacion: { $ref: '#/components/schemas/Ubicacion' }
+        descripcion: { type: string, maxLength: 1000 }
+        respuestas: { type: object, additionalProperties: { oneOf: [{ type: string }, { type: number }, { type: boolean }] } }
+        esPanico: { type: boolean, default: false }
+        ocultarIdentidadAUnidad: { type: boolean, default: false }
+    Reporte:
+      type: object
+      properties:
+        folio: { type: string }
+        incidenteId: { type: string }
+        estado: { $ref: '#/components/schemas/Estado' }
+        estadoTexto: { type: string, example: La unidad va en camino }
+        ubicacion: { $ref: '#/components/schemas/Ubicacion' }
+        municipioClave: { type: [string, 'null'], example: '006' }
+        esPanico: { type: boolean }
+        unidad:
+          type: [object, 'null']
+          properties:
+            etiqueta: { type: string }
+            corporacion: { type: string }
+            etaMinutos: { type: number }
+            lat: { type: number }
+            lng: { type: number }
+            actualizadoEn: { type: string, format: date-time }
+        evidencias:
+          type: array
+          items: { type: object, properties: { id: { type: string }, tipo: { type: string }, estado: { type: string, enum: [pendiente, verificada, rechazada] } } }
+        mensajes:
+          type: array
+          items: { type: object, properties: { id: { type: string }, autor: { type: string, enum: [ciudadano, operador, unidad] }, nombreAutor: { type: string }, texto: { type: string }, en: { type: string, format: date-time } } }
+        historial:
+          type: array
+          items: { type: object, properties: { estado: { $ref: '#/components/schemas/Estado' }, en: { type: string, format: date-time }, nota: { type: string } } }
+        creadoEn: { type: string, format: date-time }
+        actualizadoEn: { type: string, format: date-time }
