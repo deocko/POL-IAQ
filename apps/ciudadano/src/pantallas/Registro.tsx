@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Linking, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { AVISO_PRIVACIDAD_VERSION, TERMINOS_VERSION } from '@pol-iaq/shared/movil';
 import { api, ErrorApi, WEB_URL } from '../api';
-import { e } from '../estilos';
+import { colores, e } from '../estilos';
 
 /**
  * Registro con celular verificado y aceptación expresa del Aviso de
@@ -92,7 +92,7 @@ function Casilla({ valor, cambiar, children }: { valor: boolean; cambiar: (v: bo
 
 function Enlace({ ruta, children }: { ruta: string; children: React.ReactNode }) {
   return (
-    <Text style={{ color: '#0B4F9C', textDecorationLine: 'underline' }} onPress={() => Linking.openURL(`${WEB_URL}/legal/${ruta}`)}>
+    <Text style={{ color: colores.primario, textDecorationLine: 'underline' }} onPress={() => Linking.openURL(`${WEB_URL}/legal/${ruta}`)}>
       {children}
     </Text>
   );

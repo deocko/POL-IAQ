@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ESTADOS } from './estados';
+import { ResponderCuestionarioSchema } from './protocolos';
 
 export const UbicacionSchema = z.object({
   lat: z.number().min(-90).max(90),
@@ -14,7 +15,15 @@ export const CrearReporteSchema = z.object({
   ubicacion: UbicacionSchema,
   descripcion: z.string().max(1000).optional(),
   respuestas: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
-  esPanico: z.boolean().default(false),
+  /**
+   * Botón de asistencia directa (antes "botón de pánico"): el reporte sale con
+   * prioridad alta aunque el tipo de incidente no se conozca todavía.
+   */
+  asistenciaDirecta: z.boolean().default(false),
+  /** Escenario de acceso rápido del perfil con el que se levantó el reporte. */
+  escenarioId: z.string().max(40).optional(),
+  /** Respuestas del protocolo que ya se tienen al crear el reporte (escenario o despachadora virtual). */
+  cuestionario: ResponderCuestionarioSchema.optional(),
   /** Oculta el nombre y teléfono del ciudadano frente a la unidad (el operador sí los ve). */
   ocultarIdentidadAUnidad: z.boolean().default(false),
 });

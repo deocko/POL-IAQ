@@ -97,6 +97,32 @@ components:
         url: { type: string, format: uri }
         sha256: { type: string }
         expiraEn: { type: string, format: date-time }
+    Cuestionario:
+      type: object
+      description: Respuestas al protocolo de atención, guardadas en texto con la versión del protocolo.
+      properties:
+        protocoloVersion: { type: string, example: 2026.11-provisional.1 }
+        protocoloEstado: { type: string, enum: [provisional, vigente, retirado] }
+        entradas:
+          type: array
+          items:
+            type: object
+            properties:
+              preguntaId: { type: string }
+              pregunta: { type: string }
+              respuesta: {}
+              respuestaTexto: { type: string }
+              textoOriginal: { type: string }
+              via: { type: string, enum: [texto, voz, escenario, formulario] }
+              en: { type: string, format: date-time }
+        transcripcion: { type: string, description: 'Texto plano P:/R: para el operador y la unidad.' }
+    Canalizacion:
+      type: object
+      description: A quién despachar. La primera corporación es la principal; las demás, apoyo.
+      properties:
+        prioridad: { type: string, enum: [alta, media, baja] }
+        corporaciones: { type: array, items: { type: string } }
+        alertas: { type: array, items: { type: string } }
     IncidenteCreado:
       allOf:
         - $ref: '#/components/schemas/Base'
@@ -114,7 +140,10 @@ components:
                 municipioClave: { type: [string, 'null'] }
                 descripcion: { type: string }
                 respuestas: { type: object }
-                esPanico: { type: boolean }
+                asistenciaDirecta: { type: boolean, description: 'Botón de asistencia directa (antes "botón de pánico")' }
+                escenario: { type: object, properties: { id: { type: string }, titulo: { type: string } } }
+                cuestionario: { $ref: '#/components/schemas/Cuestionario' }
+                canalizacion: { $ref: '#/components/schemas/Canalizacion' }
                 reportante:
                   type: object
                   properties:
@@ -135,6 +164,8 @@ components:
                 nuevaEvidencia: { type: array, items: { $ref: '#/components/schemas/EnlaceEvidencia' } }
                 mensajeCiudadano: { type: string }
                 cancelado: { type: boolean }
+                cuestionario: { $ref: '#/components/schemas/Cuestionario' }
+                canalizacion: { $ref: '#/components/schemas/Canalizacion' }
     IncidenteRecibido:
       allOf:
         - $ref: '#/components/schemas/Base'

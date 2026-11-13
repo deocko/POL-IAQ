@@ -1,14 +1,17 @@
 import { ConflictException, ForbiddenException, HttpException, HttpStatus, Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import {
-  enrutarPorUbicacion, generarFolio, incidentePorId, puedeTransicionar, ESTADOS_FINALES,
-  type CrearReporte, type EstadoIncidente, type SolicitarEvidencia,
+  canalizar, enrutarPorUbicacion, generarFolio, incidentePorId, puedeTransicionar, resolverEntradas, respuestasDe, ESTADOS_FINALES,
+  type CrearReporte, type EntradaGuardada, type EstadoIncidente, type IncidenteCatalogo, type Prioridad, type ResponderCuestionario, type SolicitarEvidencia,
 } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
 import type { Ciudadano, Evidencia, Reporte } from '../almacen/modelos';
 import { BusService } from '../comun/bus.service';
 import { CONFIG, type Config } from '../config';
 import { DespachadorCadService } from '../cad/despachador.service';
+import { ProtocolosService } from '../protocolos/protocolos.service';
+
+const ORDEN: Record<Prioridad, number> = { baja: 0, media: 1, alta: 2 };
 
 @Injectable()
 export class ReportesService {
@@ -17,6 +20,7 @@ export class ReportesService {
     @Inject(Almacen) private readonly almacen: Almacen,
     @Inject(BusService) private readonly bus: BusService,
     @Inject(DespachadorCadService) private readonly despachador: DespachadorCadService,
+    @Inject(ProtocolosService) private readonly protocolos: ProtocolosService,
   ) {}
 
   async crear(ciudadano: Ciudadano, datos: CrearReporte): Promise<Reporte> {
@@ -27,6 +31,21 @@ export class ReportesService {
     if ((await this.almacen.contarReportesDesde(ciudadano.id, haceUnaHora)) >= this.config.maxReportesPorHora) {
       throw new HttpException({ codigo: 'limite_reportes', mensaje: 'Alcanzaste el límite de reportes por hora. Si es una emergencia, llama al 911.' }, HttpStatus.TOO_MANY_REQUESTS);
     }
+
+    // Escenario de acceso rápido: sus respuestas previas entran al cuestionario.
+    let escenario: { id: string; titulo: string } | undefined;
+    const entradas: EntradaGuardada[] = [];
+    const protocolo = this.protocolos.vigente();
+    if (datos.escenarioId) {
+      const e = (await this.almacen.perfil(ciudadano.id)).escenarios.find((x) => x.id === datos.escenarioId);
+      if (!e) throw new BadRequestException({ codigo: 'escenario_desconocido' });
+      escenario = { id: e.id, titulo: e.titulo };
+      const previas = Object.entries(e.respuestasPrevias).map(([preguntaId, respuesta]) => ({ preguntaId, respuesta }));
+      entradas.push(...resolverEntradas(protocolo, incidente.id, previas, 'escenario').validas);
+    }
+    if (datos.cuestionario) entradas.push(...resolverEntradas(protocolo, incidente.id, datos.cuestionario.entradas, datos.cuestionario.via).validas);
+    const respuestas = respuestasDe(entradas);
+    const canalizacion = canalizar(protocolo, incidente, respuestas, { asistenciaDirecta: datos.asistenciaDirecta });
 
     const ruta = enrutarPorUbicacion(datos.ubicacion.lat, datos.ubicacion.lng);
     const ahora = new Date();
@@ -39,14 +58,17 @@ export class ReportesService {
       ciudadanoId: ciudadano.id,
       incidenteId: incidente.id,
       codigoCnie: incidente.codigoCnie,
-      prioridad: datos.esPanico ? 'alta' : incidente.prioridad,
-      corporacionSugerida: incidente.corporacionSugerida,
+      prioridad: canalizacion.prioridad,
+      corporacionSugerida: canalizacion.corporaciones[0],
       ubicacion: datos.ubicacion,
       municipioClave: clave,
       cadId: ruta.cadId,
       descripcion: datos.descripcion,
-      respuestas: datos.respuestas,
-      esPanico: datos.esPanico,
+      respuestas: { ...datos.respuestas, ...respuestas },
+      asistenciaDirecta: datos.asistenciaDirecta,
+      escenarioId: escenario?.id,
+      cuestionario: { protocoloVersion: protocolo.version, protocoloEstado: protocolo.estado, entradas },
+      canalizacion,
       ocultarIdentidadAUnidad: datos.ocultarIdentidadAUnidad,
       estado: 'recibido',
       evidencias: [],
@@ -58,11 +80,11 @@ export class ReportesService {
       secuenciaEntrada: 0,
     };
     await this.almacen.guardarReporte(reporte);
-    await this.almacen.auditar({ actor: `ciudadano:${ciudadano.id}`, accion: 'reporte_creado', folio, detalle: { cadId: ruta.cadId } });
+    await this.almacen.auditar({ actor: `ciudadano:${ciudadano.id}`, accion: 'reporte_creado', folio, detalle: { cadId: ruta.cadId, escenarioId: escenario?.id, protocolo: protocolo.version } });
     // El envío al CAD modifica la secuencia de salida: va con el reporte bloqueado.
     return this.almacen.conReporte(folio, async () => {
       const r = (await this.almacen.reporte(folio))!;
-      await this.despachador.enviarCreado(r, ciudadano);
+      await this.despachador.enviarCreado(r, ciudadano, escenario);
       await this.almacen.guardarReporte(r);
       return r;
     });
@@ -107,6 +129,32 @@ export class ReportesService {
       if (ESTADOS_FINALES.includes(r.estado)) throw new ConflictException({ codigo: 'reporte_finalizado' });
       r.mensajes.push({ id: randomUUID(), autor: 'ciudadano', texto, en: new Date().toISOString() });
       await this.despachador.enviarActualizado(r, { mensajeCiudadano: texto });
+      await this.tocar(r);
+      return r;
+    });
+  }
+
+  /**
+   * Agrega respuestas al cuestionario del folio (la última respuesta a una
+   * pregunta gana), recalcula la canalización y la manda al CAD. La prioridad
+   * nunca baja por una respuesta nueva.
+   */
+  responderCuestionario(ciudadano: Ciudadano, folio: string, datos: ResponderCuestionario) {
+    return this.delCiudadanoBloqueado(ciudadano, folio, async (r) => {
+      if (ESTADOS_FINALES.includes(r.estado)) throw new ConflictException({ codigo: 'reporte_finalizado' });
+      const protocolo = this.protocolos.vigente();
+      const { validas, desconocidas } = resolverEntradas(protocolo, r.incidenteId, datos.entradas, datos.via);
+      if (!validas.length) throw new BadRequestException({ codigo: 'respuestas_invalidas', preguntas: desconocidas });
+      r.cuestionario.entradas.push(...validas);
+      const respuestas = respuestasDe(r.cuestionario.entradas);
+      Object.assign(r.respuestas, respuestas);
+      const incidente = incidentePorId(r.incidenteId) as IncidenteCatalogo;
+      const nueva = canalizar(protocolo, incidente, respuestas, { asistenciaDirecta: r.asistenciaDirecta });
+      const prioridad = ORDEN[nueva.prioridad] >= ORDEN[r.prioridad] ? nueva.prioridad : r.prioridad;
+      r.canalizacion = { ...nueva, prioridad, corporaciones: [r.corporacionSugerida, ...nueva.corporaciones.filter((c) => c !== r.corporacionSugerida)] };
+      r.prioridad = prioridad;
+      await this.despachador.enviarCuestionario(r);
+      await this.almacen.auditar({ actor: `ciudadano:${ciudadano.id}`, accion: 'cuestionario_respondido', folio, detalle: { preguntas: validas.map((v) => v.preguntaId), via: datos.via } });
       await this.tocar(r);
       return r;
     });

@@ -1,3 +1,4 @@
+import type { Perfil } from '@pol-iaq/shared';
 import type { Auditoria, Ciudadano, Envio, Evidencia, Otp, Reporte } from './modelos';
 
 /**
@@ -13,6 +14,10 @@ export abstract class Almacen {
   abstract ciudadano(id: string): Promise<Ciudadano | undefined>;
   /** Guarda al ciudadano y, si cambió `aceptadoEn`, deja constancia de la aceptación legal. */
   abstract guardarCiudadano(c: Ciudadano): Promise<void>;
+
+  /** Lugares guardados y escenarios. Perfil vacío si nunca se guardó. */
+  abstract perfil(ciudadanoId: string): Promise<Perfil>;
+  abstract guardarPerfil(ciudadanoId: string, perfil: Perfil): Promise<void>;
 
   /** Consecutivo atómico por municipio y año para el folio unificado. */
   abstract siguienteConsecutivo(claveMunicipio: string, anio: number): Promise<number>;

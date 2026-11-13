@@ -140,7 +140,7 @@ paths:
             schema: { $ref: '#/components/schemas/CrearReporte' }
       responses:
         '201': { description: Creado, content: { application/json: { schema: { $ref: '#/components/schemas/Reporte' } } } }
-        '400': { $ref: '#/components/responses/DatosInvalidos' }
+        '400': { description: '`datos_invalidos`, `incidente_desconocido` o `escenario_desconocido`' }
         '401': { $ref: '#/components/responses/NoAutenticado' }
         '403': { description: '`cuenta_suspendida` o `aceptacion_legal_pendiente`' }
         '429': { description: '`limite_reportes`' }
@@ -186,6 +186,55 @@ paths:
             schema: { type: object, required: [texto], properties: { texto: { type: string, minLength: 1, maxLength: 1000 } } }
       responses:
         '201': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Reporte' } } } }
+  /v1/reportes/{folio}/cuestionario:
+    parameters: [{ $ref: '#/components/parameters/Folio' }]
+    post:
+      tags: [Reportes]
+      summary: Agrega respuestas al protocolo de atención (despachadora 911 virtual)
+      operationId: responderCuestionario
+      description: |
+        Las respuestas se guardan en texto en el folio junto con el texto exacto de la pregunta y la
+        versión del protocolo. Se recalcula la canalización (prioridad, corporaciones de apoyo,
+        alertas) y se envía `incidente.actualizado` al CAD. La prioridad nunca baja.
+      security: [{ ciudadano: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResponderCuestionario' }
+      responses:
+        '201': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Reporte' } } } }
+        '400': { description: '`respuestas_invalidas`: ninguna pregunta existe en el protocolo vigente' }
+        '409': { description: '`reporte_finalizado`' }
+  /v1/protocolo:
+    get:
+      tags: [Catálogo]
+      summary: Protocolo de atención vigente de la despachadora virtual
+      operationId: protocolo
+      description: Versionado; se actualiza cargando un JSON nuevo (ver docs/protocolos). El actual es PROVISIONAL.
+      responses:
+        '200': { description: OK }
+  /v1/perfil:
+    get:
+      tags: [Perfil]
+      summary: Lugares guardados y escenarios de acceso rápido
+      operationId: perfil
+      security: [{ ciudadano: [] }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Perfil' } } } }
+    put:
+      tags: [Perfil]
+      summary: Reemplaza el perfil completo
+      operationId: guardarPerfil
+      security: [{ ciudadano: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Perfil' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Perfil' } } } }
+        '400': { $ref: '#/components/responses/DatosInvalidos' }
   /v1/reportes/{folio}/evidencias:
     parameters: [{ $ref: '#/components/parameters/Folio' }]
     post:
@@ -340,8 +389,58 @@ components:
         ubicacion: { $ref: '#/components/schemas/Ubicacion' }
         descripcion: { type: string, maxLength: 1000 }
         respuestas: { type: object, additionalProperties: { oneOf: [{ type: string }, { type: number }, { type: boolean }] } }
-        esPanico: { type: boolean, default: false }
+        asistenciaDirecta: { type: boolean, default: false, description: 'Botón de asistencia directa (antes "botón de pánico"): prioridad alta.' }
+        escenarioId: { type: string, description: 'Escenario de acceso rápido del perfil. Sus respuestas previas entran al cuestionario.' }
+        cuestionario: { $ref: '#/components/schemas/ResponderCuestionario' }
         ocultarIdentidadAUnidad: { type: boolean, default: false }
+    ResponderCuestionario:
+      type: object
+      required: [entradas]
+      properties:
+        via: { type: string, enum: [texto, voz, escenario, formulario], default: texto }
+        entradas:
+          type: array
+          minItems: 1
+          maxItems: 40
+          items:
+            type: object
+            required: [preguntaId, respuesta]
+            properties:
+              preguntaId: { type: string }
+              respuesta: { oneOf: [{ type: string }, { type: number }, { type: boolean }], description: 'Para preguntas cerradas se acepta "no_sabe".' }
+              textoOriginal: { type: string, maxLength: 1000, description: Lo que dijo o escribió la persona antes de interpretarlo. }
+    Canalizacion:
+      type: object
+      properties:
+        prioridad: { type: string, enum: [alta, media, baja] }
+        corporaciones: { type: array, items: { type: string }, description: La primera se despacha; las demás son apoyo. }
+        alertas: { type: array, items: { type: string } }
+    LugarGuardado:
+      type: object
+      required: [id, nombre, tipo, ubicacion]
+      properties:
+        id: { type: string, pattern: '^[a-z0-9-]{1,40}$' }
+        nombre: { type: string, maxLength: 60 }
+        tipo: { type: string, enum: [casa, familiar, trabajo, escuela, otro] }
+        ubicacion: { type: object, properties: { lat: { type: number }, lng: { type: number }, referencia: { type: string, maxLength: 280 } } }
+        vulnerables: { type: array, items: { type: string, enum: [adulto_mayor, ninos, discapacidad, enfermedad_cronica, embarazo] } }
+        infoMedica: { type: string, maxLength: 280, description: Dato sensible opcional. }
+    Escenario:
+      type: object
+      required: [id, lugarId, titulo, incidenteId]
+      properties:
+        id: { type: string, pattern: '^[a-z0-9-]{1,40}$' }
+        lugarId: { type: string }
+        titulo: { type: string, maxLength: 60 }
+        incidenteId: { type: string }
+        respuestasPrevias: { type: object, additionalProperties: { oneOf: [{ type: string }, { type: number }, { type: boolean }] } }
+        descripcion: { type: string, maxLength: 280 }
+    Perfil:
+      type: object
+      required: [lugares, escenarios]
+      properties:
+        lugares: { type: array, maxItems: 10, items: { $ref: '#/components/schemas/LugarGuardado' } }
+        escenarios: { type: array, maxItems: 30, items: { $ref: '#/components/schemas/Escenario' } }
     Reporte:
       type: object
       properties:
@@ -351,7 +450,19 @@ components:
         estadoTexto: { type: string, example: La unidad va en camino }
         ubicacion: { $ref: '#/components/schemas/Ubicacion' }
         municipioClave: { type: [string, 'null'], example: '006' }
-        esPanico: { type: boolean }
+        asistenciaDirecta: { type: boolean }
+        escenarioId: { type: [string, 'null'] }
+        cuestionario:
+          type: object
+          properties:
+            protocoloVersion: { type: string }
+            protocoloEstado: { type: string, enum: [provisional, vigente, retirado] }
+            entradas:
+              type: array
+              items: { type: object, properties: { preguntaId: { type: string }, pregunta: { type: string }, respuesta: {}, respuestaTexto: { type: string }, via: { type: string }, en: { type: string, format: date-time } } }
+            pendientes: { type: array, items: { type: string }, description: Preguntas del protocolo vigente que faltan. }
+        canalizacion: { $ref: '#/components/schemas/Canalizacion' }
+        recomendaciones: { type: array, items: { type: string }, description: Indicaciones mientras llega la unidad. }
         unidad:
           type: [object, 'null']
           properties:

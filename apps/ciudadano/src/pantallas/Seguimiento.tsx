@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { ESTADOS_FINALES, ETIQUETAS_CIUDADANO, type EstadoIncidente } from '@pol-iaq/shared/movil';
+import { ESTADOS_FINALES, ETIQUETAS_CIUDADANO, respuestasDe, type EstadoIncidente } from '@pol-iaq/shared/movil';
 import { api, seguir, type ReporteVista } from '../api';
 import { MapaSeguimiento } from '../componentes/MapaSeguimiento';
 import type { Punto } from '../componentes/tipos-mapa';
 import { tomarYSubirFoto } from '../evidencia';
 import { colores, e } from '../estilos';
+import type { ContinuarReporte } from './Asistente911';
 
 const PASOS: EstadoIncidente[] = ['recibido', 'validado', 'asignado', 'en_camino', 'en_sitio', 'cerrado'];
 const MAX_RECORRIDO = 60;
@@ -14,7 +15,7 @@ const MAX_RECORRIDO = 60;
  * Seguimiento tipo app de entregas: mapa con la unidad en vivo, pasos,
  * tiempo estimado y chat con el operador, todo bajo el folio unificado.
  */
-export function Seguimiento({ token, folio, alSalir }: { token: string; folio: string; alSalir: () => void }) {
+export function Seguimiento({ token, folio, alSalir, alContinuar }: { token: string; folio: string; alSalir: () => void; alContinuar: (c: ContinuarReporte) => void }) {
   const [r, setR] = useState<ReporteVista | null>(null);
   const [texto, setTexto] = useState('');
   const [recorrido, setRecorrido] = useState<Punto[]>([]);
@@ -87,6 +88,26 @@ export function Seguimiento({ token, folio, alSalir }: { token: string; folio: s
         </View>
       )}
 
+      {r.canalizacion.alertas.length > 0 && (
+        <View style={[e.tarjeta, { backgroundColor: colores.asistenciaSuave, borderColor: colores.asistenciaSuave }]}>
+          <Text style={[e.suave, { color: colores.asistencia, fontWeight: '700' }]}>La unidad va enterada de:</Text>
+          <Text style={e.texto}>{r.canalizacion.alertas.join(' · ')}</Text>
+        </View>
+      )}
+
+      {!finalizado && r.cuestionario.pendientes.length > 0 && (
+        <Pressable style={e.boton} onPress={() => alContinuar({ folio: r.folio, incidenteId: r.incidenteId, respuestas: respuestasDe(r.cuestionario.entradas) })}>
+          <Text style={e.botonTexto}>Contestar {r.cuestionario.pendientes.length} preguntas con la despachadora</Text>
+        </Pressable>
+      )}
+
+      {!finalizado && r.recomendaciones.length > 0 && (
+        <>
+          <Text style={e.subtitulo}>Mientras llega la unidad</Text>
+          {r.recomendaciones.map((t) => <Text key={t} style={[e.texto, { marginBottom: 4 }]}>• {t}</Text>)}
+        </>
+      )}
+
       <Text style={e.subtitulo}>Avance</Text>
       {PASOS.map((p, i) => (
         <View key={p} style={[e.fila, { marginBottom: 8 }]}>
@@ -102,9 +123,24 @@ export function Seguimiento({ token, folio, alSalir }: { token: string; folio: s
         </Pressable>
       )}
 
+      {r.cuestionario.entradas.length > 0 && (
+        <>
+          <Text style={e.subtitulo}>Tus respuestas (quedan en el folio)</Text>
+          <View style={e.tarjeta}>
+            {r.cuestionario.entradas.map((x) => (
+              <View key={`${x.preguntaId}-${x.en}`} style={{ marginBottom: 8 }}>
+                <Text style={e.suave}>{x.pregunta}</Text>
+                <Text style={e.texto}>{x.respuestaTexto}</Text>
+              </View>
+            ))}
+            <Text style={e.suave}>Protocolo {r.cuestionario.protocoloVersion}{r.cuestionario.protocoloEstado === 'provisional' ? ' (provisional)' : ''}</Text>
+          </View>
+        </>
+      )}
+
       <Text style={e.subtitulo}>Mensajes</Text>
       {r.mensajes.map((m) => (
-        <View key={m.id} style={[e.tarjeta, m.autor === 'ciudadano' && { backgroundColor: '#EAF2FC' }]}>
+        <View key={m.id} style={[e.tarjeta, m.autor === 'ciudadano' && { backgroundColor: colores.primarioSuave }]}>
           <Text style={e.suave}>{m.autor === 'ciudadano' ? 'Tú' : m.nombreAutor ?? 'Operador'}</Text>
           <Text style={e.texto}>{m.texto}</Text>
         </View>

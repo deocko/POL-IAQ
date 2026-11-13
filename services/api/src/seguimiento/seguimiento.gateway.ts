@@ -6,6 +6,7 @@ import type { Reporte } from '../almacen/modelos';
 import { leerToken } from '../auth/tokens';
 import { BusService } from '../comun/bus.service';
 import { CONFIG, type Config } from '../config';
+import { ProtocolosService } from '../protocolos/protocolos.service';
 import { vistaCiudadano } from '../reportes/vista';
 
 /**
@@ -23,10 +24,11 @@ export class SeguimientoGateway implements OnModuleInit {
     @Inject(CONFIG) private readonly config: Config,
     @Inject(Almacen) private readonly almacen: Almacen,
     @Inject(BusService) private readonly bus: BusService,
+    @Inject(ProtocolosService) private readonly protocolos: ProtocolosService,
   ) {}
 
   onModuleInit() {
-    this.bus.on('reporte.cambio', (r: Reporte) => this.server?.to(`folio:${r.folio}`).emit('reporte.actualizado', vistaCiudadano(r)));
+    this.bus.on('reporte.cambio', (r: Reporte) => this.server?.to(`folio:${r.folio}`).emit('reporte.actualizado', vistaCiudadano(r, this.protocolos.vigente())));
   }
 
   @SubscribeMessage('suscribir')
@@ -36,6 +38,6 @@ export class SeguimientoGateway implements OnModuleInit {
     if (!sesion || !r || r.ciudadanoId !== sesion.sub) return { ok: false, codigo: 'no_autorizado' };
     void socket.join(`folio:${r.folio}`);
     this.log.debug(`socket ${socket.id} sigue ${r.folio}`);
-    return { ok: true, reporte: vistaCiudadano(r) };
+    return { ok: true, reporte: vistaCiudadano(r, this.protocolos.vigente()) };
   }
 }

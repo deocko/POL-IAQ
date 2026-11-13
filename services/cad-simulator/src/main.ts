@@ -35,12 +35,21 @@ async function enviar(cadId: string, folio: string, secuencia: number, tipo: str
   console.log(`[${cadId}] ${folio} ${tipo} -> ${resp.status}`);
 }
 
-async function simular(cadId: string, folio: string, lat: number, lng: number) {
+const ETIQUETA: Record<string, string> = {
+  policia_municipal: 'Patrulla',
+  policia_estatal: 'Patrulla estatal',
+  cruz_roja: 'Ambulancia',
+  bomberos: 'Unidad de bomberos',
+  proteccion_civil: 'Protección Civil',
+};
+
+/** Despacha la unidad de la corporación principal que indica la canalización. */
+async function simular(cadId: string, folio: string, lat: number, lng: number, corporacion = 'policia_municipal') {
   let s = 0;
   const unidadId = `U-${Math.floor(100 + Math.random() * 900)}`;
   await enviar(cadId, folio, ++s, 'incidente.recibido', { folioCad: `${cadId.toUpperCase()}-${Date.now() % 100000}`, operador: 'Operador simulado' });
   await espera(PASO_MS);
-  await enviar(cadId, folio, ++s, 'unidad.asignada', { unidadId, corporacion: 'policia_municipal', etiqueta: `Patrulla ${unidadId.slice(2)}`, etaMinutos: 6 });
+  await enviar(cadId, folio, ++s, 'unidad.asignada', { unidadId, corporacion, etiqueta: `${ETIQUETA[corporacion] ?? 'Unidad'} ${unidadId.slice(2)}`, etaMinutos: 6 });
   await enviar(cadId, folio, ++s, 'mensaje.operador', { texto: 'Recibimos tu reporte, una unidad va en camino.', autor: 'Operador simulado' });
   // La unidad arranca ~1.5 km al norte y se acerca en 6 pasos.
   for (let i = 6; i >= 1; i--) {
@@ -76,7 +85,12 @@ createServer((req, res) => {
     const ev = p.data;
     console.log(`[${cadId}] recibido ${ev.tipo} ${ev.folio}`);
     if (ev.tipo === 'incidente.creado') {
-      void simular(cadId, ev.folio, ev.datos.ubicacion.lat, ev.datos.ubicacion.lng).catch((e) => console.error(e));
+      const { canalizacion, cuestionario } = ev.datos;
+      console.log(`[${cadId}] canalización: ${canalizacion.prioridad} -> ${canalizacion.corporaciones.join(', ')}${canalizacion.alertas.length ? ` (${canalizacion.alertas.join('; ')})` : ''}`);
+      if (cuestionario.entradas.length) console.log(cuestionario.transcripcion);
+      void simular(cadId, ev.folio, ev.datos.ubicacion.lat, ev.datos.ubicacion.lng, canalizacion.corporaciones[0]).catch((e) => console.error(e));
+    } else if (ev.datos.cuestionario) {
+      console.log(`[${cadId}] ${ev.folio} cuestionario actualizado:\n${ev.datos.cuestionario.transcripcion}`);
     }
   });
 }).listen(PORT, () => console.log(`CAD simulado escuchando en :${PORT}, enviando a ${POLIAQ_URL}`));

@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Pool, type PoolClient, type QueryResultRow } from 'pg';
+import { PERFIL_VACIO, type Perfil } from '@pol-iaq/shared';
 import { Almacen } from './almacen';
 import { migrar } from './migraciones';
 import type { Auditoria, Ciudadano, Envio, Evidencia, Mensaje, Otp, Reporte } from './modelos';
@@ -22,8 +23,8 @@ const SELECT_CIUDADANO = `
 const SELECT_REPORTE = `
   SELECT folio, ciudadano_id, incidente_id, codigo_cnie, prioridad, corporacion_sugerida,
          ST_Y(ubicacion::geometry) AS lat, ST_X(ubicacion::geometry) AS lng, precision_m, referencia,
-         municipio_clave, cad_id, folio_cad, descripcion, respuestas, es_panico, ocultar_identidad_a_unidad,
-         estado, secuencia_salida, secuencia_entrada, creado_en, actualizado_en
+         municipio_clave, cad_id, folio_cad, descripcion, respuestas, asistencia_directa, escenario_id, cuestionario, canalizacion,
+         ocultar_identidad_a_unidad, estado, secuencia_salida, secuencia_entrada, creado_en, actualizado_en
     FROM reporte`;
 
 /**
@@ -127,6 +128,21 @@ export class AlmacenPostgres extends Almacen {
     });
   }
 
+  // ── Perfil ────────────────────────────────────────────────────────────────
+
+  async perfil(ciudadanoId: string): Promise<Perfil> {
+    const { rows } = await this.q('SELECT lugares, escenarios FROM perfil_ciudadano WHERE ciudadano_id = $1', [ciudadanoId]);
+    return rows[0] ? { lugares: rows[0].lugares, escenarios: rows[0].escenarios } : structuredClone(PERFIL_VACIO);
+  }
+
+  async guardarPerfil(ciudadanoId: string, perfil: Perfil) {
+    await this.q(
+      `INSERT INTO perfil_ciudadano (ciudadano_id, lugares, escenarios, actualizado_en) VALUES ($1, $2, $3, now())
+       ON CONFLICT (ciudadano_id) DO UPDATE SET lugares = EXCLUDED.lugares, escenarios = EXCLUDED.escenarios, actualizado_en = now()`,
+      [ciudadanoId, JSON.stringify(perfil.lugares), JSON.stringify(perfil.escenarios)],
+    );
+  }
+
   // ── Folios y reportes ─────────────────────────────────────────────────────
 
   async siguienteConsecutivo(claveMunicipio: string, anio: number) {
@@ -180,7 +196,10 @@ export class AlmacenPostgres extends Almacen {
         folioCad: f.folio_cad ?? undefined,
         descripcion: f.descripcion ?? undefined,
         respuestas: f.respuestas,
-        esPanico: f.es_panico,
+        asistenciaDirecta: f.asistencia_directa,
+        escenarioId: f.escenario_id ?? undefined,
+        cuestionario: f.cuestionario ?? { protocoloVersion: 'sin-protocolo', protocoloEstado: 'provisional', entradas: [] },
+        canalizacion: f.canalizacion ?? { prioridad: f.prioridad, corporaciones: [f.corporacion_sugerida], alertas: [] },
         ocultarIdentidadAUnidad: f.ocultar_identidad_a_unidad,
         estado: f.estado,
         unidad: u && {
@@ -236,18 +255,21 @@ export class AlmacenPostgres extends Almacen {
     await this.enTransaccion(async () => {
       await this.q(
         `INSERT INTO reporte (folio, ciudadano_id, incidente_id, codigo_cnie, prioridad, corporacion_sugerida, ubicacion,
-            precision_m, referencia, municipio_clave, cad_id, folio_cad, descripcion, respuestas, es_panico,
-            ocultar_identidad_a_unidad, estado, secuencia_salida, secuencia_entrada, creado_en, actualizado_en)
-         VALUES ($1, $2, $3, $4, $5, $6, ${PUNTO('$7', '$8')}, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+            precision_m, referencia, municipio_clave, cad_id, folio_cad, descripcion, respuestas, asistencia_directa,
+            ocultar_identidad_a_unidad, estado, secuencia_salida, secuencia_entrada, creado_en, actualizado_en,
+            escenario_id, cuestionario, canalizacion)
+         VALUES ($1, $2, $3, $4, $5, $6, ${PUNTO('$7', '$8')}, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
          ON CONFLICT (folio) DO UPDATE SET
+            respuestas = EXCLUDED.respuestas, cuestionario = EXCLUDED.cuestionario, canalizacion = EXCLUDED.canalizacion,
             prioridad = EXCLUDED.prioridad, cad_id = EXCLUDED.cad_id, folio_cad = EXCLUDED.folio_cad,
             estado = EXCLUDED.estado, secuencia_salida = EXCLUDED.secuencia_salida,
             secuencia_entrada = EXCLUDED.secuencia_entrada, actualizado_en = EXCLUDED.actualizado_en`,
         [
           r.folio, r.ciudadanoId, r.incidenteId, r.codigoCnie, r.prioridad, r.corporacionSugerida, r.ubicacion.lng, r.ubicacion.lat,
           r.ubicacion.precisionMetros ?? null, r.ubicacion.referencia ?? null, r.municipioClave, r.cadId, r.folioCad ?? null,
-          r.descripcion ?? null, JSON.stringify(r.respuestas), r.esPanico, r.ocultarIdentidadAUnidad, r.estado,
+          r.descripcion ?? null, JSON.stringify(r.respuestas), r.asistenciaDirecta, r.ocultarIdentidadAUnidad, r.estado,
           r.secuenciaSalida, r.secuenciaEntrada, r.creadoEn, r.actualizadoEn,
+          r.escenarioId ?? null, JSON.stringify(r.cuestionario), JSON.stringify(r.canalizacion),
         ],
       );
 

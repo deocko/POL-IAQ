@@ -9,7 +9,8 @@
     "dev": "tsx watch --env-file-if-exists=.env src/main.ts",
     "start": "node --env-file-if-exists=.env dist/main.js",
     "test": "vitest run",
-    "db:migrar": "tsx --env-file-if-exists=.env src/migrar.ts"
+    "db:migrar": "tsx --env-file-if-exists=.env src/migrar.ts",
+    "validar-protocolo": "tsx src/protocolos/validar.ts"
   },
   "dependencies": {
     "@nestjs/common": "11.2.10",
