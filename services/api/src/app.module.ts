@@ -10,6 +10,8 @@ import { DespachadorCadService } from './cad/despachador.service';
 import { CatalogoController } from './catalogo/catalogo.controller';
 import { BusService } from './comun/bus.service';
 import { CONFIG, cargarConfig, type Config } from './config';
+import { PerfilController } from './perfil/perfil.controller';
+import { ProtocolosService } from './protocolos/protocolos.service';
 import { ReportesController } from './reportes/reportes.controller';
 import { ReportesService } from './reportes/reportes.service';
 import { SeguimientoGateway } from './seguimiento/seguimiento.gateway';
@@ -24,7 +26,7 @@ export async function crearAlmacen(config: Config): Promise<Almacen> {
 
 export function crearAppModule(config: Config = cargarConfig(), opciones: { almacen?: Almacen; sms?: ProveedorSms } = {}) {
   @Module({
-    controllers: [AuthController, CatalogoController, ReportesController, CadController],
+    controllers: [AuthController, CatalogoController, ReportesController, PerfilController, CadController],
     providers: [
       { provide: CONFIG, useValue: config },
       opciones.almacen ? { provide: Almacen, useValue: opciones.almacen } : { provide: Almacen, useFactory: () => crearAlmacen(config) },
@@ -33,6 +35,7 @@ export function crearAppModule(config: Config = cargarConfig(), opciones: { alma
       OtpService,
       BusService,
       DespachadorCadService,
+      ProtocolosService,
       ReportesService,
       CiudadanoGuard,
       SeguimientoGateway,

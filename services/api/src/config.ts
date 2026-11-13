@@ -32,6 +32,11 @@ export interface Config {
   /** Aplica las migraciones pendientes al arrancar. */
   migrarAlIniciar: boolean;
   sms: SmsConfig;
+  /**
+   * JSON con la versión vigente del protocolo de atención (ver docs/protocolos).
+   * Sin archivo se usa el protocolo provisional incluido en @pol-iaq/shared.
+   */
+  protocoloArchivo?: string;
 }
 
 export function cargarConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -61,6 +66,7 @@ export function cargarConfig(env: NodeJS.ProcessEnv = process.env): Config {
     databaseUrl,
     migrarAlIniciar: env.DB_MIGRATE !== 'off',
     sms: { proveedor: proveedorSms, twilio, avisos: env.SMS_NOTIFICATIONS !== 'off' },
+    protocoloArchivo: env.PROTOCOLO_ARCHIVO || undefined,
   };
 }
 

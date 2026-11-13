@@ -1,5 +1,5 @@
 import { io, type Socket } from 'socket.io-client';
-import type { EstadoIncidente } from '@pol-iaq/shared/movil';
+import type { EntradaCuestionario, EstadoIncidente, Perfil, Protocolo, ViaCuestionario } from '@pol-iaq/shared/movil';
 
 /** URL del API. En desarrollo usa la IP de tu computadora, no "localhost", si pruebas en un teléfono. */
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -15,13 +15,34 @@ export interface IncidenteCatalogoPublico {
 
 export interface ReporteVista {
   folio: string;
+  incidenteId: string;
   estado: EstadoIncidente;
+  asistenciaDirecta: boolean;
+  escenarioId: string | null;
+  cuestionario: {
+    protocoloVersion: string;
+    protocoloEstado: 'provisional' | 'vigente' | 'retirado';
+    entradas: { preguntaId: string; pregunta: string; respuesta: string | number | boolean; respuestaTexto: string; via: ViaCuestionario; en: string }[];
+    pendientes: string[];
+  };
+  canalizacion: { prioridad: 'alta' | 'media' | 'baja'; corporaciones: string[]; alertas: string[] };
+  recomendaciones: string[];
   estadoTexto: string;
   ubicacion: { lat: number; lng: number };
   unidad: { etiqueta: string; corporacion: string; etaMinutos?: number; lat?: number; lng?: number; rumbo?: number; actualizadoEn?: string } | null;
   mensajes: { id: string; autor: string; nombreAutor?: string; texto: string; en: string }[];
   historial: { estado: EstadoIncidente; en: string; nota?: string }[];
   evidencias: { id: string; tipo: string; estado: string }[];
+}
+
+export interface NuevoReporte {
+  incidenteId: string;
+  ubicacion: { lat: number; lng: number; precisionMetros?: number; referencia?: string };
+  /** Botón de asistencia directa (antes "botón de pánico"). */
+  asistenciaDirecta?: boolean;
+  escenarioId?: string;
+  descripcion?: string;
+  cuestionario?: { via: ViaCuestionario; entradas: EntradaCuestionario[] };
 }
 
 export class ErrorApi extends Error {
@@ -46,8 +67,12 @@ export const api = {
   verificar: (datos: { telefono: string; codigo: string; nombre: string; aceptaAvisoPrivacidad: string; aceptaTerminos: string }) =>
     llamar<{ token: string; ciudadano: { id: string; nombre: string } }>('/v1/auth/verificar', { method: 'POST', body: JSON.stringify(datos) }),
   catalogo: () => llamar<{ incidentes: IncidenteCatalogoPublico[] }>('/v1/catalogo'),
-  crearReporte: (token: string, datos: { incidenteId: string; ubicacion: { lat: number; lng: number; precisionMetros?: number }; esPanico?: boolean; descripcion?: string }) =>
-    llamar<ReporteVista>('/v1/reportes', { method: 'POST', token, body: JSON.stringify(datos) }),
+  crearReporte: (token: string, datos: NuevoReporte) => llamar<ReporteVista>('/v1/reportes', { method: 'POST', token, body: JSON.stringify(datos) }),
+  responder: (token: string, folio: string, via: ViaCuestionario, entradas: EntradaCuestionario[]) =>
+    llamar<ReporteVista>(`/v1/reportes/${folio}/cuestionario`, { method: 'POST', token, body: JSON.stringify({ via, entradas }) }),
+  protocolo: () => llamar<Protocolo>('/v1/protocolo'),
+  perfil: (token: string) => llamar<Perfil>('/v1/perfil', { token }),
+  guardarPerfil: (token: string, perfil: Perfil) => llamar<Perfil>('/v1/perfil', { method: 'PUT', token, body: JSON.stringify(perfil) }),
   reporte: (token: string, folio: string) => llamar<ReporteVista>(`/v1/reportes/${folio}`, { token }),
   mensaje: (token: string, folio: string, texto: string) => llamar<ReporteVista>(`/v1/reportes/${folio}/mensajes`, { method: 'POST', token, body: JSON.stringify({ texto }) }),
   cancelar: (token: string, folio: string) => llamar<ReporteVista>(`/v1/reportes/${folio}/cancelar`, { method: 'POST', token }),

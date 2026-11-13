@@ -5,6 +5,30 @@ import { EstadoSchema, UbicacionSchema } from './schemas';
  * Contrato "API Pol-IAQ CAD v1": eventos que viajan entre Pol-IAQ y cada CAD.
  * Ver docs/api/asyncapi.yaml para la especificación formal.
  */
+const EntradaSchema = z.object({
+  preguntaId: z.string(),
+  pregunta: z.string(),
+  respuesta: z.union([z.string(), z.number(), z.boolean()]),
+  respuestaTexto: z.string(),
+  textoOriginal: z.string().optional(),
+  via: z.enum(['texto', 'voz', 'escenario', 'formulario']),
+  en: z.iso.datetime(),
+});
+/** Respuestas al protocolo de atención, en texto, con la versión del protocolo usada. */
+const CuestionarioSchema = z.object({
+  protocoloVersion: z.string(),
+  protocoloEstado: z.enum(['provisional', 'vigente', 'retirado']),
+  entradas: z.array(EntradaSchema),
+  /** Transcripción legible (pregunta / respuesta) para el operador y la unidad. */
+  transcripcion: z.string(),
+});
+/** A quién despachar: la primera corporación es la principal, las demás son apoyo. */
+const CanalizacionSchema = z.object({
+  prioridad: z.enum(['alta', 'media', 'baja']),
+  corporaciones: z.array(z.string()).min(1),
+  alertas: z.array(z.string()),
+});
+
 const Base = z.object({
   /** Identificador único del evento; sirve como idempotency key. */
   eventoId: z.uuid(),
@@ -26,7 +50,10 @@ export const IncidenteCreadoSchema = Base.extend({
     municipioClave: z.string().nullable(),
     descripcion: z.string().optional(),
     respuestas: z.record(z.string(), z.unknown()),
-    esPanico: z.boolean(),
+    asistenciaDirecta: z.boolean(),
+    escenario: z.object({ id: z.string(), titulo: z.string() }).optional(),
+    cuestionario: CuestionarioSchema,
+    canalizacion: CanalizacionSchema,
     reportante: z.object({ nombre: z.string(), telefono: z.string(), confiabilidad: z.number().min(0).max(1) }),
     evidencias: z.array(z.object({ id: z.string(), tipo: z.string(), url: z.url(), sha256: z.string(), expiraEn: z.iso.datetime() })),
   }),
@@ -39,6 +66,9 @@ export const IncidenteActualizadoSchema = Base.extend({
     nuevaEvidencia: z.array(z.object({ id: z.string(), tipo: z.string(), url: z.url(), sha256: z.string(), expiraEn: z.iso.datetime() })).optional(),
     mensajeCiudadano: z.string().optional(),
     cancelado: z.boolean().optional(),
+    /** Cuestionario completo tras nuevas respuestas (reemplaza al anterior). */
+    cuestionario: CuestionarioSchema.optional(),
+    canalizacion: CanalizacionSchema.optional(),
   }),
 });
 

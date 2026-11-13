@@ -12,7 +12,8 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Pol-IAQ usa tu ubicación para enviar a la unidad de emergencia al lugar exacto del reporte.",
         "NSCameraUsageDescription": "Pol-IAQ usa la cámara para adjuntar fotos y videos como evidencia de tu reporte.",
-        "NSMicrophoneUsageDescription": "Pol-IAQ usa el micrófono para grabar audio o video como evidencia de tu reporte."
+        "NSMicrophoneUsageDescription": "Pol-IAQ usa el micrófono para hablar con la despachadora 911 virtual y para grabar audio o video como evidencia de tu reporte.",
+        "NSSpeechRecognitionUsageDescription": "Pol-IAQ convierte tu voz en texto para contestar las preguntas de la despachadora 911 virtual."
       }
     },
     "android": {
@@ -46,6 +47,13 @@
         {
           "cameraPermission": "Pol-IAQ usa la cámara para adjuntar fotos y videos como evidencia de tu reporte.",
           "microphonePermission": "Pol-IAQ usa el micrófono para grabar audio o video como evidencia de tu reporte."
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Pol-IAQ usa el micrófono para hablar con la despachadora 911 virtual.",
+          "speechRecognitionPermission": "Pol-IAQ convierte tu voz en texto para contestar las preguntas de la despachadora 911 virtual."
         }
       ]
     ]

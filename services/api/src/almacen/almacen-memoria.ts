@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { PERFIL_VACIO, type Perfil } from '@pol-iaq/shared';
 import { Almacen } from './almacen';
 import type { Auditoria, Ciudadano, Envio, Otp, Reporte } from './modelos';
 
@@ -15,6 +16,7 @@ export class AlmacenMemoria extends Almacen {
   private readonly otps: Otp[] = [];
   private readonly envios = new Map<string, Envio>();
   private readonly colas = new Map<string, Promise<unknown>>();
+  private readonly perfiles = new Map<string, Perfil>();
 
   async ciudadanoPorTelefono(telefono: string) {
     const c = [...this.ciudadanos.values()].find((x) => x.telefono === telefono);
@@ -26,6 +28,13 @@ export class AlmacenMemoria extends Almacen {
   }
   async guardarCiudadano(c: Ciudadano) {
     this.ciudadanos.set(c.id, copia(c));
+  }
+
+  async perfil(ciudadanoId: string) {
+    return copia(this.perfiles.get(ciudadanoId) ?? PERFIL_VACIO);
+  }
+  async guardarPerfil(ciudadanoId: string, perfil: Perfil) {
+    this.perfiles.set(ciudadanoId, copia(perfil));
   }
 
   async siguienteConsecutivo(claveMunicipio: string, anio: number) {

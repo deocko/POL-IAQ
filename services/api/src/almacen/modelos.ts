@@ -1,4 +1,4 @@
-import type { Corporacion, EstadoIncidente, EventoHaciaCad, Prioridad, Ubicacion } from '@pol-iaq/shared';
+import type { Canalizacion, Corporacion, Cuestionario, EstadoIncidente, EventoHaciaCad, Prioridad, Ubicacion } from '@pol-iaq/shared';
 
 export interface Ciudadano {
   id: string;
@@ -57,7 +57,12 @@ export interface Reporte {
   folioCad?: string;
   descripcion?: string;
   respuestas: Record<string, unknown>;
-  esPanico: boolean;
+  /** Levantado con el botón de asistencia directa. */
+  asistenciaDirecta: boolean;
+  escenarioId?: string;
+  /** Respuestas al protocolo de atención, en texto y con su versión. */
+  cuestionario: Cuestionario;
+  canalizacion: Canalizacion;
   ocultarIdentidadAUnidad: boolean;
   estado: EstadoIncidente;
   unidad?: Unidad;

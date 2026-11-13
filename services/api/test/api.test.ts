@@ -151,6 +151,73 @@ describe.each(ALMACENES)('API con almacén en %s', (_nombre, nuevoAlmacen) => {
     });
   });
 
+  describe('escenarios y despachadora 911 virtual', () => {
+    it('guarda lugares y escenarios en el perfil y valida referencias', async () => {
+      const token = await registrar('+524421212121');
+      const auth = { authorization: `Bearer ${token}` };
+      expect((await http.get('/v1/perfil').set(auth)).body).toEqual({ lugares: [], escenarios: [] });
+      const lugar = { id: 'abuelos', nombre: 'Casa de mis abuelos', tipo: 'familiar', ubicacion: { lat: 20.5888, lng: -100.3899, referencia: 'Calle 5 de Mayo 10' }, vulnerables: ['adulto_mayor'], infoMedica: 'Abuelo diabético' };
+      const escenario = { id: 'abuelos-medica', lugarId: 'abuelos', titulo: 'Emergencia médica de mis abuelos', incidenteId: 'emergencia-medica', respuestasPrevias: { quien_afectado: 'otra_persona', padecimientos: 'Abuelo diabético' } };
+      expect((await http.put('/v1/perfil').set(auth).send({ lugares: [lugar], escenarios: [escenario] })).status).toBe(200);
+      expect((await http.get('/v1/perfil').set(auth)).body.escenarios[0].id).toBe('abuelos-medica');
+      const malo = await http.put('/v1/perfil').set(auth).send({ lugares: [], escenarios: [escenario] });
+      expect(malo.status).toBe(400);
+    });
+
+    it('levanta el reporte desde un escenario, guarda el cuestionario en texto y canaliza la unidad', async () => {
+      const token = await registrar('+524421313131');
+      const auth = { authorization: `Bearer ${token}` };
+      const lugar = { id: 'casa', nombre: 'Mi casa', tipo: 'casa', ubicacion: { lat: 20.539, lng: -100.442 }, vulnerables: [] };
+      const escenario = { id: 'casa-ruidos', lugarId: 'casa', titulo: 'Ruidos extraños de noche', incidenteId: 'intrusion-domicilio', respuestasPrevias: { dentro_casa: true } };
+      await http.put('/v1/perfil').set(auth).send({ lugares: [lugar], escenarios: [escenario] });
+
+      const creado = await http.post('/v1/reportes').set(auth).send({
+        incidenteId: 'intrusion-domicilio', escenarioId: 'casa-ruidos', ubicacion: { lat: 20.539, lng: -100.442, referencia: 'Lugar guardado: Mi casa' },
+        cuestionario: { via: 'voz', entradas: [{ preguntaId: 'lugar_seguro', respuesta: true, textoOriginal: 'sí, estoy en mi cuarto' }] },
+      });
+      expect(creado.status).toBe(201);
+      const folio = creado.body.folio;
+      expect(creado.body.escenarioId).toBe('casa-ruidos');
+      expect(creado.body.cuestionario.entradas.map((e: { preguntaId: string }) => e.preguntaId)).toEqual(['dentro_casa', 'lugar_seguro']);
+      expect(creado.body.cuestionario.pendientes).toContain('resguardo');
+      expect(creado.body.cuestionario.protocoloEstado).toBe('provisional');
+      expect(creado.body.recomendaciones.length).toBeGreaterThan(0);
+
+      const bandeja = app.get(DespachadorCadService).bandeja;
+      const alta = bandeja.find((e) => e.evento.folio === folio && e.evento.tipo === 'incidente.creado')!.evento.datos as Record<string, any>;
+      expect(alta.escenario).toEqual({ id: 'casa-ruidos', titulo: 'Ruidos extraños de noche' });
+      expect(alta.cuestionario.transcripcion).toContain('P: ¿Usted y su familia están dentro del domicilio?\nR: Sí [escenario]');
+      expect(alta.canalizacion.corporaciones).toEqual(['policia_municipal']);
+
+      const resp = await http.post(`/v1/reportes/${folio}/cuestionario`).set(auth).send({ via: 'texto', entradas: [{ preguntaId: 'intruso_visto', respuesta: true }, { preguntaId: 'armas', respuesta: true }, { preguntaId: 'inventada', respuesta: true }] });
+      expect(resp.status).toBe(201);
+      expect(resp.body.canalizacion.alertas).toEqual(expect.arrayContaining(['Persona ajena vista en el domicilio', 'Posible persona armada']));
+      expect(resp.body.cuestionario.pendientes).not.toContain('armas');
+      const act = bandeja.filter((e) => e.evento.folio === folio && e.evento.tipo === 'incidente.actualizado').at(-1)!.evento.datos as Record<string, any>;
+      expect(act.cuestionario.entradas).toHaveLength(4);
+      expect(act.canalizacion.prioridad).toBe('alta');
+
+      expect((await http.post(`/v1/reportes/${folio}/cuestionario`).set(auth).send({ entradas: [{ preguntaId: 'inventada', respuesta: 1 }] })).status).toBe(400);
+      expect((await http.post('/v1/reportes').set(auth).send({ incidenteId: 'otro', escenarioId: 'no-existe', ubicacion: { lat: 20.539, lng: -100.442 } })).status).toBe(400);
+    });
+
+    it('el botón de asistencia directa sube la prioridad y suma apoyo médico si hay heridos', async () => {
+      const token = await registrar('+524421414141');
+      const auth = { authorization: `Bearer ${token}` };
+      const r = await http.post('/v1/reportes').set(auth).send({ incidenteId: 'ruido-rina', asistenciaDirecta: true, ubicacion: { lat: 20.5888, lng: -100.3899 } });
+      expect(r.body.asistenciaDirecta).toBe(true);
+      expect(r.body.canalizacion.prioridad).toBe('alta');
+      const otro = await http.post('/v1/reportes').set(auth).send({ incidenteId: 'robo-en-curso', ubicacion: { lat: 20.5888, lng: -100.3899 }, cuestionario: { entradas: [{ preguntaId: 'heridos', respuesta: true }] } });
+      expect(otro.body.canalizacion.corporaciones).toEqual(['policia_municipal', 'cruz_roja']);
+    });
+
+    it('publica el protocolo vigente', async () => {
+      const p = await http.get('/v1/protocolo');
+      expect(p.body.estado).toBe('provisional');
+      expect(p.body.incidentes.length).toBeGreaterThan(10);
+    });
+  });
+
   describe('evidencia y cadena de custodia', () => {
     it('acepta el archivo si el hash coincide y lo entrega al CAD con enlace firmado', async () => {
       const token = await registrar('+524425555555');

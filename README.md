@@ -11,7 +11,7 @@ Plataforma ciudadana para reportar emergencias a las policías municipales de Qu
 | `packages/shared` | Tipos, catálogo semilla, folio, máquina de estados, geocercas, contrato de eventos CAD y firma HMAC | Con pruebas |
 | `services/api` | API NestJS: registro con OTP por SMS y aceptación legal, reportes, evidencia con hash, webhooks CAD, escalamiento al C5, seguimiento por WebSocket, avisos por SMS | Con pruebas de punta a punta en memoria y en PostgreSQL |
 | `services/cad-simulator` | CAD simulado: acusa, asigna unidad, la mueve y cierra el reporte | Listo para demos |
-| `apps/ciudadano` | App Expo (Android/iOS/Web): registro, botón de pánico, catálogo, foto con hash, seguimiento con mapa de la unidad en vivo y chat | Scaffold; compila Android y web |
+| `apps/ciudadano` | App Expo (Android/iOS/Web): registro, botón de asistencia directa, despachadora 911 virtual (voz/texto), lugares guardados con accesos rápidos, catálogo, foto con hash, seguimiento con mapa de la unidad en vivo y chat | Scaffold; compila Android y web |
 | `apps/web` | Next.js: publica el Aviso de Privacidad y los Términos; consola de operador en construcción | Scaffold |
 | `docs/api` | `openapi.yaml` (API pública) y `asyncapi.yaml` (contrato de eventos con los CAD) | v0.1 |
 | `docs/legal` | Aviso de Privacidad integral y simplificado, Términos y Condiciones | Borradores para revisión jurídica |
@@ -57,12 +57,20 @@ pnpm build && pnpm typecheck && pnpm test
 TEST_DATABASE_URL=postgres://poliaq:poliaq-dev@localhost:5432/poliaq_test pnpm test
 ```
 
+## Escenarios y despachadora 911 virtual
+
+- **Mis lugares** (`GET/PUT /v1/perfil`): el ciudadano guarda su casa, la de sus familiares, su trabajo… con la ubicación exacta, quién vive ahí (adultos mayores, niños…) e información médica opcional. Para cada lugar se sugieren **accesos rápidos** (`sugerirEscenarios`), por ejemplo "Emergencia médica en casa de mis abuelos" o "Ruidos extraños de noche". Un acceso rápido se envía con dos toques, con la ubicación guardada y las respuestas que ya se conocen.
+- **Despachadora 911 virtual** (`apps/ciudadano/src/pantallas/Asistente911.tsx`): atiende por voz (`expo-speech` + `expo-speech-recognition`, es-MX) o por texto. Pregunta el motivo, lo clasifica en el catálogo, levanta el folio de inmediato y luego hace las preguntas del protocolo. Siempre ofrece llamar al 911 real.
+- **Protocolo versionado**: las preguntas son datos (JSON) y se actualizan sin tocar código. Cada respuesta queda en texto en el folio (`POST /v1/reportes/{folio}/cuestionario`) y recalcula la **canalización** (prioridad, corporaciones de apoyo y alertas) que se envía al CAD. Ver [`docs/protocolos`](docs/protocolos/README.md). **El protocolo actual es provisional, no oficial.**
+- El antiguo "botón de pánico" se llama ahora **botón de asistencia directa** (`asistenciaDirecta` en el API).
+
 ## SMS
 
 `SMS_PROVIDER=simulado` (por defecto) o `twilio` con `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` y `TWILIO_FROM` (número o Messaging Service `MG…`). En producción el API no arranca con el simulado. Para otro proveedor implementa `ProveedorSms` en `services/api/src/sms/sms.ts`.
 
 ## Pendientes antes del piloto
 
+- Sustituir el protocolo provisional de la despachadora virtual por el Protocolo Nacional de Atención de Llamadas de Emergencia 9-1-1 vigente, validado con el C5 (`docs/protocolos`).
 - Cargar los códigos oficiales del Catálogo Nacional de Incidentes de Emergencia (`codigoCnie` está en `null` a propósito).
 - Sustituir las geocercas aproximadas por los polígonos oficiales de INEGI.
 - Trabajador de colas para la bandeja de salida y los temporizadores de acuse; Redis para WebSocket con varias instancias.

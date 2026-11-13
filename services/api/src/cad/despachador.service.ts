@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { createHmac, randomUUID } from 'node:crypto';
-import { CAD_ESTATAL_ID, firmar, type EventoHaciaCad } from '@pol-iaq/shared';
+import { CAD_ESTATAL_ID, firmar, transcripcion, type EventoHaciaCad } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
 import type { Ciudadano, Envio, Evidencia, Reporte } from '../almacen/modelos';
 import { CONFIG, type Config } from '../config';
@@ -9,6 +9,11 @@ const REINTENTOS_MS = [0, 1000, 2000, 4000, 8000, 16000];
 const VIGENCIA_ENLACE_SEG = 15 * 60;
 
 export type { Envio };
+
+/** Cuestionario con su transcripción en texto, tal como lo recibe el CAD. */
+export function cuestionarioParaCad(r: Reporte) {
+  return { ...r.cuestionario, transcripcion: transcripcion(r.cuestionario) };
+}
 
 /**
  * Envía eventos de Pol-IAQ a los CAD (bandeja de salida persistida, con
@@ -41,7 +46,7 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
   }
 
   /** Encola `incidente.creado`. Incrementa `r.secuenciaSalida`: quien llama guarda el reporte. */
-  async enviarCreado(r: Reporte, ciudadano: Ciudadano) {
+  async enviarCreado(r: Reporte, ciudadano: Ciudadano, escenario?: { id: string; titulo: string }) {
     const evento: EventoHaciaCad = {
       tipo: 'incidente.creado',
       eventoId: randomUUID(),
@@ -57,13 +62,21 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
         municipioClave: r.municipioClave,
         descripcion: r.descripcion,
         respuestas: r.respuestas,
-        esPanico: r.esPanico,
+        asistenciaDirecta: r.asistenciaDirecta,
+        ...(escenario && { escenario }),
+        cuestionario: cuestionarioParaCad(r),
+        canalizacion: r.canalizacion,
         reportante: { nombre: ciudadano.nombre, telefono: ciudadano.telefono, confiabilidad: ciudadano.confiabilidad },
         evidencias: r.evidencias.filter((e) => e.estado === 'verificada').map((e) => this.enlaceEvidencia(r, e)),
       },
     };
     await this.encolar(r.cadId, evento);
-    if (r.cadId !== CAD_ESTATAL_ID) this.vigilarAcuse(r.folio, r.cadId, ciudadano);
+    if (r.cadId !== CAD_ESTATAL_ID) this.vigilarAcuse(r.folio, r.cadId, ciudadano, escenario);
+  }
+
+  /** Envía el cuestionario completo y la canalización recalculada tras nuevas respuestas. */
+  enviarCuestionario(r: Reporte) {
+    return this.enviarActualizado(r, { cuestionario: cuestionarioParaCad(r), canalizacion: r.canalizacion });
   }
 
   /** Encola `incidente.actualizado`. Incrementa `r.secuenciaSalida`: quien llama guarda el reporte. */
@@ -89,18 +102,18 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
     return createHmac('sha256', this.config.secretoTokens).update(`${evidenciaId}.${cadId}.${exp}`).digest('hex') === firma;
   }
 
-  private vigilarAcuse(folio: string, cadId: string, ciudadano: Ciudadano) {
+  private vigilarAcuse(folio: string, cadId: string, ciudadano: Ciudadano, escenario?: { id: string; titulo: string }) {
     this.almacen.aparte(() => {
       const t = setTimeout(() => {
         this.temporizadores.delete(t);
-        void this.escalarSiNoAcuso(folio, cadId, ciudadano).catch((err) => this.log.error(`${folio}: no se pudo escalar al C5: ${(err as Error).message}`));
+        void this.escalarSiNoAcuso(folio, cadId, ciudadano, escenario).catch((err) => this.log.error(`${folio}: no se pudo escalar al C5: ${(err as Error).message}`));
       }, this.config.esperaAcuseSeg * 1000);
       t.unref();
       this.temporizadores.add(t);
     });
   }
 
-  private async escalarSiNoAcuso(folio: string, cadId: string, ciudadano: Ciudadano) {
+  private async escalarSiNoAcuso(folio: string, cadId: string, ciudadano: Ciudadano, escenario?: { id: string; titulo: string }) {
     if (this.cerrando) return;
     await this.almacen.conReporte(folio, async () => {
       const r = await this.almacen.reporte(folio);
@@ -108,7 +121,7 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
       this.log.warn(`${folio}: ${cadId} no acusó en ${this.config.esperaAcuseSeg}s, se escala al C5`);
       await this.almacen.auditar({ actor: 'sistema', accion: 'escalado_c5_sin_acuse', folio, detalle: { cadId } });
       r.cadId = CAD_ESTATAL_ID;
-      await this.enviarCreado(r, ciudadano);
+      await this.enviarCreado(r, ciudadano, escenario);
       await this.almacen.guardarReporte(r);
     });
   }

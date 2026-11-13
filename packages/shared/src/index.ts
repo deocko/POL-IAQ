@@ -7,3 +7,6 @@ export * from './schemas';
 export * from './eventos-cad';
 export * from './firma';
 export * from './legal';
+export * from './protocolos';
+export * from './protocolo-provisional';
+export * from './escenarios';

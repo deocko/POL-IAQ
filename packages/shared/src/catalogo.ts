@@ -8,6 +8,9 @@
  * versión oficial vigente del CNIE antes del piloto; NO inventar códigos. En
  * producción el catálogo vive en base de datos y se versiona; este archivo es
  * solo la semilla de desarrollo.
+ *
+ * Las preguntas que hace la despachadora 911 virtual viven en el protocolo
+ * versionado (ver protocolos.ts). `preguntasGuia` queda solo por compatibilidad.
  */
 export type Prioridad = 'alta' | 'media' | 'baja';
 export type Corporacion = 'policia_municipal' | 'policia_estatal' | 'cruz_roja' | 'bomberos' | 'proteccion_civil';
@@ -29,10 +32,12 @@ const P_PERSONAS = { id: 'personas', texto: '¿Cuántas personas involucradas?',
 export const CATALOGO_SEMILLA: readonly IncidenteCatalogo[] = [
   { id: 'robo-en-curso', categoria: 'seguridad', nombreCiudadano: 'Me están robando / robo en curso', codigoCnie: null, prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_ARMAS, P_HERIDOS, P_PERSONAS] },
   { id: 'agresion', categoria: 'seguridad', nombreCiudadano: 'Agresión o pelea', codigoCnie: null, prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_ARMAS, P_HERIDOS, P_PERSONAS] },
+  { id: 'intrusion-domicilio', categoria: 'seguridad', nombreCiudadano: 'Ruidos extraños o alguien intenta entrar a mi casa', codigoCnie: null, prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_ARMAS, P_PERSONAS] },
   { id: 'violencia-familiar', categoria: 'seguridad', nombreCiudadano: 'Violencia familiar o de pareja', codigoCnie: null, prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_HERIDOS, P_ARMAS] },
   { id: 'disparos', categoria: 'seguridad', nombreCiudadano: 'Disparos', codigoCnie: null, prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_HERIDOS] },
   { id: 'persona-sospechosa', categoria: 'seguridad', nombreCiudadano: 'Persona o vehículo sospechoso', codigoCnie: null, prioridad: 'media', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_PERSONAS] },
   { id: 'accidente-vial', categoria: 'medico', nombreCiudadano: 'Accidente de tránsito', codigoCnie: null, prioridad: 'alta', corporacionSugerida: 'cruz_roja', preguntasGuia: [P_HERIDOS, P_PERSONAS] },
+  { id: 'emergencia-medica', categoria: 'medico', nombreCiudadano: 'Emergencia médica (desmayo, dolor de pecho, caída)', codigoCnie: null, prioridad: 'alta', corporacionSugerida: 'cruz_roja', preguntasGuia: [] },
   { id: 'persona-lesionada', categoria: 'medico', nombreCiudadano: 'Persona herida o inconsciente', codigoCnie: null, prioridad: 'alta', corporacionSugerida: 'cruz_roja', preguntasGuia: [P_PERSONAS] },
   { id: 'incendio', categoria: 'proteccion_civil', nombreCiudadano: 'Incendio', codigoCnie: null, prioridad: 'alta', corporacionSugerida: 'bomberos', preguntasGuia: [P_HERIDOS] },
   { id: 'fuga-gas', categoria: 'proteccion_civil', nombreCiudadano: 'Fuga de gas', codigoCnie: null, prioridad: 'alta', corporacionSugerida: 'bomberos', preguntasGuia: [] },

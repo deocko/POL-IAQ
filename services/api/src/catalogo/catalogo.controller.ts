@@ -1,8 +1,17 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Inject } from '@nestjs/common';
 import { AVISO_PRIVACIDAD_VERSION, CATALOGO_SEMILLA, MUNICIPIOS_PILOTO, TERMINOS_VERSION } from '@pol-iaq/shared';
+import { ProtocolosService } from '../protocolos/protocolos.service';
 
 @Controller('v1')
 export class CatalogoController {
+  constructor(@Inject(ProtocolosService) private readonly protocolos: ProtocolosService) {}
+
+  /** Protocolo de atención vigente (preguntas, palabras clave, recomendaciones). Es público. */
+  @Get('protocolo')
+  protocolo() {
+    return this.protocolos.vigente();
+  }
+
   @Get('catalogo')
   catalogo() {
     return { version: 'semilla-dev', incidentes: CATALOGO_SEMILLA.map(({ codigoCnie: _c, ...publico }) => publico) };

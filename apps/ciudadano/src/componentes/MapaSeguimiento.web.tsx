@@ -24,7 +24,7 @@ var reporte, unidad, linea, encuadreConUnidad = false;
 window.addEventListener('message', function (ev) {
   var d = ev.data; if (!d || d.tipo !== 'pol-iaq:mapa') return;
   var r = [d.reporte.lat, d.reporte.lng];
-  if (!reporte) { reporte = L.circleMarker(r, { radius: 9, color: '#fff', weight: 3, fillColor: '${colores.panico}', fillOpacity: 1 }).addTo(mapa).bindTooltip('Tu reporte'); mapa.setView(r, 15); }
+  if (!reporte) { reporte = L.circleMarker(r, { radius: 9, color: '#fff', weight: 3, fillColor: '${colores.asistencia}', fillOpacity: 1 }).addTo(mapa).bindTooltip('Tu reporte'); mapa.setView(r, 15); }
   else reporte.setLatLng(r);
   if (linea) { linea.remove(); linea = null; }
   if (d.recorrido.length > 1) linea = L.polyline(d.recorrido.map(function (p) { return [p.lat, p.lng]; }), { color: '${colores.primario}', weight: 4, dashArray: '6 6' }).addTo(mapa);

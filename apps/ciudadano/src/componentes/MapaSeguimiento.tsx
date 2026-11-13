@@ -34,7 +34,7 @@ export function MapaSeguimiento({ reporte, unidad, recorrido, alto = 260 }: Prop
         toolbarEnabled={false}
         accessibilityLabel={unidad ? `Mapa: ${unidad.etiqueta} rumbo a tu ubicación` : 'Mapa con la ubicación de tu reporte'}
       >
-        <Marker coordinate={{ latitude: reporte.lat, longitude: reporte.lng }} title="Tu reporte" pinColor={colores.panico} />
+        <Marker coordinate={{ latitude: reporte.lat, longitude: reporte.lng }} title="Tu reporte" pinColor={colores.asistencia} />
         {recorrido.length > 1 && (
           <Polyline coordinates={recorrido.map((p) => ({ latitude: p.lat, longitude: p.lng }))} strokeColor={colores.primario} strokeWidth={4} lineDashPattern={[6, 6]} />
         )}
