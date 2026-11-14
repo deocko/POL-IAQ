@@ -7,6 +7,7 @@ import {
   type EntradaCuestionario, type PreguntaProtocolo, type Protocolo, type ValorRespuesta, type ViaCuestionario,
 } from '@pol-iaq/shared/movil';
 import { ErrorApi, api, type ReporteVista } from '../api';
+import { CampoDictado, hayDictadoEnCurso } from '../componentes/CampoDictado';
 import { colores, e } from '../estilos';
 import { avisarFallo, llamar911, ubicacionActual } from '../ubicacion';
 
@@ -101,13 +102,15 @@ export function Asistente911({
   }
 
   useSpeechRecognitionEvent('result', (ev) => {
-    if (!ev.isFinal) return;
+    // Un dictado en el campo de texto no es la llamada por voz.
+    if (!ev.isFinal || hayDictadoEnCurso()) return;
     const dicho = ev.results[0]?.transcript?.trim();
     if (dicho) void recibir(dicho, 'voz');
   });
   useSpeechRecognitionEvent('end', () => setEscuchando(false));
   useSpeechRecognitionEvent('error', () => {
     setEscuchando(false);
+    if (hayDictadoEnCurso()) return;
     setAviso('No te escuché bien. Toca el micrófono o escribe.');
   });
 
@@ -299,6 +302,8 @@ export function Asistente911({
   }
 
   const ocupado = fase === 'enviando';
+  /** Respuesta libre: el relato inicial o una pregunta de texto del protocolo. */
+  const abierta = fase === 'motivo' || fase === 'elegir' || (fase === 'pregunta' && pregunta?.tipo === 'texto');
 
   return (
     <View style={[e.pantalla, { paddingBottom: 0 }]}>
@@ -353,15 +358,27 @@ export function Asistente911({
           >
             <Text style={{ fontSize: 22, color: voz ? colores.blanco : colores.primario }}>🎙</Text>
           </Pressable>
-          <TextInput
-            style={[e.input, { flex: 1, minWidth: 0, marginBottom: 0 }]}
-            placeholder={pregunta?.tipo === 'numero' ? 'Escribe un número' : 'Escribe tu respuesta'}
-            keyboardType={pregunta?.tipo === 'numero' ? 'number-pad' : 'default'}
-            value={texto}
-            onChangeText={setTexto}
-            onSubmitEditing={enviarTexto}
-            editable={!ocupado}
-          />
+          {abierta && !voz ? (
+            // Pregunta abierta: se puede dictar al campo y revisar antes de enviar.
+            <CampoDictado
+              estiloContenedor={{ flex: 1, minWidth: 0, marginBottom: 0 }}
+              placeholder="Escribe o dicta tu respuesta"
+              value={texto}
+              onChangeText={setTexto}
+              onSubmitEditing={enviarTexto}
+              editable={!ocupado}
+            />
+          ) : (
+            <TextInput
+              style={[e.input, { flex: 1, minWidth: 0, marginBottom: 0 }]}
+              placeholder={pregunta?.tipo === 'numero' ? 'Escribe un número' : 'Escribe tu respuesta'}
+              keyboardType={pregunta?.tipo === 'numero' ? 'number-pad' : 'default'}
+              value={texto}
+              onChangeText={setTexto}
+              onSubmitEditing={enviarTexto}
+              editable={!ocupado}
+            />
+          )}
           <Pressable style={[e.boton, { marginTop: 0, paddingHorizontal: 16 }]} onPress={enviarTexto} disabled={ocupado}>
             <Text style={e.botonTexto}>Enviar</Text>
           </Pressable>
