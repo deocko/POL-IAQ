@@ -76,3 +76,7 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--prima
   .c-columnas:not(.con-detalle) .c-vacio { display: none; }
   .c-volver { display: inline; }
 }
+
+.c-demo { font-size: 13px; background: #fff7e0; border: 1px solid #f0d58a; border-radius: 8px; padding: 8px 10px; margin: 8px 0 0; color: #5c4400; }
+.c-demo code { background: #fff; padding: 0 4px; border-radius: 4px; }
+.c-demo-barra { margin: 0 0 8px; }

@@ -4,6 +4,22 @@ Plataforma ciudadana para reportar emergencias a las policías municipales de Qu
 
 **Municipios piloto:** Querétaro (014), Corregidora (006) y El Marqués (011).
 
+## Demo en vivo (datos de prueba)
+
+| Parte | URL pública | Cómo funciona en la demo |
+| --- | --- | --- |
+| Portada | https://deocko.github.io/POL-IAQ/ | Explica el recorrido |
+| App ciudadana (web) | https://deocko.github.io/POL-IAQ/demo/ | Registro con código SMS `000000`, reporte, folio unificado y seguimiento |
+| Consola del operador | https://deocko.github.io/POL-IAQ/consola/ | Usuario `operador`, clave `operador` |
+| API (`services/api`) | **No está publicado** | Simulado en el navegador con la misma lógica de `@pol-iaq/shared` |
+| CAD simulado (`services/cad-simulator`) | **No está publicado** | Simulado en el navegador: acusa a los 3 s, asigna unidad y cierra a los ~32 s |
+
+Recorrido: abre `/demo/`, regístrate (código `000000`, no se envía ningún SMS), elige incidente y ubicación de prueba y envía. Recibes un folio como `QRO-006-2026-000001`. Si eliges "Yo, desde la consola del operador", abre `/consola/` en otra pestaña del **mismo navegador**, entra con `operador`/`operador` y lleva el reporte por recibir → asignar → en camino → en sitio → cerrar; la app ciudadana se actualiza al instante. Si eliges "El CAD simulado", avanza solo hasta cerrado. Si nadie recibe un reporte en 90 s, se escala al C5 con el mismo folio. Las ubicaciones de prueba cubren los tres municipios piloto y una fuera del piloto (San Juan del Río → folio `QRO-000-…` del C5).
+
+Por qué así: la demo se publica en GitHub Pages (gratis, en el mismo repo, sin cuentas ni llaves de terceros). Pages solo sirve archivos estáticos, así que el API NestJS y el CAD simulado no pueden correr ahí: con `NEXT_PUBLIC_DEMO=1`, `apps/web/lib/demo/motor.ts` hace en el navegador lo mismo que ellos (folio, geocercas, máquina de estados, cuestionario, canalización, escalamiento al C5). Los datos viven en el `localStorage` de quien abre la demo, se comparten entre pestañas de ese navegador y se borran con "Borrar datos de la demo". **Solo datos de prueba: nada sale del navegador ni llega a ningún CAD o policía.** Para probar los servicios reales, usa el arranque rápido de abajo.
+
+Publicación: el flujo `.github/workflows/demo-pages.yml` construye `pnpm --filter @pol-iaq/web build:demo` en cada push a `main` y publica `apps/web/out` en la rama `gh-pages`. Para la vista local idéntica: `pnpm --filter @pol-iaq/web build:demo` y sirve `apps/web/out` bajo `/POL-IAQ/`.
+
 ## Estructura
 
 | Carpeta | Qué es | Estado |
@@ -12,7 +28,7 @@ Plataforma ciudadana para reportar emergencias a las policías municipales de Qu
 | `services/api` | API NestJS: registro con OTP por SMS y aceptación legal, reportes, evidencia con hash, webhooks CAD, escalamiento al C5, seguimiento por WebSocket, avisos por SMS | Con pruebas de punta a punta en memoria y en PostgreSQL |
 | `services/cad-simulator` | CAD simulado: acusa, asigna unidad, la mueve y cierra el reporte | Listo para demos |
 | `apps/ciudadano` | App Expo (Android/iOS/Web): registro, botón de asistencia directa, despachadora 911 virtual (voz/texto), lugares guardados con accesos rápidos, catálogo, foto con hash, seguimiento con mapa de la unidad en vivo y chat | Scaffold; compila Android y web |
-| `apps/web` | Next.js: publica el Aviso de Privacidad y los Términos; consola de operador en construcción | Scaffold |
+| `apps/web` | Next.js: Aviso de Privacidad y Términos, consola del operador y la demo pública (`/demo`, modo `NEXT_PUBLIC_DEMO=1`) | En uso |
 | `docs/api` | `openapi.yaml` (API pública) y `asyncapi.yaml` (contrato de eventos con los CAD) | v0.1 |
 | `docs/legal` | Aviso de Privacidad integral y simplificado, Términos y Condiciones | Borradores para revisión jurídica |
 | `services/api/db/migraciones` | Esquema PostgreSQL + PostGIS; el API aplica las migraciones al arrancar | En uso |

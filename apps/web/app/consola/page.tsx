@@ -1,10 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { io, type Socket } from 'socket.io-client';
 import './consola.css';
 import {
-  API, CORPORACION, ERRORES, ESTADO, ErrorApi, api, esFinal, hace, hora, ordenar,
+  CORPORACION, DEMO, ERRORES, conectarOperacion, ESTADO, ErrorApi, api, esFinal, hace, hora, ordenar,
   type Accion, type Reporte, type UnidadDisponible, type Yo,
 } from './consola';
 
@@ -71,6 +71,13 @@ function Entrar({ alEntrar }: { alEntrar: (token: string, yo: Yo) => void }) {
         <label>Clave<input type="password" value={clave} onChange={(e) => setClave(e.target.value)} autoComplete="current-password" required /></label>
         {error && <p className="c-error" role="alert">{error}</p>}
         <button className="c-boton" disabled={enviando}>{enviando ? 'Entrando…' : 'Entrar'}</button>
+        {DEMO && (
+          <p className="c-demo">
+            Demo con datos de prueba. Usuario <code>operador</code>, clave <code>operador</code>.{' '}
+            <button type="button" className="c-enlace" onClick={() => { setUsuario('operador'); setClave('operador'); }}>Rellenar</button>
+            {' · '}<Link href="/demo/">Crear un reporte</Link>
+          </p>
+        )}
       </form>
     </div>
   );
@@ -84,7 +91,6 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
   const [enLinea, setEnLinea] = useState(false);
   const [aviso, setAviso] = useState('');
   const [ahora, setAhora] = useState(() => Date.now());
-  const socket = useRef<Socket | null>(null);
   const supervision = yo.operador.cads.includes('*');
   const nombreCad = useCallback((id: string) => yo.cads.find((c) => c.id === id)?.nombre ?? id, [yo.cads]);
 
@@ -100,16 +106,15 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
   }, [token, todos, alSalir]);
 
   useEffect(() => { void cargar(); }, [cargar]);
+  const cargarRef = useRef(cargar);
+  cargarRef.current = cargar;
   useEffect(() => { const t = setInterval(() => setAhora(Date.now()), 1000); return () => clearInterval(t); }, []);
 
   // Tiempo real: cada cambio llega con la vista completa del reporte.
-  useEffect(() => {
-    const s = io(`${API}/operacion`, { transports: ['websocket'] });
-    socket.current = s;
-    const suscribir = () => s.emit('suscribir', { token }, (r: { ok: boolean }) => { setEnLinea(r.ok); if (!r.ok) alSalir(); });
-    s.on('connect', suscribir);
-    s.on('disconnect', () => setEnLinea(false));
-    s.on('reporte.actualizado', (v: Reporte) => {
+  useEffect(() => conectarOperacion(token, {
+    alEnLinea: setEnLinea,
+    alRechazo: alSalir,
+    alReporte: (v: Reporte) => {
       setReportes((m) => {
         const n = new Map(m);
         const mio = supervision || yo.operador.cads.includes(v.cadId);
@@ -118,9 +123,9 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
         return n;
       });
       void api.unidades(token).then((u) => setUnidades(u.unidades)).catch(() => {});
-    });
-    return () => { s.close(); socket.current = null; };
-  }, [token, supervision, yo.operador.cads, alSalir]);
+    },
+    alRecargar: () => { void cargarRef.current(); },
+  }), [token, supervision, yo.operador.cads, alSalir]);
 
   const lista = useMemo(() => [...reportes.values()].filter((r) => todos || !esFinal(r.estado)).sort(ordenar), [reportes, todos]);
   const actual = sel ? reportes.get(sel) ?? null : null;
@@ -160,6 +165,7 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
         {misCads.some((c) => c.modo === 'webhook') && <span className="c-chip">Los CAD con sistema propio se ven en solo lectura</span>}
         {yo.protocolo.estado === 'provisional' && <span className="c-chip c-chip-aviso">Protocolo {yo.protocolo.version} PROVISIONAL: validar con el C5</span>}
       </div>
+      {DEMO && <p className="c-demo c-demo-barra">Demo: el API y el CAD corren simulados en tu navegador. Nada aquí es una emergencia real. <Link href="/demo/">Abrir la app ciudadana</Link></p>}
       {aviso && <p className="c-error c-aviso" role="alert">{aviso} <button className="c-enlace" onClick={() => setAviso('')}>Cerrar</button></p>}
 
       <div className={`c-columnas ${actual ? 'con-detalle' : ''}`}>

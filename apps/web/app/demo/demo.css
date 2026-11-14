@@ -1,0 +1,42 @@
+/* App ciudadana de la demo: una columna, cabe en 390 px. */
+.d-main { max-width: 560px; padding-top: 16px; }
+.d-cabecera h1 { font-size: 22px; margin: 12px 0 4px; }
+.d-nav { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin-bottom: 12px; }
+.d-form { display: grid; gap: 12px; }
+.d-form label:not(.c-check) { display: grid; gap: 4px; font-size: 14px; font-weight: 600; }
+.d-form input, .d-form select, .d-form textarea { width: 100%; font-weight: 400; }
+textarea { font: inherit; padding: 8px 10px; border: 1px solid var(--borde); border-radius: 8px; resize: vertical; min-width: 0; }
+.d-form .c-check { font-weight: 400; align-items: flex-start; }
+.d-form .c-check input { width: auto; flex: none; margin-top: 5px; }
+.d-form h2 { font-size: 20px; margin: 0; }
+.d-nota { font-size: 14px; margin: 0; }
+.d-preguntas, .d-modo { border: 1px solid var(--borde); border-radius: 10px; padding: 8px 12px 12px; margin: 0; display: grid; gap: 10px; min-width: 0; }
+.d-preguntas legend, .d-modo legend { font-size: 14px; font-weight: 600; padding: 0 4px; }
+.d-pregunta { display: grid; gap: 6px; font-size: 14px; }
+.d-opciones { display: flex; gap: 6px; flex-wrap: wrap; }
+.d-opcion { font: inherit; font-size: 14px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--borde); background: #fff; cursor: pointer; }
+.d-opcion.sel { background: var(--primario); border-color: var(--primario); color: #fff; }
+.d-enviar { padding: 12px; font-size: 17px; }
+.d-folio { font: 700 22px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0 0 6px; word-break: break-all; }
+.d-estado { font-size: 18px; font-weight: 700; margin: 10px 0 6px; color: var(--primario); }
+.d-estado.d-cerrado { color: var(--ok); }
+.d-estado.d-cancelado, .d-estado.d-improcedente { color: var(--suave); }
+.d-pasos { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; font-size: 14px; }
+.d-pasos li { padding-left: 22px; position: relative; color: var(--suave); }
+.d-pasos li::before { content: ''; position: absolute; left: 4px; top: 7px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--borde); background: #fff; }
+.d-pasos li.hecho { color: var(--texto); }
+.d-pasos li.hecho::before { background: var(--ok); border-color: var(--ok); }
+.d-unidad { background: var(--primario-suave); border-radius: 8px; padding: 10px 12px; margin: 8px 0; font-size: 15px; }
+.d-barra { height: 6px; border-radius: 3px; background: #fff; margin-top: 8px; overflow: hidden; }
+.d-barra span { display: block; height: 100%; background: var(--primario); transition: width 0.6s; }
+.d-cancelar { margin-top: 8px; }
+.d-seguimiento ul { margin: 0; padding-left: 20px; font-size: 14px; }
+.d-mensajes { list-style: none; padding: 0 !important; display: grid; gap: 6px; margin-bottom: 8px !important; }
+.d-mensajes li { background: var(--fondo); border-radius: 8px; padding: 6px 10px; max-width: 90%; }
+.d-mensajes li.yo { background: var(--primario-suave); justify-self: end; }
+.d-mensajes p { margin: 0; word-break: break-word; }
+.d-mensajes span { font-size: 12px; }
+.d-chat { display: flex; gap: 6px; }
+.d-chat input { flex: 1; }
+.d-historial { list-style: none; padding: 0 !important; display: grid; gap: 4px; }
+.d-historial li { word-break: break-word; }
