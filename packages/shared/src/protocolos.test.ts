@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CATALOGO_SEMILLA, NO_SABE, PROTOCOLO_PROVISIONAL as P, PerfilSchema, ProtocoloSchema, canalizar, clasificarRelato, incidentePorId,
-  interpretarRespuesta, preguntasPara, preguntasPendientes, resolverEntradas, siguientePregunta, sugerirEscenarios, transcripcion,
+  interpretarRespuesta, preguntasPara, preguntasPendientes, preguntasDespachadora, preguntasHechas, esVital, MAX_PREGUNTAS_DESPACHADORA, resolverEntradas, siguientePregunta, sugerirEscenarios, transcripcion,
 } from './index';
 
 const q = (incidenteId: string, id: string) => preguntasPara(P, incidenteId).find((x) => x.id === id)!;
@@ -101,5 +101,48 @@ describe('protocolo publicado en docs/protocolos', () => {
     const { join } = await import('node:path');
     const json = JSON.parse(readFileSync(join(__dirname, '..', '..', '..', 'docs', 'protocolos', `${P.version}.json`), 'utf8'));
     expect(ProtocoloSchema.parse(json)).toEqual(P);
+  });
+});
+
+describe('llamada corta con la despachadora virtual', () => {
+  const ids = (incidenteId: string, r: Record<string, unknown>, op?: { accesoRapido?: boolean; yaHechas?: number }) =>
+    preguntasDespachadora(P, incidenteId, r as Record<string, string>, op).map((q) => q.id);
+
+  it('entiende "sí" con o sin acento y otras formas de afirmar', () => {
+    const q = preguntasPara(P, 'otro').find((x) => x.id === 'lugar_seguro')!;
+    for (const dicho of ['Sí', 'si', 'SI', 'sí.', 'sip', 'si estoy bien', 'estoy bien', 'ok']) expect(interpretarRespuesta(q, dicho), dicho).toBe(true);
+    expect(interpretarRespuesta(q, 'algo asi')).toBeUndefined();
+  });
+
+  it('en un tema nuevo hace solo las obligatorias, primero las vitales del incidente y con tope', () => {
+    const lista = ids('emergencia-medica', {});
+    expect(lista).toEqual(['consciente', 'respira', 'sintoma', 'lugar_seguro']);
+    expect(lista).not.toContain('quien_afectado');
+    expect(lista).not.toContain('edad');
+    expect(ids('robo-en-curso', {}).length).toBe(MAX_PREGUNTAS_DESPACHADORA.temaNuevo);
+    expect(ids('robo-en-curso', {}, { yaHechas: 3 })).toHaveLength(1);
+    expect(ids('robo-en-curso', {}, { yaHechas: 4 })).toEqual([]);
+  });
+
+  it('desde un acceso rápido no repite lo prellenado y solo pregunta lo vital', () => {
+    for (const lugar of [
+      { id: 'abuelos', nombre: 'casa de mis abuelos', tipo: 'familiar' as const, ubicacion: { lat: 20.59, lng: -100.39 }, vulnerables: ['adulto_mayor' as const] },
+      { id: 'casa', nombre: 'Mi casa', tipo: 'casa' as const, ubicacion: { lat: 20.59, lng: -100.39 }, vulnerables: [] },
+    ]) {
+      for (const e of sugerirEscenarios(lugar)) {
+        const lista = preguntasDespachadora(P, e.incidenteId, e.respuestasPrevias, { accesoRapido: true });
+        expect(lista.length, e.id).toBeLessThanOrEqual(MAX_PREGUNTAS_DESPACHADORA.accesoRapido);
+        for (const q of lista) {
+          expect(Object.keys(e.respuestasPrevias), e.id).not.toContain(q.id);
+          expect(esVital(q), `${e.id}:${q.id}`).toBe(true);
+        }
+      }
+    }
+    const caida = sugerirEscenarios({ id: 'a', nombre: 'abuelos', tipo: 'familiar', ubicacion: { lat: 20.59, lng: -100.39 }, vulnerables: ['adulto_mayor'] }).find((e) => e.id === 'a-caida-adulto-mayor')!;
+    expect(ids('emergencia-medica', caida.respuestasPrevias, { accesoRapido: true })).toEqual(['consciente', 'respira']);
+  });
+
+  it('cuenta solo lo que contestó la persona', () => {
+    expect(preguntasHechas([{ via: 'escenario' }, { via: 'voz' }, { via: 'texto' }, { via: 'formulario' }])).toBe(2);
   });
 });

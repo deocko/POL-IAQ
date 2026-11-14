@@ -180,20 +180,21 @@ describe.each(ALMACENES)('API con almacén en %s', (_nombre, nuevoAlmacen) => {
       const folio = creado.body.folio;
       expect(creado.body.escenarioId).toBe('casa-ruidos');
       expect(creado.body.cuestionario.entradas.map((e: { preguntaId: string }) => e.preguntaId)).toEqual(['dentro_casa', 'lugar_seguro']);
-      expect(creado.body.cuestionario.pendientes).toContain('resguardo');
+      // Acceso rápido: no repite lo prellenado y solo queda lo vital (tope de 2, ya contestó 1).
+      expect(creado.body.cuestionario.pendientes).toEqual(['intruso_visto']);
       expect(creado.body.cuestionario.protocoloEstado).toBe('provisional');
       expect(creado.body.recomendaciones.length).toBeGreaterThan(0);
 
       const bandeja = app.get(DespachadorCadService).bandeja;
       const alta = bandeja.find((e) => e.evento.folio === folio && e.evento.tipo === 'incidente.creado')!.evento.datos as Record<string, any>;
       expect(alta.escenario).toEqual({ id: 'casa-ruidos', titulo: 'Ruidos extraños de noche' });
-      expect(alta.cuestionario.transcripcion).toContain('P: ¿Usted y su familia están dentro del domicilio?\nR: Sí [escenario]');
+      expect(alta.cuestionario.transcripcion).toContain('P: ¿Está usted dentro de la casa?\nR: Sí [escenario]');
       expect(alta.canalizacion.corporaciones).toEqual(['policia_municipal']);
 
       const resp = await http.post(`/v1/reportes/${folio}/cuestionario`).set(auth).send({ via: 'texto', entradas: [{ preguntaId: 'intruso_visto', respuesta: true }, { preguntaId: 'armas', respuesta: true }, { preguntaId: 'inventada', respuesta: true }] });
       expect(resp.status).toBe(201);
       expect(resp.body.canalizacion.alertas).toEqual(expect.arrayContaining(['Persona ajena vista en el domicilio', 'Posible persona armada']));
-      expect(resp.body.cuestionario.pendientes).not.toContain('armas');
+      expect(resp.body.cuestionario.pendientes).toEqual([]);
       const act = bandeja.filter((e) => e.evento.folio === folio && e.evento.tipo === 'incidente.actualizado').at(-1)!.evento.datos as Record<string, any>;
       expect(act.cuestionario.entradas).toHaveLength(4);
       expect(act.canalizacion.prioridad).toBe('alta');

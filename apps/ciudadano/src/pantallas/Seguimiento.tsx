@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { ESTADOS_FINALES, ETIQUETAS_CIUDADANO, respuestasDe, type EstadoIncidente } from '@pol-iaq/shared/movil';
+import { ESTADOS_FINALES, ETIQUETAS_CIUDADANO, respuestasDe, preguntasHechas, type EstadoIncidente } from '@pol-iaq/shared/movil';
 import { api, seguir, type ReporteVista } from '../api';
 import { MapaSeguimiento } from '../componentes/MapaSeguimiento';
 import type { Punto } from '../componentes/tipos-mapa';
@@ -96,7 +96,7 @@ export function Seguimiento({ token, folio, alSalir, alContinuar }: { token: str
       )}
 
       {!finalizado && r.cuestionario.pendientes.length > 0 && (
-        <Pressable style={e.boton} onPress={() => alContinuar({ folio: r.folio, incidenteId: r.incidenteId, respuestas: respuestasDe(r.cuestionario.entradas) })}>
+        <Pressable style={e.boton} onPress={() => alContinuar({ folio: r.folio, incidenteId: r.incidenteId, respuestas: respuestasDe(r.cuestionario.entradas), accesoRapido: !!r.escenarioId, yaHechas: preguntasHechas(r.cuestionario.entradas) })}>
           <Text style={e.botonTexto}>Contestar {r.cuestionario.pendientes.length} preguntas con la despachadora</Text>
         </Pressable>
       )}

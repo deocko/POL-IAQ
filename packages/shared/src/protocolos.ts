@@ -178,6 +178,47 @@ export function siguientePregunta(protocolo: Protocolo, incidenteId: string, res
   return preguntasPendientes(protocolo, incidenteId, respuestas)[0];
 }
 
+/** Tope de preguntas de la despachadora virtual por llamada. */
+export const MAX_PREGUNTAS_DESPACHADORA = { temaNuevo: 4, accesoRapido: 2 } as const;
+
+/** Vital: su respuesta puede subir la prioridad a alta o sumar otra corporación. */
+export function esVital(q: PreguntaProtocolo): boolean {
+  return q.efectos.some((ef) => ef.prioridad === 'alta' || !!ef.agregarCorporacion);
+}
+
+/**
+ * Preguntas que hace la despachadora virtual, en orden. La llamada debe ser
+ * corta: la unidad ya va en camino desde que se levanta el folio.
+ * - Solo las obligatorias; las opcionales quedan para el operador.
+ * - Primero las vitales (las del incidente y luego las generales), después las demás.
+ * - Desde un acceso rápido ya van las respuestas prellenadas: solo se
+ *   pregunta lo vital que falte, con un tope menor.
+ * - `yaHechas`: preguntas que la persona ya contestó en esta llamada (cuentan para el tope).
+ */
+export function preguntasDespachadora(
+  protocolo: Protocolo,
+  incidenteId: string,
+  respuestas: Record<string, ValorRespuesta>,
+  { accesoRapido = false, yaHechas = 0 }: { accesoRapido?: boolean; yaHechas?: number } = {},
+): PreguntaProtocolo[] {
+  const tope = (accesoRapido ? MAX_PREGUNTAS_DESPACHADORA.accesoRapido : MAX_PREGUNTAS_DESPACHADORA.temaNuevo) - yaHechas;
+  if (tope <= 0) return [];
+  const propias = new Set(protocoloDe(protocolo, incidenteId)?.preguntas.map((q) => q.id));
+  // Primero lo vital (del incidente y luego general), después lo demás.
+  const peso = (q: PreguntaProtocolo) => (esVital(q) ? 0 : 2) + (propias.has(q.id) ? 0 : 1);
+  return preguntasPendientes(protocolo, incidenteId, respuestas)
+    .filter((q) => q.obligatoria && (!accesoRapido || esVital(q)))
+    .map((q, i) => ({ q, i }))
+    .sort((a, b) => peso(a.q) - peso(b.q) || a.i - b.i)
+    .slice(0, tope)
+    .map((x) => x.q);
+}
+
+/** Cuántas preguntas contestó la persona en la llamada (no cuenta lo prellenado de un acceso rápido). */
+export function preguntasHechas(entradas: { via: ViaCuestionario }[]): number {
+  return entradas.filter((e) => e.via === 'voz' || e.via === 'texto').length;
+}
+
 /** Quita acentos y signos para comparar lo que dijo la persona. */
 export function normalizar(texto: string): string {
   return texto
@@ -205,7 +246,7 @@ const NUMEROS: Record<string, number> = {
   cero: 0, ninguno: 0, ninguna: 0, nadie: 0, un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5,
   seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, varios: 3, varias: 3, muchos: 5, muchas: 5,
 };
-const SI = ['si', 'sí', 'claro', 'afirmativo', 'correcto', 'asi es', 'exacto', 'aja', 'por supuesto', 'yes'];
+const SI = ['si', 'sí', 'sii', 'siii', 'sip', 'simon', 'claro', 'afirmativo', 'correcto', 'asi es', 'exacto', 'aja', 'por supuesto', 'de acuerdo', 'ok', 'okey', 'esta bien', 'estoy bien', 'a salvo', 'yes'];
 const NO = ['no', 'negativo', 'para nada', 'ninguno', 'ninguna', 'nadie', 'nada'];
 
 /**

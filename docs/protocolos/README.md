@@ -4,7 +4,8 @@ La despachadora virtual de la app no tiene preguntas escritas en el código: sig
 un **protocolo versionado** que es un archivo JSON validado por `ProtocoloSchema`
 (`packages/shared/src/protocolos.ts`).
 
-> **Estado actual: PROVISIONAL.** El archivo `2026.11-provisional.1.json` lo
+> **Estado actual: PROVISIONAL.** El archivo `2026.11-provisional.2.json` (vigente en el código;
+> `2026.11-provisional.1.json` queda como historial) lo
 > redactó el equipo de Pol-IAQ siguiendo la estructura general de atención de
 > llamadas de emergencia. **No** es el texto oficial del *Protocolo Nacional de
 > Atención de Llamadas de Emergencia 9-1-1* ni del *Catálogo Nacional de
@@ -27,6 +28,24 @@ un **protocolo versionado** que es un archivo JSON validado por `ProtocoloSchema
 
 Los `incidenteId` deben existir en el catálogo (`packages/shared/src/catalogo.ts`).
 Las preguntas cerradas aceptan además la respuesta `"no_sabe"`.
+
+## Llamada corta: qué pregunta la despachadora
+
+La unidad se solicita en cuanto se levanta el folio; las preguntas solo afinan la
+canalización. Por eso la despachadora no hace todo el protocolo
+(`preguntasDespachadora` en `packages/shared/src/protocolos.ts`):
+
+- Solo hace las preguntas **obligatorias**. Las opcionales (edad, padecimientos,
+  descripción de responsables…) quedan para el operador.
+- Primero las **vitales** (las que pueden subir la prioridad a alta o sumar una
+  corporación), las del incidente antes que las generales; después las demás.
+- **Tema nuevo** (la persona cuenta qué pasa): máximo 4 preguntas.
+- **Acceso rápido** de un lugar guardado: sus respuestas ya van prellenadas y no
+  se repiten. Solo se pregunta lo vital que falte, máximo 2.
+- La persona puede terminar en cualquier momento; si no se le entiende dos
+  veces, se anota "No sabe" y se sigue.
+
+Las preguntas se redactan cortas y en lenguaje cotidiano ("¿Respira bien?").
 
 ## Qué se guarda en el folio
 
