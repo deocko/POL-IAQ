@@ -6,9 +6,12 @@
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start -p 3001",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:demo": "NEXT_PUBLIC_DEMO=1 next build"
   },
   "dependencies": {
+    "@pol-iaq/shared": "workspace:*",
+    "leaflet": "1.9.4",
     "marked": "^16.4.2",
     "next": "15.5.29",
     "react": "19.3.0",
@@ -16,6 +19,7 @@
     "socket.io-client": "^4.8.4"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.22",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "typescript": "5.9.3"

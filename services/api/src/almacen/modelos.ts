@@ -1,3 +1,4 @@
+import type { Identidad, OpinionGuardada } from '@pol-iaq/shared';
 import type { Canalizacion, Corporacion, Cuestionario, EstadoIncidente, EventoHaciaCad, Prioridad, Ubicacion } from '@pol-iaq/shared';
 
 export interface Ciudadano {
@@ -64,6 +65,11 @@ export interface Reporte {
   cuestionario: Cuestionario;
   canalizacion: Canalizacion;
   ocultarIdentidadAUnidad: boolean;
+  /** Cómo se identifica ante el operador y el CAD. */
+  identidad: Identidad;
+  alias?: string;
+  /** Calificación y queja del ciudadano después del cierre. */
+  opinion?: OpinionGuardada;
   estado: EstadoIncidente;
   unidad?: Unidad;
   evidencias: Evidencia[];

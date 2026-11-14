@@ -1,4 +1,5 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { UNIDADES_EJEMPLO } from '@pol-iaq/shared';
 
 /**
  * Configuración por variables de entorno. Ver .env.example.
@@ -31,6 +32,8 @@ export interface UnidadConfig {
   cadId: string;
   corporacion: string;
   etiqueta: string;
+  /** Posición inicial mientras no llega GPS (AVL). Opcional. */
+  base?: { lat: number; lng: number };
 }
 
 export interface SmsConfig {
@@ -64,6 +67,10 @@ export interface Config {
   protocoloArchivo?: string;
   operadores: OperadorConfig[];
   unidades: UnidadConfig[];
+  /** En CAD de consola, al recibir el reporte se asigna sola la unidad disponible más cercana. */
+  asignacionAutomatica: boolean;
+  /** Servicio de rutas OSRM (propio) para el tiempo de llegada por ruta real. Sin él se estima por calles. */
+  rutasOsrmUrl?: string;
 }
 
 /** Hash de una clave de operador (scrypt). */
@@ -80,14 +87,7 @@ export function claveValida(clave: string, guardado: string): boolean {
 }
 
 /** Unidades de ejemplo para desarrollo y demos (no son unidades reales). */
-export const UNIDADES_DESARROLLO: UnidadConfig[] = [
-  ...['cad-queretaro', 'cad-corregidora', 'cad-el-marques', 'c5-queretaro'].flatMap((cadId, i) => [
-    { unidadId: `P-${i + 1}01`, cadId, corporacion: cadId === 'c5-queretaro' ? 'policia_estatal' : 'policia_municipal', etiqueta: `Patrulla ${i + 1}01` },
-    { unidadId: `P-${i + 1}02`, cadId, corporacion: cadId === 'c5-queretaro' ? 'policia_estatal' : 'policia_municipal', etiqueta: `Patrulla ${i + 1}02` },
-    { unidadId: `A-${i + 1}10`, cadId, corporacion: 'cruz_roja', etiqueta: `Ambulancia ${i + 1}10` },
-    { unidadId: `B-${i + 1}20`, cadId, corporacion: 'bomberos', etiqueta: `Unidad de bomberos ${i + 1}20` },
-  ]),
-];
+export const UNIDADES_DESARROLLO: UnidadConfig[] = UNIDADES_EJEMPLO;
 
 export function cargarConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const produccion = env.NODE_ENV === 'production';
@@ -129,6 +129,8 @@ export function cargarConfig(env: NodeJS.ProcessEnv = process.env): Config {
     protocoloArchivo: env.PROTOCOLO_ARCHIVO || undefined,
     operadores,
     unidades: env.UNIDADES_JSON ? (JSON.parse(env.UNIDADES_JSON) as UnidadConfig[]) : produccion ? [] : UNIDADES_DESARROLLO,
+    asignacionAutomatica: env.AUTO_ASSIGN !== 'off',
+    rutasOsrmUrl: env.ROUTING_OSRM_URL || undefined,
   };
 }
 

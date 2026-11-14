@@ -1,5 +1,5 @@
 import {
-  CAD_ESTATAL_ID, ESTADOS, ETIQUETAS_CIUDADANO, MUNICIPIOS_PILOTO, incidentePorId, preguntasPendientes, protocoloDe, puedeTransicionar, respuestasDe, type Protocolo,
+  CAD_ESTATAL_ID, ESTADOS, ETIQUETAS_CIUDADANO, MUNICIPIOS_PILOTO, incidentePorId, medirTiempos, preguntasPendientes, reportanteVisible, protocoloDe, puedeTransicionar, respuestasDe, type Protocolo,
 } from '@pol-iaq/shared';
 import type { Ciudadano, Reporte } from '../almacen/modelos';
 import { cuestionarioParaCad, type DespachadorCadService } from '../cad/despachador.service';
@@ -41,7 +41,7 @@ export function vistaOperador(r: Reporte, ciudadano: Ciudadano | undefined, prot
     escenarioId: r.escenarioId ?? null,
     ubicacion: r.ubicacion,
     descripcion: r.descripcion ?? null,
-    reportante: ciudadano ? { nombre: ciudadano.nombre, telefono: ciudadano.telefono, confiabilidad: ciudadano.confiabilidad } : null,
+    reportante: ciudadano ? reportanteVisible(r, ciudadano) : null,
     cuestionario: { ...cuestionarioParaCad(r), pendientes: pendientes.map((q) => q.texto) },
     canalizacion: r.canalizacion,
     recomendaciones: protocoloDe(protocolo, r.incidenteId)?.recomendaciones ?? [],
@@ -49,6 +49,8 @@ export function vistaOperador(r: Reporte, ciudadano: Ciudadano | undefined, prot
     evidencias: r.evidencias.filter((e) => e.estado === 'verificada').map((e) => despachador.enlaceEvidencia(r, e)),
     mensajes: r.mensajes,
     historial: r.historial,
+    tiempos: medirTiempos(r.historial, r.prioridad),
+    opinion: r.opinion ?? null,
     creadoEn: r.creadoEn,
     actualizadoEn: r.actualizadoEn,
     escalaAlC5En,

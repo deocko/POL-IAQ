@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { IdentidadSchema } from './identidad';
 import { EstadoSchema, UbicacionSchema } from './schemas';
 
 /**
@@ -54,7 +55,8 @@ export const IncidenteCreadoSchema = Base.extend({
     escenario: z.object({ id: z.string(), titulo: z.string() }).optional(),
     cuestionario: CuestionarioSchema,
     canalizacion: CanalizacionSchema,
-    reportante: z.object({ nombre: z.string(), telefono: z.string(), confiabilidad: z.number().min(0).max(1) }),
+    /** Con seudónimo el teléfono llega enmascarado; anónimo, sin nombre ni teléfono (se contesta por el chat del folio). */
+    reportante: z.object({ nombre: z.string(), telefono: z.string(), confiabilidad: z.number().min(0).max(1), identidad: IdentidadSchema.optional() }),
     evidencias: z.array(z.object({ id: z.string(), tipo: z.string(), url: z.url(), sha256: z.string(), expiraEn: z.iso.datetime() })),
   }),
 });

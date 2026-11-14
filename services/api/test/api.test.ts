@@ -333,6 +333,7 @@ describe.each(ALMACENES)('API con almacén en %s', (_nombre, nuevoAlmacen) => {
       appOp = await crearApp({
         ...config,
         esperaAcuseSeg: 60,
+        asignacionAutomatica: false,
         cads: { ...config.cads, 'cad-el-marques': { ...config.cads['cad-el-marques'], modo: 'consola' } },
         operadores: [
           { usuario: 'ana', nombre: 'Ana · CAD El Marqués', cadIds: ['cad-el-marques'], claveHash: hashClave('clave-de-ana-123') },
@@ -450,6 +451,108 @@ describe.each(ALMACENES)('API con almacén en %s', (_nombre, nuevoAlmacen) => {
       const alta = appOp.get(DespachadorCadService).bandeja.find((e) => e.evento.folio === folio && e.cadId === 'c5-queretaro');
       expect(alta?.evento.tipo).toBe('incidente.creado');
       expect((await httpOp.get(`/v1/operador/reportes/${folio}`).set(ana)).status).toBe(404);
+    });
+  });
+
+  describe('confianza y tiempos: identidad, cercanía, AVL, opinión y tablero', () => {
+    let appC: INestApplication;
+    let httpC: ReturnType<typeof request>;
+
+    beforeAll(async () => {
+      appC = await crearApp({
+        ...config,
+        esperaAcuseSeg: 60,
+        asignacionAutomatica: true,
+        cads: { ...config.cads, 'cad-el-marques': { ...config.cads['cad-el-marques'], modo: 'consola' } },
+        operadores: [{ usuario: 'eva', nombre: 'Eva · El Marqués', cadIds: ['cad-el-marques'], claveHash: hashClave('clave-de-eva-123') }],
+      }, { almacen, sms });
+      await appC.init();
+      httpC = request(appC.getHttpServer());
+    });
+    afterAll(async () => appC?.close());
+
+    const op = async () => ({ authorization: `Bearer ${(await httpC.post('/v1/operador/sesion').send({ usuario: 'eva', clave: 'clave-de-eva-123' })).body.token as string}` });
+    const reportar = (token: string, body: Record<string, unknown>) => httpC.post('/v1/reportes').set({ authorization: `Bearer ${token}` }).send({ ubicacion: { lat: 20.61, lng: -100.32 }, ...body });
+    const accion = (auth: Record<string, string>, folio: string, body: object) => httpC.post(`/v1/operador/reportes/${folio}/acciones`).set(auth).send(body);
+    function avl(cadId: string, secreto: string, posiciones: object[]) {
+      const cuerpo = JSON.stringify({ posiciones });
+      const ts = Math.floor(Date.now() / 1000);
+      return httpC.post(`/v1/cad/${cadId}/avl`).set('content-type', 'application/json').set('x-poliaq-timestamp', String(ts)).set('x-poliaq-firma', firmar(secreto, ts, cuerpo)).send(cuerpo);
+    }
+
+    it('permite anónimo solo en incidentes no violentos y oculta la identidad al operador y al CAD', async () => {
+      const token = await registrar('+524427771001');
+      expect((await reportar(token, { incidenteId: 'disparos', identidad: 'anonimo' })).body.codigo).toBe('anonimo_no_permitido');
+      expect((await reportar(token, { incidenteId: 'disparos', identidad: 'seudonimo' })).body.codigo).toBe('falta_seudonimo');
+
+      const anon = (await reportar(token, { incidenteId: 'ruido-rina', identidad: 'anonimo' })).body.folio as string;
+      const seud = (await reportar(token, { incidenteId: 'disparos', identidad: 'seudonimo', alias: 'Vecino del 4' })).body.folio as string;
+      const eva = await op();
+      const ver = async (folio: string) => (await httpC.get(`/v1/operador/reportes/${folio}`).set(eva)).body.reportante;
+      expect(await ver(anon)).toMatchObject({ nombre: 'Anónimo', telefono: '', identidad: 'anonimo' });
+      expect(await ver(seud)).toMatchObject({ nombre: 'Vecino del 4', telefono: '••••••1001', identidad: 'seudonimo' });
+
+      // Un CAD con sistema propio recibe lo mismo en el alta.
+      const corr = (await httpC.post('/v1/reportes').set({ authorization: `Bearer ${token}` }).send({ incidenteId: 'inundacion', identidad: 'anonimo', ubicacion: { lat: 20.539, lng: -100.442 } })).body.folio;
+      const alta = appC.get(DespachadorCadService).bandeja.find((e) => e.evento.folio === corr);
+      expect(alta?.evento.tipo === 'incidente.creado' && alta.evento.datos.reportante).toMatchObject({ nombre: 'Anónimo', telefono: '' });
+    });
+
+    it('asigna sola la unidad más cercana al recibir y calcula la llegada por ruta', async () => {
+      const token = await registrar('+524427771002');
+      const folio = (await reportar(token, { incidenteId: 'emergencia-medica' })).body.folio as string;
+      const eva = await op();
+      const v = (await accion(eva, folio, { accion: 'recibir' })).body;
+      expect(v.estado).toBe('asignado');
+      expect(v.unidad.unidadId).toBe('A-310'); // la ambulancia de El Marqués
+      expect(v.unidad.etaMinutos).toBeGreaterThan(0);
+      expect(v.unidad.lat).toBeTypeOf('number');
+      expect(v.tiempos.etapas[0]).toMatchObject({ id: 'recepcion', estado: 'cumplida' });
+      expect((await almacen.auditoria(folio)).some((a) => a.actor === 'sistema:asignacion_automatica')).toBe(true);
+    });
+
+    it('usa las posiciones GPS (AVL) del CAD para elegir la unidad más cercana', async () => {
+      // Firma inválida y unidades ajenas no cuentan.
+      expect((await avl('cad-el-marques', 'mala', [])).status).toBe(401);
+      const lote = await avl('cad-el-marques', 'secreto-marques', [
+        { unidadId: 'P-302', lat: 20.6101, lng: -100.3201 },
+        { unidadId: 'P-101', lat: 20.6101, lng: -100.3201 },
+      ]);
+      expect(lote.body).toEqual({ aceptadas: 1 });
+      const eva = await op();
+      const unidades = (await httpC.get('/v1/operador/unidades').set(eva)).body.unidades;
+      expect(unidades.find((u: { unidadId: string }) => u.unidadId === 'P-302').posicion).toMatchObject({ lat: 20.6101 });
+
+      const token = await registrar('+524427771003');
+      const folio = (await reportar(token, { incidenteId: 'persona-sospechosa' })).body.folio as string;
+      const v = (await accion(eva, folio, { accion: 'recibir' })).body;
+      expect(v.unidad).toMatchObject({ unidadId: 'P-302', etaMinutos: 1 });
+    });
+
+    it('recibe calificación y queja después del cierre y las muestra en el tablero de tiempos', async () => {
+      const token = await registrar('+524427771004');
+      const folio = (await reportar(token, { incidenteId: 'otro' })).body.folio as string;
+      const auth = { authorization: `Bearer ${token}` };
+      expect((await httpC.post(`/v1/reportes/${folio}/opinion`).set(auth).send({ calificacion: 1, llegoUnidad: 'no' })).body.codigo).toBe('reporte_en_curso');
+      const eva = await op();
+      await accion(eva, folio, { accion: 'recibir' });
+      for (const estado of ['en_camino', 'en_sitio', 'cerrado']) expect((await accion(eva, folio, { accion: 'estado', estado })).body.estado).toBe(estado);
+
+      const ciudadano = (await httpC.get(`/v1/reportes/${folio}`).set(auth)).body;
+      expect(ciudadano.puedeOpinar).toBe(true);
+      expect(ciudadano.tiempos.llegada.estado).toBe('cumplida');
+      expect((await httpC.post(`/v1/reportes/${folio}/opinion`).set(auth).send({ calificacion: 9, llegoUnidad: 'si' })).status).toBe(400);
+      const r = await httpC.post(`/v1/reportes/${folio}/opinion`).set(auth).send({ calificacion: 2, llegoUnidad: 'tarde', comentario: 'Tardaron mucho' });
+      expect(r.body.opinion).toMatchObject({ calificacion: 2, queja: true });
+      expect(r.body.puedeOpinar).toBe(false);
+      expect((await httpC.post(`/v1/reportes/${folio}/opinion`).set(auth).send({ calificacion: 5, llegoUnidad: 'si' })).body.codigo).toBe('opinion_ya_registrada');
+
+      const tablero = (await httpC.get('/v1/operador/tiempos').set(eva)).body;
+      expect(tablero.metas.estado).toBe('provisional');
+      expect(tablero.quejas).toBeGreaterThanOrEqual(1);
+      expect(tablero.resumen.find((x: { id: string }) => x.id === 'llegada').n).toBeGreaterThanOrEqual(1);
+      expect(tablero.reportes.find((x: { folio: string }) => x.folio === folio).opinion.comentario).toBe('Tardaron mucho');
+      expect((await almacen.auditoria(folio)).some((a) => a.accion === 'queja_registrada')).toBe(true);
     });
   });
 

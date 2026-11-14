@@ -1,5 +1,5 @@
 /* Consola del operador: tema claro, mismos colores que la app ciudadana. */
-:root { --tarjeta: #ffffff; --asistencia: #e04f4f; --asistencia-suave: #fdecec; --aviso: #b26a00; --aviso-suave: #fff4e0; --ok: #1f9d55; --primario-suave: #e8f0fc; }
+/* Los colores (claro y oscuro) están en app/globals.css. */
 
 .c-centro { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
 .c-tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; min-width: 0; }
@@ -11,11 +11,11 @@
 .c-entrar p { margin: 0; }
 .c-entrar label { display: grid; gap: 4px; font-weight: 600; font-size: 14px; }
 
-input, select { font: inherit; padding: 8px 10px; border: 1px solid var(--borde); border-radius: 8px; background: #fff; color: var(--texto); min-width: 0; }
+input, select { font: inherit; padding: 8px 10px; border: 1px solid var(--borde); border-radius: 8px; background: var(--campo); color: var(--texto); min-width: 0; }
 input:focus, select:focus, button:focus-visible { outline: 2px solid var(--primario); outline-offset: 1px; }
 .c-boton, .c-boton-sec { font: inherit; font-weight: 600; border-radius: 8px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--primario); }
-.c-boton { background: var(--primario); color: #fff; }
-.c-boton-sec { background: #fff; color: var(--primario); }
+.c-boton { background: var(--boton); color: var(--boton-texto); border-color: var(--boton); }
+.c-boton-sec { background: var(--tarjeta); color: var(--primario); }
 .c-boton:disabled, .c-boton-sec:disabled { opacity: 0.5; cursor: default; }
 .c-peligro { color: var(--asistencia); border-color: var(--asistencia); }
 .c-enlace { background: none; border: 0; color: var(--primario); font: inherit; cursor: pointer; padding: 0; }
@@ -24,7 +24,7 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--prima
 .c-nota { background: var(--primario-suave); border-radius: 8px; padding: 10px 14px; margin: 0 0 12px; }
 
 .c-mesa { min-height: 100vh; display: flex; flex-direction: column; }
-.c-cabecera { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px; background: #fff; border-bottom: 1px solid var(--borde); flex-wrap: wrap; }
+.c-cabecera { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px; background: var(--tarjeta); border-bottom: 1px solid var(--borde); flex-wrap: wrap; }
 .c-cabecera-der { display: flex; align-items: center; gap: 8px; }
 .c-punto { width: 10px; height: 10px; border-radius: 50%; background: var(--aviso); display: inline-block; }
 .c-punto.ok { background: var(--ok); }
@@ -39,9 +39,9 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--prima
 
 .c-fila { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .c-check { font-size: 14px; display: flex; gap: 6px; align-items: center; }
-.c-contador { background: var(--asistencia); color: #fff; border-radius: 999px; font-size: 12px; padding: 2px 8px; vertical-align: middle; }
+.c-contador { background: var(--asistencia); color: var(--tarjeta); border-radius: 999px; font-size: 12px; padding: 2px 8px; vertical-align: middle; }
 
-.c-item { display: block; width: 100%; text-align: left; font: inherit; color: inherit; background: #fff; border: 1px solid var(--borde); border-left: 5px solid var(--borde); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
+.c-item { display: block; width: 100%; text-align: left; font: inherit; color: inherit; background: var(--tarjeta); border: 1px solid var(--borde); border-left: 5px solid var(--borde); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
 .c-item.sel { border-color: var(--primario); box-shadow: 0 0 0 1px var(--primario); }
 .c-item.final { opacity: 0.6; }
 .p-alta { border-left-color: var(--asistencia) !important; }
@@ -54,8 +54,8 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--prima
 .c-chip { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 10px; background: var(--primario-suave); color: var(--primario); }
 .c-chip-alerta { background: var(--asistencia-suave); color: var(--asistencia); }
 .c-chip-aviso { background: var(--aviso-suave); color: var(--aviso); }
-.e-recibido { background: var(--asistencia); color: #fff; }
-.e-cerrado, .e-improcedente, .e-cancelado { background: #eef1f4; color: var(--suave); }
+.e-recibido { background: var(--asistencia); color: var(--tarjeta); }
+.e-cerrado, .e-improcedente, .e-cancelado { background: var(--neutro); color: var(--suave); }
 .c-pequeno { font-size: 13px; }
 .c-cuenta { margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--aviso); }
 
@@ -75,4 +75,48 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--prima
   .c-columnas.con-detalle .c-bandeja { display: none; }
   .c-columnas:not(.con-detalle) .c-vacio { display: none; }
   .c-volver { display: inline; }
+}
+
+.c-demo { font-size: 13px; background: var(--demo-fondo); border: 1px solid var(--demo-borde); border-radius: 8px; padding: 8px 10px; margin: 8px 0 0; color: var(--demo-texto); }
+.c-demo code { background: var(--campo); padding: 0 4px; border-radius: 4px; }
+.c-demo-barra { margin: 0 0 8px; }
+
+/* Pestañas, mapa, tiempos y tablero */
+.c-pestanas { display: flex; gap: 4px; padding: 8px 16px 0; flex-wrap: wrap; }
+.c-pestanas button { font: inherit; font-weight: 600; font-size: 14px; border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto); border-radius: 999px; padding: 8px 14px; min-height: 40px; cursor: pointer; }
+.c-pestanas button.activa { background: var(--boton); border-color: var(--boton); color: var(--boton-texto); }
+.c-panel { padding: 8px 16px 32px; max-width: 1100px; width: 100%; }
+.c-panel h2 { font-size: 18px; margin: 8px 0; }
+.c-grande { width: 100%; padding: 12px 14px; font-size: 15px; margin: 4px 0 8px; min-height: 48px; text-align: left; }
+.c-chip-ok { background: var(--ok-suave); color: var(--ok); }
+.c-leyenda { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 6px 0 0; }
+.c-punto-l { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: -4px; }
+.c-punto-l.asignada { background: #2563c9; }
+.c-punto-l.libre { background: #1f9d55; }
+.c-punto-l.ocupada { background: #8a94a3; }
+.c-queja { border-color: var(--asistencia); background: var(--asistencia-suave); }
+.c-cita { margin: 6px 0; font-style: italic; }
+.c-evidencias { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.c-evidencias li { display: grid; gap: 4px; max-width: 180px; }
+.c-evidencias img { width: 100%; max-height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid var(--borde); display: block; }
+.c-tiempos { width: 100%; border-collapse: collapse; display: table; font-size: 14px; }
+.c-tiempos th, .c-tiempos td { border: 0; border-bottom: 1px solid var(--borde); padding: 6px 6px; text-align: left; vertical-align: middle; }
+.c-tiempos thead th { font-size: 12px; color: var(--suave); font-weight: 600; }
+.c-tiempos .c-total th, .c-tiempos .c-total td { font-weight: 700; border-bottom: 0; }
+.t-chip-cumplida { background: var(--ok-suave); color: var(--ok); }
+.t-chip-excedida { background: var(--asistencia-suave); color: var(--asistencia); }
+.t-chip-en_riesgo { background: var(--aviso-suave); color: var(--aviso); }
+.t-chip-pendiente, .t-chip-omitida { background: var(--neutro); color: var(--suave); }
+.c-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.c-kpi { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 12px 14px; display: grid; }
+.c-kpi strong { font-size: 26px; line-height: 1.2; }
+.c-kpi span { font-size: 13px; color: var(--suave); }
+.c-kpi.alerta { border-color: var(--asistencia); }
+.c-kpi.alerta strong { color: var(--asistencia); }
+.c-lista-plana { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.c-velocidad { white-space: nowrap; }
+.c-velocidad select { padding: 2px 6px; font-size: 13px; }
+@media (max-width: 760px) {
+  .c-tiempos { font-size: 13px; }
+  .c-unidades td:nth-child(4), .c-unidades th:nth-child(4) { display: none; }
 }

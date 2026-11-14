@@ -1,4 +1,4 @@
-import { ETIQUETAS_CIUDADANO, preguntasDespachadora, preguntasHechas, protocoloDe, respuestasDe, type Protocolo } from '@pol-iaq/shared';
+import { ETIQUETAS_CIUDADANO, medirTiempos, preguntasDespachadora, preguntasHechas, protocoloDe, respuestasDe, type Protocolo } from '@pol-iaq/shared';
 import type { Reporte } from '../almacen/modelos';
 
 /** Lo que el ciudadano puede ver de su reporte. */
@@ -30,6 +30,11 @@ export function vistaCiudadano(r: Reporte, protocolo: Protocolo) {
     evidencias: r.evidencias.map((e) => ({ id: e.id, tipo: e.tipo, estado: e.estado })),
     mensajes: r.mensajes,
     historial: r.historial,
+    /** Tiempo de cada etapa contra su meta; la app muestra cuánto falta. */
+    tiempos: medirTiempos(r.historial, r.prioridad),
+    identidad: r.identidad,
+    opinion: r.opinion ?? null,
+    puedeOpinar: !r.opinion && ['cerrado', 'improcedente', 'cancelado'].includes(r.estado),
     creadoEn: r.creadoEn,
     actualizadoEn: r.actualizadoEn,
   };

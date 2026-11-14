@@ -1,0 +1,35 @@
+name: Demo en GitHub Pages
+
+# Publica la demo con datos de prueba en https://deocko.github.io/POL-IAQ/
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: demo-pages
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pol-iaq/shared build
+      - run: pnpm --filter @pol-iaq/web build:demo
+      - run: touch apps/web/out/.nojekyll
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: apps/web/out
+          publish_branch: gh-pages
+          force_orphan: true

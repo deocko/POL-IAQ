@@ -1,7 +1,8 @@
 import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { EventoDesdeCad } from '@pol-iaq/shared';
+import { minutosDe, type EventoDesdeCad } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
+import { AvlService, RutasService } from '../despacho/avl.service';
 import type { Reporte } from '../almacen/modelos';
 import { ReportesService } from '../reportes/reportes.service';
 import { AvisosSmsService } from '../sms/avisos-sms.service';
@@ -19,6 +20,8 @@ export class EventosCadService {
     @Inject(Almacen) private readonly almacen: Almacen,
     @Inject(ReportesService) private readonly reportes: ReportesService,
     @Inject(AvisosSmsService) private readonly avisos: AvisosSmsService,
+    @Inject(AvlService) private readonly avl: AvlService,
+    @Inject(RutasService) private readonly rutas: RutasService,
   ) {}
 
   /**
@@ -60,14 +63,26 @@ export class EventosCadService {
         break;
       case 'unidad.asignada':
         r.unidad = { unidadId: ev.datos.unidadId, corporacion: ev.datos.corporacion, etiqueta: ev.datos.etiqueta, etaMinutos: ev.datos.etaMinutos };
+        {
+          // Sin ETA del CAD: se calcula por ruta desde la última posición GPS de la unidad.
+          const p = this.avl.posicion(ev.datos.unidadId);
+          if (p) {
+            Object.assign(r.unidad, { lat: p.lat, lng: p.lng, actualizadoEn: ahora });
+            if (ev.datos.etaMinutos === undefined) r.unidad.etaMinutos = minutosDe((await this.rutas.ruta(p, r.ubicacion)).segundos);
+          }
+        }
         if (r.estado === 'recibido') this.reportes.cambiarEstado(r, 'validado');
         this.reportes.cambiarEstado(r, 'asignado');
         break;
-      case 'unidad.posicion':
+      case 'unidad.posicion': {
+        this.avl.actualizar(ev.datos.unidadId, { lat: ev.datos.lat, lng: ev.datos.lng, rumbo: ev.datos.rumbo, en: ev.ocurridoEn });
         if (!r.unidad || r.unidad.unidadId !== ev.datos.unidadId) return;
-        Object.assign(r.unidad, { lat: ev.datos.lat, lng: ev.datos.lng, rumbo: ev.datos.rumbo, etaMinutos: ev.datos.etaMinutos ?? r.unidad.etaMinutos, actualizadoEn: ahora });
+        // El ETA lo manda el CAD o se recalcula por ruta desde la nueva posición.
+        const eta = ev.datos.etaMinutos ?? minutosDe((await this.rutas.ruta(ev.datos, r.ubicacion)).segundos);
+        Object.assign(r.unidad, { lat: ev.datos.lat, lng: ev.datos.lng, rumbo: ev.datos.rumbo, etaMinutos: eta, actualizadoEn: ahora });
         if (r.estado === 'asignado') this.reportes.cambiarEstado(r, 'en_camino');
         break;
+      }
       case 'incidente.estado':
         this.reportes.cambiarEstado(r, ev.datos.estado, ev.datos.nota);
         break;

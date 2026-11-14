@@ -3,7 +3,8 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { ESTADOS_FINALES, type EventoDesdeCad } from '@pol-iaq/shared';
+import { ESTADOS_FINALES, METAS_PROVISIONALES, candidatasPorCercania, medirTiempos, minutosDe, resumirTiempos, type EventoDesdeCad, type UnidadAvl } from '@pol-iaq/shared';
+import { AvlService, RutasService } from '../despacho/avl.service';
 import { Almacen } from '../almacen/almacen';
 import type { Reporte } from '../almacen/modelos';
 import { emitirSesion } from '../auth/tokens';
@@ -24,7 +25,10 @@ const SesionSchema = z.object({ usuario: z.string().min(1).max(60), clave: z.str
 const AccionSchema = z.discriminatedUnion('accion', [
   /** Acuse: el operador tomó el reporte (detiene el escalamiento al C5). */
   z.object({ accion: z.literal('recibir') }),
+  /** Sin `etaMinutos`, el tiempo de llegada se calcula por ruta desde el GPS de la unidad. */
   z.object({ accion: z.literal('asignar'), unidadId: z.string().min(1), etaMinutos: z.number().int().min(0).max(240).optional() }),
+  /** Asigna la unidad disponible más cercana de la corporación que pide la canalización. */
+  z.object({ accion: z.literal('asignar_cercana') }),
   z.object({ accion: z.literal('estado'), estado: z.enum(['en_camino', 'en_sitio', 'cerrado', 'improcedente']), nota: z.string().max(500).optional() }),
   z.object({ accion: z.literal('mensaje'), texto: z.string().trim().min(1).max(1000) }),
   z.object({ accion: z.literal('transferir'), cadDestinoId: z.string().min(1), motivo: z.string().max(500).optional() }),
@@ -47,6 +51,8 @@ export class OperadorController {
     @Inject(EventosCadService) private readonly eventos: EventosCadService,
     @Inject(DespachadorCadService) private readonly despachador: DespachadorCadService,
     @Inject(ProtocolosService) private readonly protocolos: ProtocolosService,
+    @Inject(AvlService) private readonly avl: AvlService,
+    @Inject(RutasService) private readonly rutas: RutasService,
   ) {}
 
   @Post('sesion')
@@ -98,8 +104,41 @@ export class OperadorController {
     return {
       unidades: this.config.unidades
         .filter((u) => puedeVer(req.operador, u.cadId))
-        .map((u) => ({ ...u, ocupadaEn: ocupadas.get(u.unidadId) ?? null })),
+        .map((u) => ({ ...u, ocupadaEn: ocupadas.get(u.unidadId) ?? null, posicion: this.avl.posicion(u.unidadId) ?? null })),
     };
+  }
+
+  /** Tablero de tiempos de respuesta: cada etapa contra su meta, y quejas. */
+  @Get('tiempos')
+  @UseGuards(OperadorGuard)
+  async tiempos(@Req() req: { operador: OperadorSesion }) {
+    const lista = await this.almacen.reportesPorCad(req.operador.cads, false);
+    const mediciones = lista.map((r) => ({ r, t: medirTiempos(r.historial, r.prioridad) }));
+    return {
+      metas: METAS_PROVISIONALES,
+      resumen: resumirTiempos(mediciones.map((m) => m.t)),
+      reportes: mediciones.map(({ r, t }) => ({ folio: r.folio, cadId: r.cadId, prioridad: r.prioridad, estado: r.estado, creadoEn: r.creadoEn, tiempos: t, opinion: r.opinion ?? null })),
+      quejas: lista.filter((r) => r.opinion?.queja).length,
+      calificacionPromedio: promedio(lista.flatMap((r) => (r.opinion ? [r.opinion.calificacion] : []))),
+    };
+  }
+
+  /** Unidades disponibles con GPS del CAD, para la asignación por cercanía. */
+  private async disponiblesConGps(cadId: string): Promise<UnidadAvl[]> {
+    const activos = await this.almacen.reportesPorCad([cadId], true);
+    const ocupadas = new Set(activos.filter((r) => r.unidad).map((r) => r.unidad!.unidadId));
+    return this.config.unidades
+      .filter((u) => u.cadId === cadId)
+      .map((u) => ({ unidadId: u.unidadId, corporacion: u.corporacion, etiqueta: u.etiqueta, disponible: !ocupadas.has(u.unidadId), posicion: this.avl.posicion(u.unidadId) }));
+  }
+
+  /** La más cercana por ruta: preselecciona por línea recta y calcula la ruta de las 3 mejores. */
+  private async masCercana(r: Reporte) {
+    const previas = candidatasPorCercania(await this.disponiblesConGps(r.cadId), r.ubicacion, r.canalizacion.corporaciones[0]).slice(0, 3);
+    if (!previas.length) return null;
+    const conRuta = await Promise.all(previas.map(async (c) => ({ ...c, ruta: await this.rutas.ruta(c.unidad.posicion!, r.ubicacion) })));
+    const delTipo = conRuta.filter((c) => c.delTipo);
+    return (delTipo.length ? delTipo : conRuta).sort((a, b) => a.ruta.segundos - b.ruta.segundos)[0];
   }
 
   @Post('reportes/:folio/acciones')
@@ -112,7 +151,13 @@ export class OperadorController {
     const cadId = actual.cadId;
     if (!consolaOpera(this.config, cadId)) throw new ConflictException({ codigo: 'cad_con_sistema_propio', mensaje: 'Este CAD despacha en su propio sistema; la consola solo lo muestra.' });
 
-    const ev = this.evento(folio, cadId, op, body);
+    let accion: Accion = body;
+    if (body.accion === 'asignar_cercana') {
+      const c = await this.masCercana(actual);
+      if (!c) throw new ConflictException({ codigo: 'sin_unidades_disponibles', mensaje: 'No hay unidades disponibles con GPS en este CAD.' });
+      accion = { accion: 'asignar', unidadId: c.unidad.unidadId, etaMinutos: minutosDe(c.ruta.segundos) };
+    }
+    const ev = this.evento(folio, cadId, op, accion);
     await this.eventos.procesar(cadId, ev, {
       actor: `operador:${op.usuario}`,
       secuenciaSiguiente: true,
@@ -122,6 +167,17 @@ export class OperadorController {
       },
     });
     if (body.accion === 'transferir') await this.avisarDestino(folio, body.cadDestinoId);
+    // Asignación automática: al recibir, se asigna sola la unidad más cercana (el operador puede cambiarla).
+    if (body.accion === 'recibir' && this.config.asignacionAutomatica) {
+      const r = (await this.almacen.reporte(folio))!;
+      const c = await this.masCercana(r);
+      if (c) {
+        await this.eventos.procesar(cadId, this.evento(folio, cadId, op, { accion: 'asignar', unidadId: c.unidad.unidadId, etaMinutos: minutosDe(c.ruta.segundos) }), {
+          actor: 'sistema:asignacion_automatica',
+          secuenciaSiguiente: true,
+        });
+      }
+    }
     return this.vista((await this.almacen.reporte(folio))!);
   }
 
@@ -145,6 +201,8 @@ export class OperadorController {
     switch (a.accion) {
       case 'recibir':
         return { ...base, tipo: 'incidente.recibido', datos: { folioCad: folio, operador: op.nombre } };
+      case 'asignar_cercana':
+        throw new BadRequestException({ codigo: 'accion_invalida' });
       case 'asignar': {
         const u = this.config.unidades.find((x) => x.unidadId === a.unidadId && x.cadId === cadId);
         if (!u) throw new BadRequestException({ codigo: 'unidad_desconocida' });
@@ -172,3 +230,5 @@ export class OperadorController {
     return vistaOperador(r, await this.almacen.ciudadano(r.ciudadanoId), this.protocolos.vigente(), this.config, this.despachador);
   }
 }
+
+const promedio = (xs: number[]) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
