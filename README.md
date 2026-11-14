@@ -12,7 +12,7 @@ Plataforma ciudadana para reportar emergencias a las policías municipales de Qu
 | App ciudadana (web) | https://deocko.github.io/POL-IAQ/demo/ | Registro con código SMS `000000`, reporte, folio unificado y seguimiento |
 | Consola del operador | https://deocko.github.io/POL-IAQ/consola/ | Usuario `operador`, clave `operador` |
 | API (`services/api`) | **No está publicado** | Simulado en el navegador con la misma lógica de `@pol-iaq/shared` |
-| CAD simulado (`services/cad-simulator`) | **No está publicado** | Simulado en el navegador: acusa a los 3 s, asigna unidad y cierra a los ~32 s |
+| CAD simulado (`services/cad-simulator`) | **No está publicado** | Simulado en el navegador: recibe, asigna la unidad más cercana, la mueve por GPS simulado hasta el lugar y cierra (con reloj ×1 o ×10) |
 
 Recorrido: abre `/demo/`, regístrate (código `000000`, no se envía ningún SMS), elige incidente y ubicación de prueba y envía. Recibes un folio como `QRO-006-2026-000001`. Si eliges "Yo, desde la consola del operador", abre `/consola/` en otra pestaña del **mismo navegador**, entra con `operador`/`operador` y lleva el reporte por recibir → asignar → en camino → en sitio → cerrar; la app ciudadana se actualiza al instante. Si eliges "El CAD simulado", avanza solo hasta cerrado. Si nadie recibe un reporte en 90 s, se escala al C5 con el mismo folio. Las ubicaciones de prueba cubren los tres municipios piloto y una fuera del piloto (San Juan del Río → folio `QRO-000-…` del C5).
 
@@ -59,7 +59,7 @@ Prueba rápida sin la app:
 
 ```bash
 TOKEN=$(curl -s localhost:3000/v1/auth/verificar -H 'content-type: application/json' \
-  -d '{"telefono":"+524421234567","codigo":"000000","nombre":"Prueba","aceptaAvisoPrivacidad":"2026-11-13","aceptaTerminos":"2026-11-13"}' | jq -r .token)
+  -d '{"telefono":"+524421234567","codigo":"000000","nombre":"Prueba","aceptaAvisoPrivacidad":"2026-11-14","aceptaTerminos":"2026-11-14"}' | jq -r .token)
 curl -s localhost:3000/v1/reportes -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"incidenteId":"robo-en-curso","ubicacion":{"lat":20.539,"lng":-100.442}}' | jq .folio
 # -> "QRO-006-2026-000001" (Corregidora). El CAD simulado lo lleva hasta "cerrado".
@@ -80,11 +80,22 @@ TEST_DATABASE_URL=postgres://poliaq:poliaq-dev@localhost:5432/poliaq_test pnpm t
 - **Protocolo versionado**: las preguntas son datos (JSON) y se actualizan sin tocar código. Cada respuesta queda en texto en el folio (`POST /v1/reportes/{folio}/cuestionario`) y recalcula la **canalización** (prioridad, corporaciones de apoyo y alertas) que se envía al CAD. Ver [`docs/protocolos`](docs/protocolos/README.md). **El protocolo actual es provisional, no oficial.**
 - El antiguo "botón de pánico" se llama ahora **botón de asistencia directa** (`asistenciaDirecta` en el API).
 
+## Confianza y tiempo de respuesta
+
+- **Identidad del reportante** (`identidad`: `completa`, `seudonimo` con `alias`, o `anonimo`). El anónimo no se permite en incidentes violentos o en curso (`INCIDENTES_SIN_ANONIMATO` en `packages/shared/src/identidad.ts`), porque la policía podría necesitar volver a llamar. Con seudónimo o anónimo el operador y el CAD no ven el nombre ni el teléfono completo; el registro interno sí existe para el folio y la auditoría.
+- **Calificación y quejas** (`POST /v1/reportes/{folio}/opinion`): al cerrar, el ciudadano dice si llegó la unidad (sí, tarde, no), califica de 1 a 5 y comenta. "No llegó" o 1–2 estrellas cuentan como queja y aparecen en la consola.
+- **Asignación automática por cercanía**: al recibir un reporte se asigna la unidad libre más cercana por ruta (`AUTO_ASSIGN=off` lo apaga). La consola ofrece "Asignar la más cercana" y la lista de unidades ordenada por distancia y minutos. El operador ya no escribe la ETA.
+- **Ruta y ETA**: con `ROUTING_OSRM_URL` (un servidor OSRM propio) la ETA sale de la ruta real; sin él, de una estimación (línea recta × 1.4 a 35 km/h), marcada como estimada.
+- **GPS de las unidades (AVL)**: `POST /v1/cad/{cadId}/avl`, firmado igual que los demás eventos del CAD, recibe posiciones por lote; también `unidad.posicion`. La consola muestra el mapa de unidades libres y ocupadas, y el ciudadano ve su unidad moverse en el mapa.
+- **Tablero de tiempos** (`GET /v1/operador/tiempos`): mide recibido → validado → asignado → en camino → en sitio contra metas en minutos por prioridad. **Las metas actuales son provisionales** (`METAS_PROVISIONALES` en `packages/shared/src/tiempos.ts`, versión `2026.11-provisional.1`) y deben acordarse con los municipios y el C5. El ciudadano ve cuánto falta y el operador si se cumple la meta.
+- **Sin conexión**: la app guarda el reporte en una cola y lo envía sola al volver la red; si después de 60 s no se ha podido enviar, ofrece llamar al 911 (`packages/shared/src/cola.ts`).
+- **Modo claro y oscuro**: la web sigue el tema del sistema y permite elegir Claro, Oscuro o Auto.
+
 ## Consola del operador/despachador
 
 `http://localhost:3001/consola` (`apps/web/app/consola`). Es para municipios **sin CAD integrado** y para supervisión:
 
-- Los CAD en `CONSOLA_CADS` (p. ej. `CONSOLA_CADS=cad-el-marques`) no reciben webhook: el operador ve su bandeja en tiempo real (namespace `/operacion`), con la transcripción de la despachadora virtual, la canalización, las alertas y los datos del reportante, y despacha desde ahí: recibir, asignar unidad con ETA, en camino, en sitio, cerrar, improcedente, transferir a otro CAD y chatear con el ciudadano. Cada acción pasa por el mismo flujo que los eventos de un CAD (`EventosCadService`): auditoría, SMS y seguimiento en la app.
+- Los CAD en `CONSOLA_CADS` (p. ej. `CONSOLA_CADS=cad-el-marques`) no reciben webhook: el operador ve su bandeja en tiempo real (namespace `/operacion`), con la transcripción de la despachadora virtual, la canalización, las alertas y los datos del reportante, y despacha desde ahí: recibir, asignar unidad (la más cercana por ruta, con ETA calculada), en camino, en sitio, cerrar, improcedente, transferir a otro CAD y chatear con el ciudadano. Cada acción pasa por el mismo flujo que los eventos de un CAD (`EventosCadService`): auditoría, SMS y seguimiento en la app.
 - Los CAD con sistema propio (webhook) se ven en **solo lectura**.
 - Si nadie recibe el reporte en `CAD_ACK_TIMEOUT_SEC`, se escala al C5 igual que con un CAD integrado (la consola muestra la cuenta regresiva).
 - Operadores en `OPERADORES_JSON` (clave con `pnpm --filter @pol-iaq/api hash-clave '<clave>'`), cada uno limitado a sus `cadIds` (`*` = supervisión). Fuera de producción existe `operador` / `operador`. Unidades en `UNIDADES_JSON` (en desarrollo hay unidades de ejemplo por CAD).
@@ -103,5 +114,7 @@ TEST_DATABASE_URL=postgres://poliaq:poliaq-dev@localhost:5432/poliaq_test pnpm t
 - Trabajador de colas para la bandeja de salida y los temporizadores de acuse; Redis para WebSocket con varias instancias.
 - Contratar el proveedor de SMS (cuenta, remitente y registro de plantillas), Keycloak/OIDC, almacén de objetos con WORM y URLs prefirmadas (hoy la evidencia va en PostgreSQL).
 - mTLS y lista de IPs con cada CAD; adaptadores reales para los CAD de los tres municipios y el C5.
-- Revisión jurídica de `docs/legal` y convenios con cada municipio.
+- Revisión jurídica de `docs/legal` y convenios con cada municipio. Los datos que debe entregar jurídico están en [`docs/legal/PENDIENTES-JURIDICO.md`](docs/legal/PENDIENTES-JURIDICO.md); las páginas publicadas los muestran como "por definir".
+- Acordar las metas de tiempo con los municipios y el C5; servidor de rutas (OSRM o proveedor) y fuente real de GPS de las unidades (CAD, proveedor de AVL o app de la unidad).
+- Llevar a la app móvil la cola sin conexión, la identidad (seudónimo/anónimo) y la calificación, que hoy están en el API y en la demo web.
 - Llave de Google Maps para Android, proveedor de teselas para web y consola de operador.

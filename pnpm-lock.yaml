@@ -81,6 +81,9 @@ importers:
       '@pol-iaq/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      leaflet:
+        specifier: 1.9.4
+        version: 1.9.4
       marked:
         specifier: ^16.4.2
         version: 16.4.2
@@ -97,6 +100,9 @@ importers:
         specifier: ^4.8.4
         version: 4.8.4
     devDependencies:
+      '@types/leaflet':
+        specifier: ^1.9.22
+        version: 1.9.22
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
@@ -1491,6 +1497,9 @@ packages:
   '@types/istanbul-reports@3.0.4':
     resolution: {integrity: sha512-pk2B1NWalF9toCRu6gjBzR69syFjP4Od8WRAX+0mmf9lAjCRicLOWc+ZrxZHx/0XRjotgkF9t6iaMJ+aXcOdZQ==}
 
+  '@types/leaflet@1.9.22':
+    resolution: {integrity: sha512-h3lhECYEKDasG7LFHu+GiHqAvsgLuQvlJvVZzJDGONo3sEL+wUOqSFLnwkZlK0qVxnxbuGFW8iBlJNYs5wgndA==}
+
   '@types/methods@1.1.4':
     resolution: {integrity: sha512-ymXWVrDiCxTBE3+RIrrP533E70eA+9qu7zdWoHuOmGujkYtzf4HQF96b8nwHLqhuf4ykX61IGRIB38CC6/sImQ==}
 
@@ -2429,6 +2438,9 @@ packages:
   lan-network@0.2.1:
     resolution: {integrity: sha512-ONPnazC96VKDntab9j9JKwIWhZ4ZUceB4A9Epu4Ssg0hYFmtHZSeQ+n15nIwTFmcBUKtExOer8WTJ4GF9MO64A==}
     hasBin: true
+
+  leaflet@1.9.4:
+    resolution: {integrity: sha512-nxS1ynzJOmOlHp+iL3FyWqK89GtNL8U8rvlMOsQdTTssxZwCXh8N2NB3GDQOL+YR3XnWyZAxwQixURb+FA74PA==}
 
   leven@3.1.0:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
@@ -5082,6 +5094,10 @@ snapshots:
     dependencies:
       '@types/istanbul-lib-report': 3.0.3
 
+  '@types/leaflet@1.9.22':
+    dependencies:
+      '@types/geojson': 7946.0.16
+
   '@types/methods@1.1.4': {}
 
   '@types/node@22.20.5':
@@ -6121,6 +6137,8 @@ snapshots:
   kleur@3.0.3: {}
 
   lan-network@0.2.1: {}
+
+  leaflet@1.9.4: {}
 
   leven@3.1.0: {}
 

@@ -172,6 +172,28 @@ paths:
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Reporte' } } } }
         '409': { description: '`reporte_finalizado`' }
+  /v1/reportes/{folio}/opinion:
+    parameters: [{ $ref: '#/components/parameters/Folio' }]
+    post:
+      tags: [Reportes]
+      summary: Califica la atención o presenta una queja (después del cierre, una vez)
+      description: Si `llegoUnidad` es `no` o la calificación es 1 o 2, queda registrada como queja (`opinion.queja = true`) y aparece en el tablero de la consola.
+      operationId: opinarReporte
+      security: [{ ciudadano: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [calificacion, llegoUnidad]
+              properties:
+                calificacion: { type: integer, minimum: 1, maximum: 5 }
+                llegoUnidad: { type: string, enum: [si, tarde, 'no'] }
+                comentario: { type: string, maxLength: 1000 }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Reporte' } } } }
+        '409': { description: '`reporte_en_curso` u `opinion_ya_registrada`' }
   /v1/reportes/{folio}/mensajes:
     parameters: [{ $ref: '#/components/parameters/Folio' }]
     post:
@@ -306,6 +328,32 @@ paths:
         '401': { description: '`firma_invalida`' }
         '403': { description: '`folio_de_otra_jurisdiccion`' }
         '404': { description: '`folio_no_encontrado`' }
+  /v1/cad/{cadId}/avl:
+    parameters: [{ $ref: '#/components/parameters/CadId' }]
+    post:
+      tags: [Integración CAD]
+      summary: Posiciones GPS (AVL) de las unidades del CAD, en lote
+      description: Firmado igual que los eventos. Alimenta la asignación por cercanía y el mapa de la consola. Las unidades de otro CAD se ignoran; una posición más vieja que la guardada se descarta.
+      operationId: recibirAvl
+      security: [{ cadFirma: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [posiciones]
+              properties:
+                posiciones:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: object
+                    required: [unidadId, lat, lng]
+                    properties: { unidadId: { type: string }, lat: { type: number }, lng: { type: number }, rumbo: { type: number }, en: { type: string, format: date-time } }
+      responses:
+        '202': { description: OK, content: { application/json: { schema: { type: object, properties: { aceptadas: { type: integer } } } } } }
+        '401': { description: '`firma_invalida`' }
   /v1/cad/{cadId}/evidencias/{evidenciaId}:
     parameters:
       - { $ref: '#/components/parameters/CadId' }
@@ -361,7 +409,7 @@ paths:
   /v1/operador/reportes/{folio}/acciones:
     post:
       tags: [Consola de operador]
-      summary: Despacha desde la consola (solo CAD en modo consola)
+      summary: Despacha desde la consola (solo CAD en modo consola). Al `recibir`, si AUTO_ASSIGN no es `off`, se asigna sola la unidad más cercana
       description: Cada acción se aplica como el evento equivalente de un CAD (incidente.recibido, unidad.asignada, incidente.estado, mensaje.operador, incidente.transferido). Una transferencia envía el alta completa al CAD destino.
       operationId: accionOperador
       security: [{ operador: [] }]
@@ -373,7 +421,8 @@ paths:
             schema:
               oneOf:
                 - { type: object, required: [accion], properties: { accion: { const: recibir } } }
-                - { type: object, required: [accion, unidadId], properties: { accion: { const: asignar }, unidadId: { type: string }, etaMinutos: { type: integer, minimum: 0, maximum: 240 } } }
+                - { type: object, required: [accion, unidadId], description: 'Sin etaMinutos, la llegada se calcula por ruta desde el GPS de la unidad.', properties: { accion: { const: asignar }, unidadId: { type: string }, etaMinutos: { type: integer, minimum: 0, maximum: 240 } } }
+                - { type: object, required: [accion], description: 'Asigna la unidad libre más cercana de la corporación principal.', properties: { accion: { const: asignar_cercana } } }
                 - { type: object, required: [accion, estado], properties: { accion: { const: estado }, estado: { type: string, enum: [en_camino, en_sitio, cerrado, improcedente] }, nota: { type: string } } }
                 - { type: object, required: [accion, texto], properties: { accion: { const: mensaje }, texto: { type: string, maxLength: 1000 } } }
                 - { type: object, required: [accion, cadDestinoId], properties: { accion: { const: transferir }, cadDestinoId: { type: string }, motivo: { type: string } } }
@@ -381,14 +430,21 @@ paths:
         '200': { description: VistaOperador actualizada }
         '400': { description: '`unidad_desconocida`, `cad_destino_invalido` o `datos_invalidos`' }
         '404': { description: '`folio_no_encontrado`' }
-        '409': { description: '`cad_con_sistema_propio`, `reporte_cerrado`, `ya_recibido` o `transicion_invalida`' }
+        '409': { description: '`cad_con_sistema_propio`, `reporte_cerrado`, `ya_recibido`, `transicion_invalida` o `sin_unidades_disponibles`' }
   /v1/operador/unidades:
     get:
       tags: [Consola de operador]
-      summary: Unidades de los CAD del operador, con `ocupadaEn` (folio que atienden)
+      summary: Unidades de los CAD del operador, con `ocupadaEn` (folio que atienden) y `posicion` (último GPS)
       operationId: unidadesOperador
       security: [{ operador: [] }]
       responses: { '200': { description: OK } }
+  /v1/operador/tiempos:
+    get:
+      tags: [Consola de operador]
+      summary: Tablero de tiempos de respuesta por etapa contra su meta (provisional), calificaciones y quejas
+      operationId: tiemposOperador
+      security: [{ operador: [] }]
+      responses: { '200': { description: '`metas`, `resumen` por etapa (promedio, mediana, % en meta), `reportes`, `quejas`, `calificacionPromedio`' } }
 components:
   securitySchemes:
     ciudadano:
@@ -464,6 +520,8 @@ components:
         escenarioId: { type: string, description: 'Escenario de acceso rápido del perfil. Sus respuestas previas entran al cuestionario.' }
         cuestionario: { $ref: '#/components/schemas/ResponderCuestionario' }
         ocultarIdentidadAUnidad: { type: boolean, default: false }
+        identidad: { type: string, enum: [completa, seudonimo, anonimo], default: completa, description: 'Cómo lo ven operador, unidad y CAD. `anonimo` solo en incidentes no violentos (`anonimo_no_permitido`); `seudonimo` exige `alias`.' }
+        alias: { type: string, minLength: 2, maxLength: 40 }
     ResponderCuestionario:
       type: object
       required: [entradas]

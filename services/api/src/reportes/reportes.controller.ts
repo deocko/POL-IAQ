@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
 import {
-  CrearReporteSchema, MensajeSchema, ResponderCuestionarioSchema, SolicitarEvidenciaSchema,
+  CrearReporteSchema, MensajeSchema, OpinionSchema, type Opinion, ResponderCuestionarioSchema, SolicitarEvidenciaSchema,
   type CrearReporte, type ResponderCuestionario, type SolicitarEvidencia,
 } from '@pol-iaq/shared';
 import { CiudadanoGuard } from '../auth/auth.guard';
@@ -53,6 +53,13 @@ export class ReportesController {
   @Post(':folio/cuestionario')
   async cuestionario(@Req() req: Req_, @Param('folio') folio: string, @Body(new ZodPipe(ResponderCuestionarioSchema)) body: ResponderCuestionario) {
     return this.vista(await this.reportes.responderCuestionario(req.ciudadano, folio, body));
+  }
+
+  /** Calificación y queja después del cierre ("no llegó nadie", trato, tardanza). */
+  @Post(':folio/opinion')
+  @HttpCode(200)
+  async opinion(@Req() req: Req_, @Param('folio') folio: string, @Body(new ZodPipe(OpinionSchema)) body: Opinion) {
+    return this.vista(await this.reportes.opinar(req.ciudadano, folio, body));
   }
 
   @Post(':folio/evidencias')

@@ -1,5 +1,21 @@
 /* Tema claro de Pol-IAQ (mismos colores que la app ciudadana). */
-:root { color-scheme: light; --fondo: #f4f8fc; --texto: #1b2430; --suave: #5e6b7a; --primario: #2563c9; --borde: #dce5ef; }
+/* Tema claro por defecto; oscuro con data-tema="oscuro" (lo pone el selector o la preferencia del teléfono). */
+:root {
+  color-scheme: light;
+  --fondo: #f4f8fc; --texto: #1b2430; --suave: #5e6b7a; --primario: #2563c9; --borde: #dce5ef;
+  --tarjeta: #ffffff; --campo: #ffffff; --boton: #2563c9; --boton-texto: #ffffff;
+  --asistencia: #d93b3b; --asistencia-suave: #fdecec; --aviso: #9a5b00; --aviso-suave: #fff4e0;
+  --ok: #17824a; --ok-suave: #e3f6ec; --primario-suave: #e8f0fc; --neutro: #eef1f4;
+  --demo-fondo: #fff7e0; --demo-borde: #f0d58a; --demo-texto: #5c4400;
+}
+:root[data-tema="oscuro"] {
+  color-scheme: dark;
+  --fondo: #10151c; --texto: #e6edf5; --suave: #a7b4c4; --primario: #7aa7ff; --borde: #2e3a49;
+  --tarjeta: #19212c; --campo: #121921; --boton: #3b6fd8; --boton-texto: #ffffff;
+  --asistencia: #ff7676; --asistencia-suave: #3b1f23; --aviso: #f2b862; --aviso-suave: #3a2d17;
+  --ok: #4fd18b; --ok-suave: #173326; --primario-suave: #1c2a42; --neutro: #26303c;
+  --demo-fondo: #2f2a17; --demo-borde: #6b5a22; --demo-texto: #f3dfa2;
+}
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--fondo); color: var(--texto); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
@@ -9,7 +25,15 @@ th, td { border: 1px solid var(--borde); padding: 6px 10px; text-align: left; ve
 blockquote { margin: 16px 0; padding: 8px 16px; border-left: 4px solid var(--primario); color: var(--suave); }
 .suave { color: var(--suave); }
 
-.demo-portada { background: #fff7e0; border: 1px solid #f0d58a; border-radius: 12px; padding: 12px 16px; margin: 16px 0; }
+.demo-portada { background: var(--demo-fondo); color: var(--demo-texto); border: 1px solid var(--demo-borde); border-radius: 12px; padding: 12px 16px; margin: 16px 0; }
 .demo-portada p { margin: 4px 0; }
 .demo-portada ol { margin: 8px 0 0; padding-left: 20px; }
-code { background: #fff; border: 1px solid var(--borde); padding: 0 4px; border-radius: 4px; }
+code { background: var(--campo); color: var(--texto); border: 1px solid var(--borde); padding: 0 4px; border-radius: 4px; }
+
+/* Accesibilidad: foco visible y respeto a "reducir movimiento". */
+:focus-visible { outline: 3px solid var(--primario); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+.solo-lector { position: absolute !important; left: 0; top: 0; width: 1px !important; height: 1px !important; min-height: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tema { display: inline-flex; border: 1px solid var(--borde); border-radius: 999px; overflow: hidden; }
+.tema button { font: inherit; font-size: 13px; border: 0; background: var(--tarjeta); color: var(--texto); padding: 6px 10px; cursor: pointer; min-height: 32px; }
+.tema button[aria-pressed="true"] { background: var(--boton); color: var(--boton-texto); }

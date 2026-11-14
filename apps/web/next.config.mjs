@@ -8,6 +8,7 @@ const basePath = process.env.DEMO_BASE_PATH ?? '/POL-IAQ';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  env: { NEXT_PUBLIC_BASE_PATH: demo ? basePath : '' },
   ...(demo && { output: 'export', basePath, trailingSlash: true, images: { unoptimized: true } }),
 };
 export default nextConfig;

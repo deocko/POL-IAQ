@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { notFound } from 'next/navigation';
 import { marked } from 'marked';
+import { paraPublicar } from '../../../lib/legal';
 
 /** Los textos legales viven en docs/legal del repositorio: una sola fuente. */
 const DOCUMENTOS = {
@@ -23,6 +24,6 @@ export default async function PaginaLegal({ params }: { params: Promise<{ docume
   if (!(documento in DOCUMENTOS)) notFound();
   const archivo = path.join(process.cwd(), '..', '..', 'docs', 'legal', DOCUMENTOS[documento as Documento]);
   const md = await readFile(archivo, 'utf8');
-  const html = await marked.parse(md.replace(/\]\(([\w-]+)\.md\)/g, '](/legal/$1)'));
-  return <main dangerouslySetInnerHTML={{ __html: html }} />;
+  const html = await marked.parse(paraPublicar(md, documento, process.env.NEXT_PUBLIC_BASE_PATH ?? ''));
+  return <main className="legal" dangerouslySetInnerHTML={{ __html: html }} />;
 }

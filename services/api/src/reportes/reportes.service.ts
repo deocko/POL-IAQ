@@ -1,8 +1,8 @@
 import { ConflictException, ForbiddenException, HttpException, HttpStatus, Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import {
-  canalizar, enrutarPorUbicacion, generarFolio, incidentePorId, puedeTransicionar, resolverEntradas, respuestasDe, ESTADOS_FINALES,
-  type CrearReporte, type EntradaGuardada, type EstadoIncidente, type IncidenteCatalogo, type Prioridad, type ResponderCuestionario, type SolicitarEvidencia,
+  canalizar, enrutarPorUbicacion, esQueja, permiteAnonimo, generarFolio, incidentePorId, puedeTransicionar, resolverEntradas, respuestasDe, ESTADOS_FINALES,
+  type CrearReporte, type EntradaGuardada, type EstadoIncidente, type IncidenteCatalogo, type Opinion, type Prioridad, type ResponderCuestionario, type SolicitarEvidencia,
 } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
 import type { Ciudadano, Evidencia, Reporte } from '../almacen/modelos';
@@ -26,6 +26,10 @@ export class ReportesService {
   async crear(ciudadano: Ciudadano, datos: CrearReporte): Promise<Reporte> {
     const incidente = incidentePorId(datos.incidenteId);
     if (!incidente) throw new BadRequestException({ codigo: 'incidente_desconocido' });
+    if (datos.identidad === 'anonimo' && !permiteAnonimo(incidente.id)) {
+      throw new BadRequestException({ codigo: 'anonimo_no_permitido', mensaje: 'Para este tipo de emergencia necesitamos poder contactarte. Puedes usar un seudónimo.' });
+    }
+    if (datos.identidad === 'seudonimo' && !datos.alias) throw new BadRequestException({ codigo: 'falta_seudonimo' });
 
     const haceUnaHora = new Date(Date.now() - 3600_000).toISOString();
     if ((await this.almacen.contarReportesDesde(ciudadano.id, haceUnaHora)) >= this.config.maxReportesPorHora) {
@@ -70,6 +74,8 @@ export class ReportesService {
       cuestionario: { protocoloVersion: protocolo.version, protocoloEstado: protocolo.estado, entradas },
       canalizacion,
       ocultarIdentidadAUnidad: datos.ocultarIdentidadAUnidad,
+      identidad: datos.identidad,
+      ...(datos.identidad === 'seudonimo' && { alias: datos.alias }),
       estado: 'recibido',
       evidencias: [],
       mensajes: [],
@@ -156,6 +162,22 @@ export class ReportesService {
       r.prioridad = prioridad;
       await this.despachador.enviarCuestionario(r);
       await this.almacen.auditar({ actor: `ciudadano:${ciudadano.id}`, accion: 'cuestionario_respondido', folio, detalle: { preguntas: validas.map((v) => v.preguntaId), via: datos.via } });
+      await this.tocar(r);
+      return r;
+    });
+  }
+
+  /**
+   * Calificación de la atención y, si no llegó nadie o fue mala, queja.
+   * Solo cuando el reporte terminó y una sola vez por folio.
+   */
+  opinar(ciudadano: Ciudadano, folio: string, opinion: Opinion) {
+    return this.delCiudadanoBloqueado(ciudadano, folio, async (r) => {
+      if (!ESTADOS_FINALES.includes(r.estado)) throw new ConflictException({ codigo: 'reporte_en_curso', mensaje: 'Podrás calificar cuando el reporte termine.' });
+      if (r.opinion) throw new ConflictException({ codigo: 'opinion_ya_registrada' });
+      const queja = esQueja(opinion);
+      r.opinion = { ...opinion, queja, en: new Date().toISOString() };
+      await this.almacen.auditar({ actor: `ciudadano:${ciudadano.id}`, accion: queja ? 'queja_registrada' : 'atencion_calificada', folio, detalle: { calificacion: opinion.calificacion, llegoUnidad: opinion.llegoUnidad } });
       await this.tocar(r);
       return r;
     });

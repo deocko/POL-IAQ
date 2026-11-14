@@ -12,3 +12,8 @@ export * from './escenarios';
 export { CATALOGO_SEMILLA, incidentePorId } from './catalogo';
 export * from './municipios';
 export * from './geo';
+export * from './despacho';
+export * from './tiempos';
+export * from './identidad';
+export * from './cola';
+export * from './unidades-ejemplo';

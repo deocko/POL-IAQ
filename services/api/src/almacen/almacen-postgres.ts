@@ -24,7 +24,8 @@ const SELECT_REPORTE = `
   SELECT folio, ciudadano_id, incidente_id, codigo_cnie, prioridad, corporacion_sugerida,
          ST_Y(ubicacion::geometry) AS lat, ST_X(ubicacion::geometry) AS lng, precision_m, referencia,
          municipio_clave, cad_id, folio_cad, descripcion, respuestas, asistencia_directa, escenario_id, cuestionario, canalizacion,
-         ocultar_identidad_a_unidad, estado, secuencia_salida, secuencia_entrada, creado_en, actualizado_en
+         ocultar_identidad_a_unidad, estado, secuencia_salida, secuencia_entrada, creado_en, actualizado_en,
+         identidad, alias, opinion
     FROM reporte`;
 
 /**
@@ -201,6 +202,9 @@ export class AlmacenPostgres extends Almacen {
         cuestionario: f.cuestionario ?? { protocoloVersion: 'sin-protocolo', protocoloEstado: 'provisional', entradas: [] },
         canalizacion: f.canalizacion ?? { prioridad: f.prioridad, corporaciones: [f.corporacion_sugerida], alertas: [] },
         ocultarIdentidadAUnidad: f.ocultar_identidad_a_unidad,
+        identidad: f.identidad ?? 'completa',
+        ...(f.alias != null && { alias: f.alias }),
+        ...(f.opinion != null && { opinion: f.opinion }),
         estado: f.estado,
         unidad: u && {
           unidadId: u.unidad_id,
@@ -265,19 +269,21 @@ export class AlmacenPostgres extends Almacen {
         `INSERT INTO reporte (folio, ciudadano_id, incidente_id, codigo_cnie, prioridad, corporacion_sugerida, ubicacion,
             precision_m, referencia, municipio_clave, cad_id, folio_cad, descripcion, respuestas, asistencia_directa,
             ocultar_identidad_a_unidad, estado, secuencia_salida, secuencia_entrada, creado_en, actualizado_en,
-            escenario_id, cuestionario, canalizacion)
-         VALUES ($1, $2, $3, $4, $5, $6, ${PUNTO('$7', '$8')}, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+            escenario_id, cuestionario, canalizacion, identidad, alias, opinion)
+         VALUES ($1, $2, $3, $4, $5, $6, ${PUNTO('$7', '$8')}, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
          ON CONFLICT (folio) DO UPDATE SET
             respuestas = EXCLUDED.respuestas, cuestionario = EXCLUDED.cuestionario, canalizacion = EXCLUDED.canalizacion,
             prioridad = EXCLUDED.prioridad, cad_id = EXCLUDED.cad_id, folio_cad = EXCLUDED.folio_cad,
             estado = EXCLUDED.estado, secuencia_salida = EXCLUDED.secuencia_salida,
-            secuencia_entrada = EXCLUDED.secuencia_entrada, actualizado_en = EXCLUDED.actualizado_en`,
+            secuencia_entrada = EXCLUDED.secuencia_entrada, actualizado_en = EXCLUDED.actualizado_en,
+            opinion = EXCLUDED.opinion`,
         [
           r.folio, r.ciudadanoId, r.incidenteId, r.codigoCnie, r.prioridad, r.corporacionSugerida, r.ubicacion.lng, r.ubicacion.lat,
           r.ubicacion.precisionMetros ?? null, r.ubicacion.referencia ?? null, r.municipioClave, r.cadId, r.folioCad ?? null,
           r.descripcion ?? null, JSON.stringify(r.respuestas), r.asistenciaDirecta, r.ocultarIdentidadAUnidad, r.estado,
           r.secuenciaSalida, r.secuenciaEntrada, r.creadoEn, r.actualizadoEn,
           r.escenarioId ?? null, JSON.stringify(r.cuestionario), JSON.stringify(r.canalizacion),
+          r.identidad ?? 'completa', r.alias ?? null, r.opinion ? JSON.stringify(r.opinion) : null,
         ],
       );
 

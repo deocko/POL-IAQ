@@ -2,6 +2,7 @@
 
 import { io } from 'socket.io-client';
 import * as demo from '../../lib/demo/motor';
+import type { MetasTiempo, OpinionGuardada, ResumenEtapa, TiemposReporte } from '@pol-iaq/shared/movil';
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 /** Demo pública: sin servidor, el API y el CAD simulado corren en el navegador. */
@@ -30,14 +31,18 @@ export interface Reporte {
   escenarioId: string | null;
   ubicacion: { lat: number; lng: number; precisionMetros?: number; referencia?: string };
   descripcion: string | null;
-  reportante: { nombre: string; telefono: string; confiabilidad: number } | null;
+  reportante: { nombre: string; telefono: string; confiabilidad: number; identidad?: 'completa' | 'seudonimo' | 'anonimo' } | null;
   cuestionario: { protocoloVersion: string; protocoloEstado: string; transcripcion: string; pendientes: string[]; entradas: unknown[] };
   canalizacion: { prioridad: Prioridad; corporaciones: string[]; alertas: string[] };
   recomendaciones: string[];
-  unidad: { unidadId: string; corporacion: string; etiqueta: string; etaMinutos?: number } | null;
+  unidad: { unidadId: string; corporacion: string; etiqueta: string; etaMinutos?: number; lat?: number; lng?: number; rumbo?: number; distanciaMetros?: number } | null;
   evidencias: { id: string; tipo: string; url: string; sha256: string; expiraEn: string }[];
   mensajes: { id: string; autor: 'ciudadano' | 'operador' | 'unidad'; nombreAutor?: string; texto: string; en: string }[];
   historial: { estado: Estado; en: string; nota?: string }[];
+  /** Tiempo de cada etapa contra su meta. */
+  tiempos: TiemposReporte;
+  /** Calificación o queja del ciudadano después del cierre. */
+  opinion: OpinionGuardada | null;
   creadoEn: string;
   actualizadoEn: string;
   escalaAlC5En: string | null;
@@ -51,11 +56,22 @@ export interface UnidadDisponible {
   corporacion: string;
   etiqueta: string;
   ocupadaEn: string | null;
+  /** Última posición GPS (AVL). */
+  posicion: { lat: number; lng: number; rumbo?: number; en: string } | null;
+}
+
+export interface Tablero {
+  metas: MetasTiempo;
+  resumen: ResumenEtapa[];
+  reportes: { folio: string; cadId: string; prioridad: Prioridad; estado: Estado; creadoEn: string; tiempos: TiemposReporte; opinion: OpinionGuardada | null }[];
+  quejas: number;
+  calificacionPromedio: number | null;
 }
 
 export type Accion =
   | { accion: 'recibir' }
   | { accion: 'asignar'; unidadId: string; etaMinutos?: number }
+  | { accion: 'asignar_cercana' }
   | { accion: 'estado'; estado: 'en_camino' | 'en_sitio' | 'cerrado' | 'improcedente'; nota?: string }
   | { accion: 'mensaje'; texto: string }
   | { accion: 'transferir'; cadDestinoId: string; motivo?: string };
@@ -92,6 +108,7 @@ const apiDemo = {
   reportes: (t: string, todos: boolean) => enDemo<{ reportes: Reporte[] }>(() => demo.operador.reportes(t, todos)),
   unidades: (t: string) => enDemo<{ unidades: UnidadDisponible[] }>(() => demo.operador.unidades(t)),
   accion: (t: string, folio: string, a: Accion) => enDemo<Reporte>(() => demo.operador.accion(t, folio, a)),
+  tiempos: (t: string) => enDemo<Tablero>(() => demo.operador.tiempos(t)),
 };
 
 const apiReal = {
@@ -100,7 +117,11 @@ const apiReal = {
   reportes: (t: string, todos: boolean) => llamar<{ reportes: Reporte[] }>(`/v1/operador/reportes${todos ? '?todos=1' : ''}`, t),
   unidades: (t: string) => llamar<{ unidades: UnidadDisponible[] }>('/v1/operador/unidades', t),
   accion: (t: string, folio: string, a: Accion) => llamar<Reporte>(`/v1/operador/reportes/${encodeURIComponent(folio)}/acciones`, t, { method: 'POST', body: JSON.stringify(a) }),
+  tiempos: (t: string) => llamar<Tablero>('/v1/operador/tiempos', t),
 };
+
+/** Hora actual: en la demo, el reloj (quizá acelerado) del motor. */
+export const ahoraMs = () => (DEMO ? demo.ahora() : Date.now());
 
 export const api = DEMO ? apiDemo : apiReal;
 
@@ -156,6 +177,7 @@ export const ERRORES: Record<string, string> = {
   cad_destino_invalido: 'Elige otro CAD de destino.',
   folio_de_otra_jurisdiccion: 'El reporte cambió de CAD. Actualiza la bandeja.',
   folio_no_encontrado: 'El reporte ya no está en tu bandeja.',
+  sin_unidades_disponibles: 'No hay unidades libres con GPS en este CAD. Asigna una a mano o transfiere.',
 };
 
 const PESO: Record<Prioridad, number> = { alta: 0, media: 1, baja: 2 };
@@ -182,3 +204,8 @@ export function hace(iso: string, ahora: number) {
 }
 
 export const hora = (iso: string) => new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+
+export const distanciaTexto = (m: number) => (m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`);
+
+export const IDENTIDAD: Record<string, string> = { completa: 'Con su nombre', seudonimo: 'Con seudónimo', anonimo: 'Anónimo' };
+export const LLEGO: Record<string, string> = { si: 'Sí llegó', tarde: 'Llegó tarde', no: 'No llegó nadie' };

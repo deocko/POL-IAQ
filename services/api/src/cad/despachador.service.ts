@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { createHmac, randomUUID } from 'node:crypto';
-import { CAD_ESTATAL_ID, firmar, transcripcion, type EventoHaciaCad } from '@pol-iaq/shared';
+import { CAD_ESTATAL_ID, firmar, transcripcion, type EventoHaciaCad, reportanteVisible } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
 import { BusService } from '../comun/bus.service';
 import type { Ciudadano, Envio, Evidencia, Reporte } from '../almacen/modelos';
@@ -71,7 +71,7 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
         ...(escenario && { escenario }),
         cuestionario: cuestionarioParaCad(r),
         canalizacion: r.canalizacion,
-        reportante: { nombre: ciudadano.nombre, telefono: ciudadano.telefono, confiabilidad: ciudadano.confiabilidad },
+        reportante: reportanteVisible(r, ciudadano),
         evidencias: r.evidencias.filter((e) => e.estado === 'verificada').map((e) => this.enlaceEvidencia(r, e)),
       },
     };

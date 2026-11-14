@@ -150,6 +150,7 @@ components:
                     nombre: { type: string }
                     telefono: { type: string }
                     confiabilidad: { type: number, minimum: 0, maximum: 1 }
+                    identidad: { type: string, enum: [completa, seudonimo, anonimo], description: 'Con seudónimo, `nombre` es el seudónimo y `telefono` llega enmascarado; anónimo, nombre "Anónimo" y teléfono vacío. Se contesta por el chat del folio.' }
                 evidencias: { type: array, items: { $ref: '#/components/schemas/EnlaceEvidencia' } }
     IncidenteActualizado:
       allOf:

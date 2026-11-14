@@ -8,6 +8,7 @@ import { OtpService } from './auth/otp.service';
 import { CadController } from './cad/cad.controller';
 import { EventosCadService } from './cad/eventos-cad.service';
 import { DespachadorCadService } from './cad/despachador.service';
+import { AvlService, RutasService } from './despacho/avl.service';
 import { CatalogoController } from './catalogo/catalogo.controller';
 import { BusService } from './comun/bus.service';
 import { CONFIG, cargarConfig, type Config } from './config';
@@ -42,6 +43,8 @@ export function crearAppModule(config: Config = cargarConfig(), opciones: { alma
       ProtocolosService,
       ReportesService,
       EventosCadService,
+      AvlService,
+      RutasService,
       CiudadanoGuard,
       OperadorGuard,
       SeguimientoGateway,

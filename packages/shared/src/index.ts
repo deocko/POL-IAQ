@@ -10,3 +10,8 @@ export * from './legal';
 export * from './protocolos';
 export * from './protocolo-provisional';
 export * from './escenarios';
+export * from './despacho';
+export * from './tiempos';
+export * from './identidad';
+export * from './cola';
+export * from './unidades-ejemplo';

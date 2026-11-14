@@ -1,8 +1,7 @@
 # Aviso de Privacidad Integral de Pol-IAQ
 
-**Versión:** 2026-11-13 · **Estado:** borrador para revisión jurídica
+**Versión:** 2026-11-14 · **Estado:** borrador para revisión jurídica
 
-> Nota para el equipo (eliminar antes de publicar): este borrador asume que el responsable del tratamiento es una autoridad pública (los municipios piloto y/o el Gobierno del Estado), por lo que se apoya en la Ley General de Protección de Datos Personales en Posesión de Sujetos Obligados y en la ley estatal equivalente de Querétaro. Si quien opera Pol-IAQ fuera un particular, aplica la Ley Federal de Protección de Datos Personales en Posesión de los Particulares y el aviso debe ajustarse. Las leyes de protección de datos se reformaron en 2025 y cambió la autoridad garante; el área jurídica debe confirmar las referencias vigentes, los artículos y la autoridad ante la que se presentan quejas. Todo lo que está entre [CORCHETES] debe completarse.
 
 ## 1. Quién es responsable de tus datos
 
@@ -17,9 +16,9 @@ Cuando tu reporte se atiende en otro municipio participante o por el Centro de C
 | Identificación y contacto | Nombre, número de celular verificado, [CURP, si se solicita] | Al registrarte |
 | Ubicación | Coordenadas GPS y precisión del dispositivo, referencias que escribas | Al enviar un reporte y mientras esté activo |
 | Contenido del reporte | Tipo de incidente, descripción, respuestas a preguntas guía, mensajes con el operador | Al reportar y durante el seguimiento |
-| Evidencia multimedia | Fotografías, videos y audios, con su fecha, hora, ubicación y huella digital (hash) | Solo si decides adjuntarlos o usas el botón de pánico |
+| Evidencia multimedia | Fotografías, videos y audios, con su fecha, hora, ubicación y huella digital (hash) | Solo si decides adjuntarlos o usas el botón de asistencia directa (pánico) |
 | Datos técnicos | Identificador y modelo del dispositivo, sistema operativo, dirección IP, registros de acceso | Durante el uso |
-| Historial | Folios, estados de atención, calificaciones y, en su caso, reportes declarados improcedentes | Durante el uso |
+| Historial | Folios, estados de atención y tiempos de cada etapa, calificaciones y quejas sobre la atención, y, en su caso, reportes declarados improcedentes | Durante el uso |
 
 **Datos personales sensibles.** Tus reportes, fotos, videos y audios pueden revelar información sobre tu salud o la de otras personas, sobre hechos posiblemente delictivos o sobre la imagen y la voz de terceros. Estos datos se tratan como sensibles, con medidas de seguridad reforzadas, y solo para atender la emergencia y darle seguimiento.
 
@@ -36,6 +35,7 @@ No es obligatorio adjuntar evidencia para que tu reporte se atienda. Pol-IAQ **n
 5. Verificar tu identidad, proteger tu cuenta y prevenir el uso indebido del servicio, incluidas las falsas alarmas.
 6. Registrar en bitácoras de auditoría quién consulta o modifica cada reporte.
 7. Cumplir obligaciones legales y atender requerimientos fundados y motivados de autoridades competentes.
+8. Recibir y dar seguimiento a tus quejas sobre la atención (por ejemplo, si no llegó la unidad) y medir los tiempos de respuesta del servicio.
 
 **Finalidades adicionales** (puedes negarte sin que afecte la atención de tus reportes):
 
@@ -62,6 +62,14 @@ Tus datos se comparten **solo lo necesario para atender tu reporte**:
 La unidad que acude puede ver tu nombre y tu teléfono para localizarte; puedes pedir que se oculten frente a la unidad (el operador sí los verá). Estas comunicaciones se realizan entre autoridades para el ejercicio de sus facultades y [CONFIRMAR: no requieren tu consentimiento conforme a la ley aplicable].
 
 Los proveedores que nos dan servicios tecnológicos (alojamiento en la nube, envío de SMS y notificaciones) actúan como encargados: tratan los datos solo por cuenta del responsable, bajo contrato y sin usarlos para fines propios. Los datos se alojan en [PAÍS/REGIÓN, de preferencia México].
+
+**Reportar con seudónimo o de forma anónima.** Al reportar puedes elegir cómo te identificas ante el operador, la unidad y el CAD:
+
+- **Con tu nombre:** ven tu nombre y teléfono.
+- **Con un seudónimo:** ven el seudónimo que elijas; tu teléfono se muestra oculto y la comunicación es por el chat del folio.
+- **Anónimo** (solo en incidentes no violentos): no ven tu nombre ni tu teléfono.
+
+En los tres casos tu cuenta conserva el teléfono verificado para prevenir reportes falsos. Ese dato solo se entrega a una autoridad cuando la ley lo exige.
 
 **No vendemos ni cedemos tus datos con fines comerciales o publicitarios.**
 
