@@ -1,0 +1,156 @@
+1:"$Sreact.fragment"
+2:I[5341,[],""]
+3:I[25,[],""]
+5:I[5104,[],"OutletBoundary"]
+7:I[7158,[],"AsyncMetadataOutlet"]
+9:I[5104,[],"ViewportBoundary"]
+b:I[5104,[],"MetadataBoundary"]
+c:"$Sreact.suspense"
+e:I[4431,[],""]
+:HL["/POL-IAQ/_next/static/css/305406932f72212b.css","style"]
+0:{"P":null,"b":"su9_mrC9aGmDEPDSlIrLX","p":"/POL-IAQ","c":["","legal","aviso-privacidad",""],"i":false,"f":[[["",{"children":["legal",{"children":[["documento","aviso-privacidad","d"],{"children":["__PAGE__",{}]}]}]},"$undefined","$undefined",true],["",["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/POL-IAQ/_next/static/css/305406932f72212b.css","precedence":"next","crossOrigin":"$undefined","nonce":"$undefined"}]],["$","html",null,{"lang":"es-MX","children":["$","body",null,{"children":["$","$L2",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L3",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":[[["$","title",null,{"children":"404: This page could not be found."}],["$","div",null,{"style":{"fontFamily":"system-ui,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\"","height":"100vh","textAlign":"center","display":"flex","flexDirection":"column","alignItems":"center","justifyContent":"center"},"children":["$","div",null,{"children":[["$","style",null,{"dangerouslySetInnerHTML":{"__html":"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}"}}],["$","h1",null,{"className":"next-error-h1","style":{"display":"inline-block","margin":"0 20px 0 0","padding":"0 23px 0 0","fontSize":24,"fontWeight":500,"verticalAlign":"top","lineHeight":"49px"},"children":404}],["$","div",null,{"style":{"display":"inline-block"},"children":["$","h2",null,{"style":{"fontSize":14,"fontWeight":400,"lineHeight":"49px","margin":0},"children":"This page could not be found."}]}]]}]}]],[]],"forbidden":"$undefined","unauthorized":"$undefined"}]}]}]]}],{"children":["legal",["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L3",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],{"children":[["documento","aviso-privacidad","d"],["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L3",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],{"children":["__PAGE__",["$","$1","c",{"children":["$L4",null,["$","$L5",null,{"children":["$L6",["$","$L7",null,{"promise":"$@8"}]]}]]}],{},null,false]},null,false]},null,false]},null,false],["$","$1","h",{"children":[null,[["$","$L9",null,{"children":"$La"}],null],["$","$Lb",null,{"children":["$","div",null,{"hidden":true,"children":["$","$c",null,{"fallback":null,"children":"$Ld"}]}]}]]}],false]],"m":"$undefined","G":["$e",[]],"s":false,"S":true}
+a:[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]
+6:null
+8:{"metadata":[["$","title","0",{"children":"Pol-IAQ"}],["$","meta","1",{"name":"description","content":"Reporta emergencias a la policía de tu municipio en Querétaro y sigue la atención en tiempo real."}]],"error":null,"digest":"$undefined"}
+d:"$8:metadata"
+f:T2738,<h1>Aviso de Privacidad Integral de Pol-IAQ</h1>
+<p><strong>Versión:</strong> 2026-11-13 · <strong>Estado:</strong> borrador para revisión jurídica</p>
+<blockquote>
+<p>Nota para el equipo (eliminar antes de publicar): este borrador asume que el responsable del tratamiento es una autoridad pública (los municipios piloto y/o el Gobierno del Estado), por lo que se apoya en la Ley General de Protección de Datos Personales en Posesión de Sujetos Obligados y en la ley estatal equivalente de Querétaro. Si quien opera Pol-IAQ fuera un particular, aplica la Ley Federal de Protección de Datos Personales en Posesión de los Particulares y el aviso debe ajustarse. Las leyes de protección de datos se reformaron en 2025 y cambió la autoridad garante; el área jurídica debe confirmar las referencias vigentes, los artículos y la autoridad ante la que se presentan quejas. Todo lo que está entre [CORCHETES] debe completarse.</p>
+</blockquote>
+<h2>1. Quién es responsable de tus datos</h2>
+<p>[NOMBRE DEL RESPONSABLE, por ejemplo: Municipio de Querétaro, a través de la Secretaría de Seguridad Pública Municipal], con domicilio en [DOMICILIO], es responsable del tratamiento de los datos personales que proporcionas al usar la aplicación y el sitio web Pol-IAQ (en adelante, &quot;Pol-IAQ&quot;).</p>
+<p>Cuando tu reporte se atiende en otro municipio participante o por el Centro de Comando, Control, Cómputo, Comunicaciones, Contacto Ciudadano e Inteligencia del Estado (C5), esa autoridad también trata tus datos como responsable, para los mismos fines y conforme a su propio aviso de privacidad. Los municipios participantes en la etapa piloto son <strong>Querétaro, Corregidora y El Marqués</strong>.</p>
+<h2>2. Qué datos personales tratamos</h2>
+<table>
+<thead>
+<tr>
+<th>Categoría</th>
+<th>Datos</th>
+<th>Cuándo</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Identificación y contacto</td>
+<td>Nombre, número de celular verificado, [CURP, si se solicita]</td>
+<td>Al registrarte</td>
+</tr>
+<tr>
+<td>Ubicación</td>
+<td>Coordenadas GPS y precisión del dispositivo, referencias que escribas</td>
+<td>Al enviar un reporte y mientras esté activo</td>
+</tr>
+<tr>
+<td>Contenido del reporte</td>
+<td>Tipo de incidente, descripción, respuestas a preguntas guía, mensajes con el operador</td>
+<td>Al reportar y durante el seguimiento</td>
+</tr>
+<tr>
+<td>Evidencia multimedia</td>
+<td>Fotografías, videos y audios, con su fecha, hora, ubicación y huella digital (hash)</td>
+<td>Solo si decides adjuntarlos o usas el botón de pánico</td>
+</tr>
+<tr>
+<td>Datos técnicos</td>
+<td>Identificador y modelo del dispositivo, sistema operativo, dirección IP, registros de acceso</td>
+<td>Durante el uso</td>
+</tr>
+<tr>
+<td>Historial</td>
+<td>Folios, estados de atención, calificaciones y, en su caso, reportes declarados improcedentes</td>
+<td>Durante el uso</td>
+</tr>
+</tbody></table>
+<p><strong>Datos personales sensibles.</strong> Tus reportes, fotos, videos y audios pueden revelar información sobre tu salud o la de otras personas, sobre hechos posiblemente delictivos o sobre la imagen y la voz de terceros. Estos datos se tratan como sensibles, con medidas de seguridad reforzadas, y solo para atender la emergencia y darle seguimiento.</p>
+<p>No es obligatorio adjuntar evidencia para que tu reporte se atienda. Pol-IAQ <strong>no</strong> accede a tu ubicación cuando no tienes un reporte activo, ni a tus contactos, fotos o archivos que no elijas compartir.</p>
+<h2>3. Para qué usamos tus datos</h2>
+<p><strong>Finalidades necesarias para el servicio</strong> (no puedes oponerte a ellas sin dejar de usar Pol-IAQ):</p>
+<ol>
+<li>Recibir tu reporte, asignarle un folio unificado y canalizarlo al Centro de Atención y Despacho (CAD) del municipio donde ocurre o al C5.</li>
+<li>Despachar a la unidad o corporación de emergencia que corresponda y mostrarte su avance en tiempo real.</li>
+<li>Permitir la comunicación entre tú, el operador y la unidad durante la atención.</li>
+<li>Integrar y resguardar la evidencia que compartas, conservando su integridad (cadena de custodia), y ponerla a disposición de las autoridades competentes cuando proceda.</li>
+<li>Verificar tu identidad, proteger tu cuenta y prevenir el uso indebido del servicio, incluidas las falsas alarmas.</li>
+<li>Registrar en bitácoras de auditoría quién consulta o modifica cada reporte.</li>
+<li>Cumplir obligaciones legales y atender requerimientos fundados y motivados de autoridades competentes.</li>
+</ol>
+<p><strong>Finalidades adicionales</strong> (puedes negarte sin que afecte la atención de tus reportes):</p>
+<ol>
+<li>Enviarte encuestas de satisfacción sobre la atención recibida.</li>
+<li>Elaborar estadísticas e informes para mejorar la seguridad pública; para ello los datos se disocian o anonimizan.</li>
+</ol>
+<p>Para negarte a las finalidades adicionales, desactívalas en <strong>Perfil &gt; Privacidad</strong> o escribe a [CORREO DE LA UNIDAD DE TRANSPARENCIA].</p>
+<h2>4. Fundamento legal</h2>
+<p>[COMPLETAR por el área jurídica: artículos aplicables de la Ley General de Protección de Datos Personales en Posesión de Sujetos Obligados, de la ley estatal de Querétaro en la materia, de la Ley General del Sistema Nacional de Seguridad Pública, de la Ley de Seguridad para el Estado de Querétaro y de los reglamentos municipales que facultan al responsable para prestar el servicio de atención de emergencias.]</p>
+<h2>5. Con quién compartimos tus datos</h2>
+<p>Tus datos se comparten <strong>solo lo necesario para atender tu reporte</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Destinatario</th>
+<th>Para qué</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CAD de los municipios de Querétaro, Corregidora y El Marqués</td>
+<td>Recibir, despachar y dar seguimiento a los reportes de su territorio</td>
+</tr>
+<tr>
+<td>C5 del Estado de Querétaro</td>
+<td>Atender reportes fuera de los municipios piloto, de competencia estatal o que un municipio no pueda atender</td>
+</tr>
+<tr>
+<td>Corporaciones de emergencia (policías, Cruz Roja, bomberos, protección civil)</td>
+<td>Atender el incidente en el lugar</td>
+</tr>
+<tr>
+<td>Fiscalía General del Estado y autoridades judiciales</td>
+<td>Cuando la evidencia sea necesaria para una investigación y medie requerimiento legal</td>
+</tr>
+</tbody></table>
+<p>La unidad que acude puede ver tu nombre y tu teléfono para localizarte; puedes pedir que se oculten frente a la unidad (el operador sí los verá). Estas comunicaciones se realizan entre autoridades para el ejercicio de sus facultades y [CONFIRMAR: no requieren tu consentimiento conforme a la ley aplicable].</p>
+<p>Los proveedores que nos dan servicios tecnológicos (alojamiento en la nube, envío de SMS y notificaciones) actúan como encargados: tratan los datos solo por cuenta del responsable, bajo contrato y sin usarlos para fines propios. Los datos se alojan en [PAÍS/REGIÓN, de preferencia México].</p>
+<p><strong>No vendemos ni cedemos tus datos con fines comerciales o publicitarios.</strong></p>
+<h2>6. Cuánto tiempo los conservamos</h2>
+<table>
+<thead>
+<tr>
+<th>Dato</th>
+<th>Plazo propuesto</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Reportes atendidos sin investigación abierta, con su evidencia</td>
+<td>[12 meses] después del cierre; luego se eliminan o anonimizan</td>
+</tr>
+<tr>
+<td>Evidencia vinculada a una carpeta de investigación</td>
+<td>El plazo que fije la autoridad o la ley aplicable</td>
+</tr>
+<tr>
+<td>Bitácoras de auditoría</td>
+<td>[5 años]</td>
+</tr>
+<tr>
+<td>Cuenta de usuario</td>
+<td>Mientras esté activa; al cancelarla se elimina en [30 días], salvo lo que deba conservarse por los plazos anteriores</td>
+</tr>
+</tbody></table>
+<h2>7. Cómo protegemos tus datos</h2>
+<p>Ciframos la información en tránsito y almacenada, limitamos el acceso por rol y por municipio, registramos cada consulta en una bitácora que no puede alterarse, verificamos la integridad de la evidencia mediante su huella digital (hash SHA-256) y realizamos pruebas de seguridad periódicas.</p>
+<h2>8. Tus derechos ARCO y cómo ejercerlos</h2>
+<p>Puedes <strong>Acceder</strong> a tus datos, pedir su <strong>Rectificación</strong> si son inexactos, su <strong>Cancelación</strong> cuando ya no sean necesarios, u <strong>Oponerte</strong> a su tratamiento para fines específicos. También puedes solicitar la portabilidad de tus datos y revocar tu consentimiento para las finalidades adicionales.</p>
+<ul>
+<li><strong>Desde la app:</strong> Perfil &gt; Privacidad &gt; Mis derechos.</li>
+<li><strong>Por escrito o en persona:</strong> Unidad de Transparencia de [RESPONSABLE], [DOMICILIO], [HORARIO], [CORREO], [TELÉFONO].</li>
+<li><strong>En línea:</strong> Plataforma Nacional de Transparencia [CONFIRMAR denominación vigente].</li>
+</ul>
+<p>Tu solicitud debe incluir tu nombre, un medio para recibir respuesta, el documento que acredite tu identidad (o la de tu representante), la descripción de los datos y el derecho que deseas ejercer. Te responderemos en un plazo máximo de [20 días hábiles], conforme a la ley aplicable.</p>
+<p>Algunos datos no podrán cancelarse mientras sean necesarios para una investigación, un procedimiento legal o para cumplir obligaciones de conservación.</p>
+<p>Si consideras que tu derecho no fue atendido, puedes acudir a [AUTORIDAD GARANTE COMPETENTE EN QUERÉTARO, CONFIRMAR TRAS LA REFORMA DE 2025].</p>
+<h2>9. Personas menores de edad</h2>
+<p>Pol-IAQ está dirigido a personas mayores de 18 años. [CONFIRMAR CON JURÍDICO: si se permitirá el registro de adolescentes con consentimiento de madre, padre o tutor.] En cualquier caso, ante una emergencia cualquier persona puede llamar al 911.</p>
+<h2>10. Cambios a este aviso</h2>
+<p>Si cambiamos este aviso te lo mostraremos en la app antes de que sigas usándola y te pediremos aceptarlo de nuevo cuando el cambio lo requiera. La versión vigente está siempre en [URL] y en <strong>Perfil &gt; Privacidad</strong>.</p>
+<p><strong>Última actualización:</strong> 13 de noviembre de 2026.</p>
+4:["$","main",null,{"dangerouslySetInnerHTML":{"__html":"$f"}}]

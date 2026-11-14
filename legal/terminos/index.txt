@@ -1,0 +1,61 @@
+1:"$Sreact.fragment"
+2:I[5341,[],""]
+3:I[25,[],""]
+5:I[5104,[],"OutletBoundary"]
+7:I[7158,[],"AsyncMetadataOutlet"]
+9:I[5104,[],"ViewportBoundary"]
+b:I[5104,[],"MetadataBoundary"]
+c:"$Sreact.suspense"
+e:I[4431,[],""]
+:HL["/POL-IAQ/_next/static/css/305406932f72212b.css","style"]
+0:{"P":null,"b":"su9_mrC9aGmDEPDSlIrLX","p":"/POL-IAQ","c":["","legal","terminos",""],"i":false,"f":[[["",{"children":["legal",{"children":[["documento","terminos","d"],{"children":["__PAGE__",{}]}]}]},"$undefined","$undefined",true],["",["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/POL-IAQ/_next/static/css/305406932f72212b.css","precedence":"next","crossOrigin":"$undefined","nonce":"$undefined"}]],["$","html",null,{"lang":"es-MX","children":["$","body",null,{"children":["$","$L2",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L3",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":[[["$","title",null,{"children":"404: This page could not be found."}],["$","div",null,{"style":{"fontFamily":"system-ui,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\"","height":"100vh","textAlign":"center","display":"flex","flexDirection":"column","alignItems":"center","justifyContent":"center"},"children":["$","div",null,{"children":[["$","style",null,{"dangerouslySetInnerHTML":{"__html":"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}"}}],["$","h1",null,{"className":"next-error-h1","style":{"display":"inline-block","margin":"0 20px 0 0","padding":"0 23px 0 0","fontSize":24,"fontWeight":500,"verticalAlign":"top","lineHeight":"49px"},"children":404}],["$","div",null,{"style":{"display":"inline-block"},"children":["$","h2",null,{"style":{"fontSize":14,"fontWeight":400,"lineHeight":"49px","margin":0},"children":"This page could not be found."}]}]]}]}]],[]],"forbidden":"$undefined","unauthorized":"$undefined"}]}]}]]}],{"children":["legal",["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L3",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],{"children":[["documento","terminos","d"],["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L3",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],{"children":["__PAGE__",["$","$1","c",{"children":["$L4",null,["$","$L5",null,{"children":["$L6",["$","$L7",null,{"promise":"$@8"}]]}]]}],{},null,false]},null,false]},null,false]},null,false],["$","$1","h",{"children":[null,[["$","$L9",null,{"children":"$La"}],null],["$","$Lb",null,{"children":["$","div",null,{"hidden":true,"children":["$","$c",null,{"fallback":null,"children":"$Ld"}]}]}]]}],false]],"m":"$undefined","G":["$e",[]],"s":false,"S":true}
+a:[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]
+6:null
+8:{"metadata":[["$","title","0",{"children":"Pol-IAQ"}],["$","meta","1",{"name":"description","content":"Reporta emergencias a la policía de tu municipio en Querétaro y sigue la atención en tiempo real."}]],"error":null,"digest":"$undefined"}
+d:"$8:metadata"
+f:T13ed,<h1>Términos y Condiciones de Uso de Pol-IAQ</h1>
+<p><strong>Versión:</strong> 2026-11-13 · <strong>Estado:</strong> borrador para revisión jurídica</p>
+<blockquote>
+<p>Nota para el equipo (eliminar antes de publicar): completar lo que está entre [CORCHETES] y validar con el área jurídica de cada municipio piloto y del C5, en especial las secciones 6 (sanciones), 9 (responsabilidad) y 12 (jurisdicción).</p>
+</blockquote>
+<h2>1. Qué es Pol-IAQ</h2>
+<p>Pol-IAQ es un servicio digital gratuito de [RESPONSABLE] que permite a las personas reportar emergencias, compartir su ubicación y evidencia (fotos, videos y audios) y dar seguimiento en tiempo real a la atención, mediante un folio único. Los reportes se canalizan al Centro de Atención y Despacho (CAD) del municipio donde ocurren (en la etapa piloto: <strong>Querétaro, Corregidora y El Marqués</strong>) o al C5 del Estado de Querétaro.</p>
+<p>Al registrarte y marcar la casilla de aceptación, aceptas estos Términos y el Aviso de Privacidad. Si no estás de acuerdo, no uses Pol-IAQ.</p>
+<h2>2. Pol-IAQ no sustituye al 911</h2>
+<p>Pol-IAQ es un canal adicional. <strong>Si la app no funciona, no tienes conexión o la situación lo requiere, llama al 911.</strong> La atención depende de la conectividad de tu dispositivo, de la precisión de tu GPS y de la disponibilidad de unidades.</p>
+<h2>3. Quién puede usarla</h2>
+<p>Debes ser mayor de 18 años [CONFIRMAR política para adolescentes], contar con un número de celular propio en México y registrar datos verdaderos. La cuenta es personal e intransferible; eres responsable de lo que se haga con ella.</p>
+<h2>4. Cómo se usa</h2>
+<ol>
+<li>Elige el tipo de emergencia o usa el botón de pánico.</li>
+<li>Confirma tu ubicación. Si puedes, agrega una descripción y evidencia.</li>
+<li>Recibirás un folio y verás el avance: recibido, validado, unidad asignada, en camino, en sitio y cerrado.</li>
+<li>Puedes escribir al operador, adjuntar más evidencia o cancelar tu reporte mientras no se haya cerrado.</li>
+</ol>
+<p>El operador puede reclasificar tu reporte, canalizarlo a otra corporación o municipio, o declararlo improcedente. El folio no cambia.</p>
+<h2>5. Lo que te comprometes a hacer</h2>
+<ul>
+<li>Reportar solo hechos reales y de buena fe.</li>
+<li>Compartir información y evidencia relacionadas con la emergencia.</li>
+<li>No usar Pol-IAQ para insultar, amenazar o acosar a operadores, unidades u otras personas.</li>
+<li>No compartir contenido ilícito, ni contenido que exponga innecesariamente a menores de edad o a víctimas.</li>
+<li>No intentar vulnerar la seguridad de Pol-IAQ, automatizar reportes ni suplantar a otra persona.</li>
+</ul>
+<h2>6. Falsas alarmas y uso indebido</h2>
+<p>Reportar emergencias falsas distrae recursos de quien sí los necesita. Pol-IAQ puede limitar el número de reportes por hora, mostrar al operador un indicador de confiabilidad de la cuenta y <strong>suspender o cancelar</strong> cuentas con reportes falsos o uso indebido. Además, los hechos pueden ser sancionados conforme a [CITAR la disposición aplicable de la legislación del Estado de Querétaro o reglamento municipal].</p>
+<h2>7. La evidencia que compartes</h2>
+<p>Conservas los derechos sobre las fotos, videos y audios que compartas. Al enviarlos autorizas a las autoridades que atienden tu reporte a usarlos, reproducirlos y resguardarlos solo para atender la emergencia, darle seguimiento y, cuando proceda, integrarlos a una investigación. Cada archivo se protege con una huella digital (hash) para acreditar que no fue modificado.</p>
+<h2>8. Disponibilidad del servicio</h2>
+<p>Trabajamos para que Pol-IAQ esté disponible las 24 horas, pero puede haber interrupciones por mantenimiento, fallas de red, de proveedores o causas de fuerza mayor. Los tiempos estimados de llegada son aproximados.</p>
+<h2>9. Responsabilidad</h2>
+<p>[RESPONSABLE] y las corporaciones atienden los reportes conforme a sus atribuciones, protocolos y recursos disponibles. Pol-IAQ no garantiza un tiempo de respuesta específico. [REVISAR CON JURÍDICO el alcance de la limitación de responsabilidad aplicable a una autoridad pública.]</p>
+<h2>10. Suspensión y baja de la cuenta</h2>
+<p>Puedes dar de baja tu cuenta en cualquier momento desde Perfil &gt; Cuenta. Podemos suspenderla si incumples estos Términos; te informaremos el motivo y cómo inconformarte en [MEDIO]. La información de reportes previos se conserva por los plazos del Aviso de Privacidad.</p>
+<h2>11. Cambios a estos Términos</h2>
+<p>Si los modificamos, te mostraremos la nueva versión en la app y te pediremos aceptarla antes de seguir usando el servicio.</p>
+<h2>12. Ley aplicable y jurisdicción</h2>
+<p>Estos Términos se rigen por las leyes del Estado de Querétaro y, en lo que corresponda, por las leyes federales de México. Cualquier controversia se resolverá ante [AUTORIDADES O TRIBUNALES COMPETENTES EN SANTIAGO DE QUERÉTARO].</p>
+<h2>13. Contacto</h2>
+<p>[CORREO] · [TELÉFONO] · [DOMICILIO]</p>
+<p><strong>Última actualización:</strong> 13 de noviembre de 2026.</p>
+4:["$","main",null,{"dangerouslySetInnerHTML":{"__html":"$f"}}]
