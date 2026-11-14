@@ -10,3 +10,5 @@ export * from './protocolos';
 export * from './protocolo-provisional';
 export * from './escenarios';
 export { CATALOGO_SEMILLA, incidentePorId } from './catalogo';
+export * from './municipios';
+export * from './geo';

@@ -6,14 +6,16 @@
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start -p 3001",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:demo": "NEXT_PUBLIC_DEMO=1 next build"
   },
   "dependencies": {
     "marked": "^16.4.2",
     "next": "15.5.29",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "socket.io-client": "^4.8.4"
+    "socket.io-client": "^4.8.4",
+    "@pol-iaq/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

@@ -1,6 +1,11 @@
 /** Cliente del API de la consola del operador y etiquetas en español. */
 
+import { io } from 'socket.io-client';
+import * as demo from '../../lib/demo/motor';
+
 export const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+/** Demo pública: sin servidor, el API y el CAD simulado corren en el navegador. */
+export const DEMO = process.env.NEXT_PUBLIC_DEMO === '1';
 
 export type Prioridad = 'alta' | 'media' | 'baja';
 export type Estado = 'recibido' | 'validado' | 'asignado' | 'en_camino' | 'en_sitio' | 'transferido' | 'cerrado' | 'improcedente' | 'cancelado';
@@ -71,13 +76,53 @@ async function llamar<T>(ruta: string, token: string | null, init: RequestInit =
   return cuerpo as T;
 }
 
-export const api = {
+/** Ejecuta la versión en navegador con la misma forma de errores que el API. */
+async function enDemo<T>(f: () => unknown): Promise<T> {
+  try {
+    return f() as T;
+  } catch (err) {
+    if (err instanceof demo.ErrorDemo) throw new ErrorApi(err.status, err.codigo);
+    throw err;
+  }
+}
+
+const apiDemo = {
+  sesion: (usuario: string, clave: string) => enDemo<Yo & { token: string }>(() => demo.operador.sesion(usuario, clave)),
+  yo: (t: string) => enDemo<Yo>(() => demo.operador.yo(t)),
+  reportes: (t: string, todos: boolean) => enDemo<{ reportes: Reporte[] }>(() => demo.operador.reportes(t, todos)),
+  unidades: (t: string) => enDemo<{ unidades: UnidadDisponible[] }>(() => demo.operador.unidades(t)),
+  accion: (t: string, folio: string, a: Accion) => enDemo<Reporte>(() => demo.operador.accion(t, folio, a)),
+};
+
+const apiReal = {
   sesion: (usuario: string, clave: string) => llamar<Yo & { token: string }>('/v1/operador/sesion', null, { method: 'POST', body: JSON.stringify({ usuario, clave }) }),
   yo: (t: string) => llamar<Yo>('/v1/operador/yo', t),
   reportes: (t: string, todos: boolean) => llamar<{ reportes: Reporte[] }>(`/v1/operador/reportes${todos ? '?todos=1' : ''}`, t),
   unidades: (t: string) => llamar<{ unidades: UnidadDisponible[] }>('/v1/operador/unidades', t),
   accion: (t: string, folio: string, a: Accion) => llamar<Reporte>(`/v1/operador/reportes/${encodeURIComponent(folio)}/acciones`, t, { method: 'POST', body: JSON.stringify(a) }),
 };
+
+export const api = DEMO ? apiDemo : apiReal;
+
+/**
+ * Tiempo real. Con API: socket.io en /operacion, cada cambio trae la vista completa.
+ * En la demo: aviso entre pestañas del motor del navegador. Devuelve la función para cerrar.
+ */
+export function conectarOperacion(
+  token: string,
+  h: { alReporte: (v: Reporte) => void; alEnLinea: (ok: boolean) => void; alRechazo: () => void; alRecargar: () => void },
+): () => void {
+  if (DEMO) {
+    h.alEnLinea(true);
+    // Cualquier cambio (de otra pestaña o del CAD simulado) recarga la bandeja completa.
+    return demo.escuchar(() => h.alRecargar());
+  }
+  const s = io(`${API}/operacion`, { transports: ['websocket'] });
+  s.on('connect', () => s.emit('suscribir', { token }, (r: { ok: boolean }) => { h.alEnLinea(r.ok); if (!r.ok) h.alRechazo(); }));
+  s.on('disconnect', () => h.alEnLinea(false));
+  s.on('reporte.actualizado', h.alReporte);
+  return () => { s.close(); };
+}
 
 export const ESTADO: Record<Estado, string> = {
   recibido: 'Nuevo',

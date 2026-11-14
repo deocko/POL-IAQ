@@ -78,6 +78,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@pol-iaq/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       marked:
         specifier: ^16.4.2
         version: 16.4.2
