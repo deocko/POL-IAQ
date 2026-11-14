@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { ESTADOS_FINALES, ETIQUETAS_CIUDADANO, respuestasDe, preguntasHechas, type EstadoIncidente } from '@pol-iaq/shared/movil';
+import { CampoDictado } from '../componentes/CampoDictado';
 import { api, seguir, type ReporteVista } from '../api';
 import { MapaSeguimiento } from '../componentes/MapaSeguimiento';
 import type { Punto } from '../componentes/tipos-mapa';
@@ -147,7 +148,7 @@ export function Seguimiento({ token, folio, alSalir, alContinuar }: { token: str
       ))}
       {!finalizado && (
         <>
-          <TextInput style={e.input} placeholder="Escribe al operador" value={texto} onChangeText={setTexto} />
+          <CampoDictado placeholder="Escribe o dicta tu mensaje al operador" value={texto} onChangeText={setTexto} multiline />
           <Pressable style={e.boton} onPress={enviarMensaje}>
             <Text style={e.botonTexto}>Enviar</Text>
           </Pressable>

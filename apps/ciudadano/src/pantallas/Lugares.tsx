@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import {
   ETIQUETAS_VULNERABILIDAD, MAX_LUGARES, TIPOS_LUGAR, VULNERABILIDADES, incidentePorId, sugerirEscenarios,
   type LugarGuardado, type Perfil, type TipoLugar, type Vulnerabilidad,
 } from '@pol-iaq/shared/movil';
 import { api } from '../api';
+import { CampoDictado } from '../componentes/CampoDictado';
 import { colores, e } from '../estilos';
 import { ubicacionActual } from '../ubicacion';
 
@@ -103,7 +104,7 @@ export function Lugares({ token, perfil, alCambiar, alSalir }: { token: string; 
       {editando ? (
         <View style={[e.tarjeta, { marginTop: 12 }]}>
           <Text style={e.subtitulo}>Nuevo lugar</Text>
-          <TextInput style={e.input} placeholder="Nombre, ej. Casa de mis abuelos" value={nombre} onChangeText={setNombre} maxLength={60} />
+          <CampoDictado placeholder="Nombre, ej. Casa de mis abuelos" value={nombre} onChangeText={setNombre} maxLength={60} />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
             {TIPOS_LUGAR.map((t) => (
               <Pressable key={t} style={[e.chip, tipo === t && e.chipActivo]} onPress={() => setTipo(t)}><Text>{ETIQUETA_TIPO[t]}</Text></Pressable>
@@ -112,7 +113,7 @@ export function Lugares({ token, perfil, alCambiar, alSalir }: { token: string; 
           <Pressable style={e.botonSecundario} onPress={async () => { const u = await ubicacionActual(); if (u) setPunto({ lat: u.lat, lng: u.lng }); }}>
             <Text style={e.botonSecundarioTexto}>{punto ? `Ubicación guardada (${punto.lat.toFixed(5)}, ${punto.lng.toFixed(5)})` : 'Usar mi ubicación actual (estando en el lugar)'}</Text>
           </Pressable>
-          <TextInput style={[e.input, { marginTop: 12 }]} placeholder="Referencia: calle, número, color de fachada" value={referencia} onChangeText={setReferencia} maxLength={280} />
+          <CampoDictado estiloContenedor={{ marginTop: 12 }} placeholder="Referencia: calle, número, color de fachada" value={referencia} onChangeText={setReferencia} maxLength={280} multiline />
           <Text style={e.suave}>¿Quién vive ahí y necesita atención especial?</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 8 }}>
             {VULNERABILIDADES.map((v) => (
@@ -121,7 +122,7 @@ export function Lugares({ token, perfil, alCambiar, alSalir }: { token: string; 
               </Pressable>
             ))}
           </View>
-          <TextInput style={e.input} placeholder="Información médica (opcional), ej. abuelo diabético" value={infoMedica} onChangeText={setInfoMedica} maxLength={280} />
+          <CampoDictado placeholder="Información médica (opcional), ej. abuelo diabético" value={infoMedica} onChangeText={setInfoMedica} maxLength={280} multiline />
           <Text style={[e.suave, { marginBottom: 8 }]}>Dato sensible: solo se envía a la corporación cuando usas un acceso rápido de este lugar.</Text>
           <Pressable style={[e.boton, (!nombre.trim() || !punto || guardando) && { opacity: 0.5 }]} disabled={!nombre.trim() || !punto || guardando} onPress={agregar}>
             <Text style={e.botonTexto}>Guardar lugar y crear accesos rápidos</Text>
