@@ -31,7 +31,7 @@ docker compose up -d postgres   # PostgreSQL + PostGIS; el API crea las tablas a
 
 pnpm dev:api        # API en http://localhost:3000
 pnpm dev:cad        # CAD simulado en http://localhost:4000
-pnpm dev:web        # Avisos legales en http://localhost:3001
+pnpm dev:web        # Avisos legales y consola de operador en http://localhost:3001
 pnpm dev:ciudadano  # App: abre con Expo Go
 ```
 
@@ -64,6 +64,16 @@ TEST_DATABASE_URL=postgres://poliaq:poliaq-dev@localhost:5432/poliaq_test pnpm t
 - **Protocolo versionado**: las preguntas son datos (JSON) y se actualizan sin tocar código. Cada respuesta queda en texto en el folio (`POST /v1/reportes/{folio}/cuestionario`) y recalcula la **canalización** (prioridad, corporaciones de apoyo y alertas) que se envía al CAD. Ver [`docs/protocolos`](docs/protocolos/README.md). **El protocolo actual es provisional, no oficial.**
 - El antiguo "botón de pánico" se llama ahora **botón de asistencia directa** (`asistenciaDirecta` en el API).
 
+## Consola del operador/despachador
+
+`http://localhost:3001/consola` (`apps/web/app/consola`). Es para municipios **sin CAD integrado** y para supervisión:
+
+- Los CAD en `CONSOLA_CADS` (p. ej. `CONSOLA_CADS=cad-el-marques`) no reciben webhook: el operador ve su bandeja en tiempo real (namespace `/operacion`), con la transcripción de la despachadora virtual, la canalización, las alertas y los datos del reportante, y despacha desde ahí: recibir, asignar unidad con ETA, en camino, en sitio, cerrar, improcedente, transferir a otro CAD y chatear con el ciudadano. Cada acción pasa por el mismo flujo que los eventos de un CAD (`EventosCadService`): auditoría, SMS y seguimiento en la app.
+- Los CAD con sistema propio (webhook) se ven en **solo lectura**.
+- Si nadie recibe el reporte en `CAD_ACK_TIMEOUT_SEC`, se escala al C5 igual que con un CAD integrado (la consola muestra la cuenta regresiva).
+- Operadores en `OPERADORES_JSON` (clave con `pnpm --filter @pol-iaq/api hash-clave '<clave>'`), cada uno limitado a sus `cadIds` (`*` = supervisión). Fuera de producción existe `operador` / `operador`. Unidades en `UNIDADES_JSON` (en desarrollo hay unidades de ejemplo por CAD).
+- La web apunta al API con `NEXT_PUBLIC_API_URL` (por defecto `http://localhost:3000`).
+
 ## SMS
 
 `SMS_PROVIDER=simulado` (por defecto) o `twilio` con `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` y `TWILIO_FROM` (número o Messaging Service `MG…`). En producción el API no arranca con el simulado. Para otro proveedor implementa `ProveedorSms` en `services/api/src/sms/sms.ts`.
@@ -71,6 +81,7 @@ TEST_DATABASE_URL=postgres://poliaq:poliaq-dev@localhost:5432/poliaq_test pnpm t
 ## Pendientes antes del piloto
 
 - Sustituir el protocolo provisional de la despachadora virtual por el Protocolo Nacional de Atención de Llamadas de Emergencia 9-1-1 vigente, validado con el C5 (`docs/protocolos`).
+- Consola: cambiar los usuarios en configuración por SSO (OIDC) con segundo factor, y cargar el padrón real de unidades de cada municipio.
 - Cargar los códigos oficiales del Catálogo Nacional de Incidentes de Emergencia (`codigoCnie` está en `null` a propósito).
 - Sustituir las geocercas aproximadas por los polígonos oficiales de INEGI.
 - Trabajador de colas para la bandeja de salida y los temporizadores de acuse; Redis para WebSocket con varias instancias.

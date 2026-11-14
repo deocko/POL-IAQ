@@ -25,6 +25,11 @@ export abstract class Almacen {
   abstract reporte(folio: string): Promise<Reporte | undefined>;
   abstract guardarReporte(r: Reporte): Promise<void>;
   abstract reportesDe(ciudadanoId: string): Promise<Reporte[]>;
+  /**
+   * Reportes de una bandeja de CAD para la consola (más recientes primero, máx. 200).
+   * `cadIds` vacío o con `*` = todos. `soloActivos` excluye cerrados, improcedentes y cancelados.
+   */
+  abstract reportesPorCad(cadIds: string[], soloActivos: boolean): Promise<Reporte[]>;
   abstract contarReportesDesde(ciudadanoId: string, desdeIso: string): Promise<number>;
   abstract evidencia(evidenciaId: string): Promise<{ folio: string; evidencia: Evidencia } | undefined>;
 

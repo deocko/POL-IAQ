@@ -1,9 +1,13 @@
-import { ETIQUETAS_CIUDADANO, preguntasPendientes, protocoloDe, respuestasDe, type Protocolo } from '@pol-iaq/shared';
+import { ETIQUETAS_CIUDADANO, preguntasDespachadora, preguntasHechas, protocoloDe, respuestasDe, type Protocolo } from '@pol-iaq/shared';
 import type { Reporte } from '../almacen/modelos';
 
 /** Lo que el ciudadano puede ver de su reporte. */
 export function vistaCiudadano(r: Reporte, protocolo: Protocolo) {
-  const pendientes = preguntasPendientes(protocolo, r.incidenteId, respuestasDe(r.cuestionario.entradas));
+  // Solo lo que la despachadora aún preguntaría: llamada corta, y casi nada si vino de un acceso rápido.
+  const pendientes = preguntasDespachadora(protocolo, r.incidenteId, respuestasDe(r.cuestionario.entradas), {
+    accesoRapido: !!r.escenarioId,
+    yaHechas: preguntasHechas(r.cuestionario.entradas),
+  });
   return {
     folio: r.folio,
     incidenteId: r.incidenteId,

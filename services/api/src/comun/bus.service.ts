@@ -9,8 +9,11 @@ import type { Reporte } from '../almacen/modelos';
  */
 @Injectable()
 export class BusService extends EventEmitter {
-  /** Un reporte cambió y hay que avisar al ciudadano en tiempo real. */
-  reporteCambio(r: Reporte) {
-    this.emit('reporte.cambio', r);
+  /**
+   * Un reporte cambió: se avisa en tiempo real al ciudadano y a la consola.
+   * `cadAnterior` es el CAD que lo tenía antes de una transferencia.
+   */
+  reporteCambio(r: Reporte, cadAnterior?: string) {
+    this.emit('reporte.cambio', r, cadAnterior);
   }
 }

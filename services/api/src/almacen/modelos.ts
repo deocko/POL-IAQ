@@ -102,5 +102,6 @@ export interface Envio {
   cadId: string;
   evento: EventoHaciaCad;
   intentos: number;
-  estado: 'pendiente' | 'entregado' | 'fallido' | 'sin_configuracion';
+  /** `consola`: el CAD despacha desde la consola web de Pol-IAQ y no recibe webhook. */
+  estado: 'pendiente' | 'entregado' | 'fallido' | 'sin_configuracion' | 'consola';
 }

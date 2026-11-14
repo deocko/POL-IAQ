@@ -3,10 +3,10 @@ import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View, type S
 import * as Speech from 'expo-speech';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import {
-  CATALOGO_SEMILLA, NO_SABE, clasificarRelato, incidentePorId, interpretarRespuesta, protocoloDe, siguientePregunta,
+  CATALOGO_SEMILLA, NO_SABE, clasificarRelato, incidentePorId, interpretarRespuesta, preguntasDespachadora, protocoloDe,
   type EntradaCuestionario, type PreguntaProtocolo, type Protocolo, type ValorRespuesta, type ViaCuestionario,
 } from '@pol-iaq/shared/movil';
-import { api, type ReporteVista } from '../api';
+import { ErrorApi, api, type ReporteVista } from '../api';
 import { colores, e } from '../estilos';
 import { avisarFallo, llamar911, ubicacionActual } from '../ubicacion';
 
@@ -18,6 +18,10 @@ export interface ContinuarReporte {
   folio: string;
   incidenteId: string;
   respuestas: Record<string, ValorRespuesta>;
+  /** Vino de un acceso rápido: sus respuestas ya van prellenadas y se pregunta lo mínimo. */
+  accesoRapido?: boolean;
+  /** Preguntas que la persona ya contestó en este folio (cuentan para el tope). */
+  yaHechas?: number;
 }
 
 const SI_NO: PreguntaProtocolo = { id: 'confirmacion', texto: '', tipo: 'si_no', obligatoria: true, efectos: [] };
@@ -25,8 +29,10 @@ const SI_NO: PreguntaProtocolo = { id: 'confirmacion', texto: '', tipo: 'si_no',
 /**
  * Despachadora 911 virtual. Conduce la llamada según el protocolo de atención
  * vigente: pregunta el motivo, lo clasifica en el catálogo, levanta el folio
- * en cuanto sabe qué pasa (para no retrasar el despacho) y después hace las
- * preguntas del protocolo. Cada respuesta se guarda en texto en el folio y
+ * en cuanto sabe qué pasa (para no retrasar el despacho) y después hace solo
+ * las preguntas indispensables del protocolo (`preguntasDespachadora`): pocas en
+ * un tema nuevo y casi ninguna si viene de un acceso rápido. Nunca repite una
+ * pregunta y la persona puede terminar cuando quiera. Cada respuesta se guarda en texto en el folio y
  * recalcula la canalización de la unidad.
  *
  * Funciona por voz (lee en voz alta y escucha) o por texto, y siempre ofrece
@@ -60,6 +66,10 @@ export function Asistente911({
     folio: continuar?.folio ?? null,
     respuestas: { ...(continuar?.respuestas ?? {}) } as Record<string, ValorRespuesta>,
     omitidas: new Set<string>(),
+    /** Preguntas ya hechas en esta llamada: nunca se repiten aunque no se haya podido guardar la respuesta. */
+    hechas: new Set<string>(),
+    yaHechas: continuar?.yaHechas ?? 0,
+    noEntendi: 0,
     /** Respuestas que no se pudieron enviar; viajan con la siguiente. */
     porEnviar: [] as { via: ViaCuestionario; entrada: EntradaCuestionario }[],
     pregunta: null as PreguntaProtocolo | null,
@@ -171,7 +181,13 @@ export function Asistente911({
         const q = st.pregunta;
         if (!q) return;
         const v = interpretarRespuesta(q, dicho);
-        if (v === undefined) return decir(`Perdone, no le entendí. ${q.texto}`, true);
+        if (v === undefined) {
+          // A la segunda se anota "No sabe" y se sigue: la llamada no se atora en una pregunta.
+          if (++st.noEntendi < 2) return decir(`Perdone, no le entendí. ${q.texto}${q.tipo === 'si_no' ? ' Diga sí o no.' : ''}`, true);
+          decir('Lo anoto como "no sabe".');
+          await guardar(q, NO_SABE, dicho, via);
+          return;
+        }
         await guardar(q, v, dicho, via);
         return;
       }
@@ -191,7 +207,7 @@ export function Asistente911({
       if (!ubicacion) return alSalir();
       const r = await api.crearReporte(token, { incidenteId, ubicacion, descripcion: st.relato || undefined });
       st.folio = r.folio;
-      decir(`Su folio es ${r.folio}. Ya se solicitó una unidad. Ahora le haré algunas preguntas para enviar la ayuda adecuada.`);
+      decir(`Su folio es ${r.folio}. Ya se solicitó una unidad. Le haré unas preguntas rápidas; puede terminar cuando quiera.`);
       siguiente();
     } catch {
       avisarFallo();
@@ -202,6 +218,8 @@ export function Asistente911({
   async function guardar(q: PreguntaProtocolo, valor: ValorRespuesta, textoOriginal: string | undefined, via: ViaCuestionario) {
     const st = s.current;
     st.respuestas[q.id] = valor;
+    st.hechas.add(q.id);
+    st.noEntendi = 0;
     st.porEnviar.push({ via, entrada: { preguntaId: q.id, respuesta: valor, textoOriginal } });
     // Se agrupan por vía (voz/texto) para que el folio registre cómo se respondió cada una.
     for (const v of ['voz', 'texto'] as const) {
@@ -210,7 +228,12 @@ export function Asistente911({
       try {
         await api.responder(token, st.folio!, v, lote.map((x) => x.entrada));
         st.porEnviar = st.porEnviar.filter((x) => !lote.includes(x));
-      } catch {
+      } catch (err) {
+        if (err instanceof ErrorApi && err.status === 409) {
+          // El reporte ya se cerró: no tiene caso seguir preguntando.
+          st.porEnviar = [];
+          return terminar('Su reporte ya fue atendido o cerrado.');
+        }
         setAviso('No se guardó la última respuesta; la volveremos a enviar con la siguiente.');
       }
     }
@@ -229,7 +252,8 @@ export function Asistente911({
     const st = s.current;
     const vistas = { ...st.respuestas };
     for (const id of st.omitidas) vistas[id] = '';
-    const q = siguientePregunta(protocolo, st.incidenteId!, vistas);
+    const q = preguntasDespachadora(protocolo, st.incidenteId!, vistas, { accesoRapido: continuar?.accesoRapido, yaHechas: st.yaHechas + st.hechas.size })
+      .find((x) => !st.hechas.has(x.id));
     st.pregunta = q ?? null;
     setPregunta(q ?? null);
     if (q) {
@@ -237,7 +261,15 @@ export function Asistente911({
       decir(q.texto, true);
       return;
     }
+    terminar();
+  }
+
+  function terminar(nota?: string) {
+    const st = s.current;
+    st.pregunta = null;
+    setPregunta(null);
     cambiarFase('fin');
+    if (nota) decir(nota);
     decir(protocolo.apertura.cierre.replace('{folio}', st.folio ?? ''));
     for (const r of protocoloDe(protocolo, st.incidenteId!)?.recomendaciones ?? []) decir(r);
   }
@@ -262,6 +294,7 @@ export function Asistente911({
       : [];
     if (q.tipo !== 'texto') lista.push(resp('No sé', NO_SABE));
     if (!q.obligatoria) lista.push({ etiqueta: 'Omitir', accion: omitir });
+    lista.push({ etiqueta: 'Terminar, ya pedí ayuda', accion: () => { setBurbujas((b) => [...b, { id: ++contador.current, de: 'yo', texto: 'Terminar' }]); terminar(); } });
     return lista;
   }
 

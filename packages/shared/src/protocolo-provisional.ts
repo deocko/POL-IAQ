@@ -18,30 +18,30 @@ const SI = { igualA: true } as const;
 const NO = { igualA: false } as const;
 
 const HERIDOS = {
-  id: 'heridos', texto: '¿Hay personas heridas?', tipo: 'si_no',
+  id: 'heridos', texto: '¿Hay heridos?', tipo: 'si_no',
   efectos: [{ cuando: SI, prioridad: 'alta', agregarCorporacion: 'cruz_roja', alerta: 'Hay personas heridas' }],
 } as const;
-const NUM_HERIDOS = { id: 'num_heridos', texto: '¿Cuántas personas están heridas?', tipo: 'numero', mostrarSi: { preguntaId: 'heridos', igualA: true } } as const;
+const NUM_HERIDOS = { id: 'num_heridos', texto: '¿Cuántos heridos hay?', tipo: 'numero', mostrarSi: { preguntaId: 'heridos', igualA: true } } as const;
 const ARMAS = {
-  id: 'armas', texto: '¿Vio o escuchó algún arma (de fuego o blanca)?', tipo: 'si_no',
+  id: 'armas', texto: '¿Vio algún arma?', tipo: 'si_no',
   efectos: [{ cuando: SI, prioridad: 'alta', alerta: 'Posible persona armada' }],
 } as const;
-const PERSONAS = { id: 'personas', texto: '¿Cuántas personas están involucradas?', tipo: 'numero' } as const;
+const PERSONAS = { id: 'personas', texto: '¿Cuántas personas son?', tipo: 'numero' } as const;
 const CONSCIENTE = {
-  id: 'consciente', texto: '¿La persona está despierta y responde cuando le habla?', tipo: 'si_no',
+  id: 'consciente', texto: '¿La persona le responde si le habla?', tipo: 'si_no',
   efectos: [{ cuando: NO, prioridad: 'alta', alerta: 'Persona inconsciente' }],
 } as const;
 const RESPIRA = {
-  id: 'respira', texto: '¿Respira con normalidad?', tipo: 'si_no',
+  id: 'respira', texto: '¿Respira bien?', tipo: 'si_no',
   efectos: [{ cuando: NO, prioridad: 'alta', alerta: 'No respira con normalidad' }],
 } as const;
 const EDAD = {
-  id: 'edad', texto: '¿Qué edad tiene aproximadamente la persona?', tipo: 'numero', obligatoria: false,
+  id: 'edad', texto: '¿Qué edad tiene, más o menos?', tipo: 'numero', obligatoria: false,
   efectos: [{ cuando: { mayorQue: 64 }, alerta: 'Adulto mayor' }],
 } as const;
 
 const DATOS = {
-  version: '2026.11-provisional.1',
+  version: '2026.11-provisional.2',
   estado: 'provisional',
   nombre: 'Protocolo de atención Pol-IAQ (provisional, no oficial)',
   fuentes: [
@@ -49,21 +49,21 @@ const DATOS = {
     { titulo: 'Catálogo Nacional de Incidentes de Emergencia (SESNSP / CNI)', version: 'pendiente de confirmar' },
     { titulo: 'Norma Técnica para la Estandarización de los Servicios de Llamadas de Emergencia (NT CALLE)', url: 'https://www.gob.mx/cms/uploads/attachment/file/895276/NT_CALLE_2023_II-2024_final.pdf' },
   ],
-  publicadoEn: '2026-11-13',
+  publicadoEn: '2026-11-14',
   aviso: 'Contenido provisional redactado por Pol-IAQ. No sustituye al protocolo oficial ni a una llamada al 9-1-1.',
   apertura: {
     saludo: '9-1-1 virtual de Pol-IAQ. Le atiende la despachadora virtual. Su ubicación ya se está compartiendo.',
-    preguntaMotivo: '¿Cuál es su emergencia? Cuénteme brevemente qué está pasando.',
-    confirmacion: 'Entiendo que se trata de: {incidente}. ¿Es correcto?',
+    preguntaMotivo: '¿Cuál es su emergencia?',
+    confirmacion: '¿Se trata de: {incidente}?',
     cierre: 'Su folio es {folio}. La unidad ya fue canalizada; puede seguirla en el mapa. No cuelgue la app y manténgase en un lugar seguro.',
   },
   preguntasGenerales: [
     {
-      id: 'lugar_seguro', texto: '¿Se encuentra usted en un lugar seguro en este momento?', tipo: 'si_no',
+      id: 'lugar_seguro', texto: '¿Está usted a salvo ahora?', tipo: 'si_no',
       efectos: [{ cuando: NO, prioridad: 'alta', alerta: 'Quien reporta no está en un lugar seguro' }],
     },
     {
-      id: 'quien_afectado', texto: '¿La emergencia le está pasando a usted, a otra persona, o usted es testigo?', tipo: 'opcion',
+      id: 'quien_afectado', texto: '¿A quién le pasa?', tipo: 'opcion', obligatoria: false,
       opciones: [
         { valor: 'yo', etiqueta: 'A mí', sinonimos: ['a mi', 'yo', 'soy yo', 'me pasa a mi'] },
         { valor: 'otra_persona', etiqueta: 'A otra persona', sinonimos: ['otra persona', 'a mi familiar', 'a un familiar', 'a mi abuelo', 'a mi abuela', 'a mi hijo', 'a mi hija', 'a mi mama', 'a mi papa'] },
@@ -79,7 +79,7 @@ const DATOS = {
         CONSCIENTE,
         RESPIRA,
         {
-          id: 'sintoma', texto: '¿Cuál es el problema principal?', tipo: 'opcion',
+          id: 'sintoma', texto: '¿Qué le pasa?', tipo: 'opcion',
           opciones: [
             { valor: 'dolor_pecho', etiqueta: 'Dolor de pecho', sinonimos: ['pecho', 'infarto', 'corazon'] },
             { valor: 'dificultad_respirar', etiqueta: 'Le cuesta respirar', sinonimos: ['no puede respirar', 'se ahoga', 'asma', 'respirar'] },
@@ -96,7 +96,7 @@ const DATOS = {
           ],
         },
         EDAD,
-        { id: 'padecimientos', texto: '¿Tiene alguna enfermedad conocida, como diabetes, presión alta o del corazón?', tipo: 'texto', obligatoria: false },
+        { id: 'padecimientos', texto: '¿Tiene alguna enfermedad, como diabetes o presión alta?', tipo: 'texto', obligatoria: false },
       ],
       recomendaciones: [
         'No le dé de comer ni de beber.',
@@ -110,11 +110,11 @@ const DATOS = {
       palabrasClave: ['ruidos', 'ruido extraño', 'ruidos extraños', 'se metieron', 'alguien entro', 'intruso', 'forzando', 'forzaron', 'en mi casa', 'escucho', 'escuche', 'brincaron', 'se brinco', 'ladrones en mi casa'],
       preguntas: [
         {
-          id: 'intruso_visto', texto: '¿Ha visto a alguien dentro o alrededor de su domicilio?', tipo: 'si_no',
+          id: 'intruso_visto', texto: '¿Ha visto a alguien?', tipo: 'si_no',
           efectos: [{ cuando: SI, prioridad: 'alta', alerta: 'Persona ajena vista en el domicilio' }],
         },
         {
-          id: 'origen_ruido', texto: '¿Por dónde se escuchan los ruidos?', tipo: 'opcion',
+          id: 'origen_ruido', texto: '¿Dónde se oyen los ruidos?', tipo: 'opcion',
           opciones: [
             { valor: 'puerta', etiqueta: 'Puerta', sinonimos: ['puerta', 'entrada', 'cochera', 'porton'] },
             { valor: 'ventana', etiqueta: 'Ventana', sinonimos: ['ventana', 'vidrio'] },
@@ -124,8 +124,8 @@ const DATOS = {
           ],
           efectos: [{ cuando: { igualA: 'dentro' }, prioridad: 'alta', alerta: 'Ruidos dentro del domicilio' }],
         },
-        { id: 'dentro_casa', texto: '¿Usted y su familia están dentro del domicilio?', tipo: 'si_no' },
-        { id: 'resguardo', texto: '¿Pueden encerrarse en una habitación con seguro?', tipo: 'si_no', mostrarSi: { preguntaId: 'dentro_casa', igualA: true } },
+        { id: 'dentro_casa', texto: '¿Está usted dentro de la casa?', tipo: 'si_no' },
+        { id: 'resguardo', texto: '¿Puede encerrarse en un cuarto con seguro?', tipo: 'si_no', mostrarSi: { preguntaId: 'dentro_casa', igualA: true } },
         ARMAS,
       ],
       recomendaciones: [
@@ -139,7 +139,7 @@ const DATOS = {
       palabrasClave: ['robo', 'robando', 'asalto', 'asaltando', 'me asaltaron', 'me robaron', 'ladron', 'ladrones', 'atraco'],
       preguntas: [
         ARMAS, HERIDOS, NUM_HERIDOS, PERSONAS,
-        { id: 'siguen_lugar', texto: '¿Los responsables siguen en el lugar?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', alerta: 'Responsables en el lugar' }] },
+        { id: 'siguen_lugar', texto: '¿Siguen ahí?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', alerta: 'Responsables en el lugar' }] },
         { id: 'huida', texto: '¿Hacia dónde se fueron y en qué (a pie, moto, auto)?', tipo: 'texto', obligatoria: false, mostrarSi: { preguntaId: 'siguen_lugar', igualA: false } },
         { id: 'media_filiacion', texto: 'Describa a los responsables: ropa, complexión, rasgos.', tipo: 'texto', obligatoria: false },
       ],
@@ -149,7 +149,7 @@ const DATOS = {
       incidenteId: 'agresion',
       palabrasClave: ['pelea', 'peleando', 'golpes', 'golpeando', 'agresion', 'me pegaron', 'rina', 'navaja', 'apuñalado'],
       preguntas: [
-        { id: 'continua', texto: '¿La agresión continúa en este momento?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', alerta: 'Agresión en curso' }] },
+        { id: 'continua', texto: '¿Siguen peleando?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', alerta: 'Agresión en curso' }] },
         ARMAS, HERIDOS, NUM_HERIDOS, PERSONAS,
       ],
       recomendaciones: ['Aléjese del lugar si puede hacerlo sin riesgo.', 'No intervenga físicamente.'],
@@ -158,9 +158,9 @@ const DATOS = {
       incidenteId: 'violencia-familiar',
       palabrasClave: ['violencia familiar', 'mi pareja', 'mi esposo', 'mi esposa', 'mi novio', 'me golpea', 'me pega', 'me amenaza', 'violencia'],
       preguntas: [
-        { id: 'agresor_presente', texto: '¿La persona agresora está con usted en este momento?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', alerta: 'Persona agresora presente' }] },
+        { id: 'agresor_presente', texto: '¿La persona agresora está con usted?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', alerta: 'Persona agresora presente' }] },
         HERIDOS, ARMAS,
-        { id: 'menores', texto: '¿Hay niñas o niños en el lugar?', tipo: 'si_no', efectos: [{ cuando: SI, alerta: 'Menores en el lugar' }] },
+        { id: 'menores', texto: '¿Hay niños ahí?', tipo: 'si_no', efectos: [{ cuando: SI, alerta: 'Menores en el lugar' }] },
       ],
       recomendaciones: ['Si puede, salga a un lugar seguro o con una vecina o vecino.', 'Si no puede hablar, conteste escribiendo; la app no hace sonidos.'],
     },
@@ -168,7 +168,7 @@ const DATOS = {
       incidenteId: 'disparos',
       palabrasClave: ['disparos', 'balazos', 'balacera', 'tiros', 'detonaciones', 'dispararon'],
       preguntas: [
-        { id: 'continuan', texto: '¿Se siguen escuchando disparos?', tipo: 'si_no', efectos: [{ cuando: SI, alerta: 'Disparos en curso' }] },
+        { id: 'continuan', texto: '¿Se siguen oyendo disparos?', tipo: 'si_no', efectos: [{ cuando: SI, alerta: 'Disparos en curso' }] },
         HERIDOS, NUM_HERIDOS,
         { id: 'direccion', texto: '¿De qué dirección vienen los disparos?', tipo: 'texto', obligatoria: false },
       ],
@@ -189,9 +189,9 @@ const DATOS = {
       palabrasClave: ['choque', 'chocaron', 'accidente', 'atropellado', 'atropellaron', 'volcadura', 'se volco', 'motociclista'],
       preguntas: [
         HERIDOS, NUM_HERIDOS,
-        { id: 'atrapados', texto: '¿Hay personas atrapadas dentro de los vehículos?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', agregarCorporacion: 'bomberos', alerta: 'Personas prensadas' }] },
-        { id: 'fuego_combustible', texto: '¿Hay fuego o fuga de combustible?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', agregarCorporacion: 'bomberos', alerta: 'Fuego o derrame de combustible' }] },
-        { id: 'vehiculos', texto: '¿Cuántos vehículos están involucrados?', tipo: 'numero', efectos: [{ cuando: { mayorQue: 0 }, agregarCorporacion: 'policia_municipal' }] },
+        { id: 'atrapados', texto: '¿Hay alguien atrapado en un vehículo?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', agregarCorporacion: 'bomberos', alerta: 'Personas prensadas' }] },
+        { id: 'fuego_combustible', texto: '¿Hay fuego o se tira gasolina?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', agregarCorporacion: 'bomberos', alerta: 'Fuego o derrame de combustible' }] },
+        { id: 'vehiculos', texto: '¿Cuántos vehículos son?', tipo: 'numero', efectos: [{ cuando: { mayorQue: 0 }, agregarCorporacion: 'policia_municipal' }] },
       ],
       recomendaciones: ['No mueva a las personas lesionadas.', 'Encienda intermitentes y colóquese fuera del arroyo vehicular.'],
     },
@@ -200,7 +200,7 @@ const DATOS = {
       palabrasClave: ['herido', 'herida', 'inconsciente', 'sangrando', 'lesionado', 'lesionada', 'tirado en la calle', 'no se mueve'],
       preguntas: [
         CONSCIENTE, RESPIRA,
-        { id: 'sangrado', texto: '¿Hay sangrado abundante?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', alerta: 'Sangrado abundante' }] },
+        { id: 'sangrado', texto: '¿Sangra mucho?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', alerta: 'Sangrado abundante' }] },
         EDAD,
       ],
       recomendaciones: ['No la mueva salvo que esté en peligro.', 'Si sangra, presione la herida con una tela limpia.'],
@@ -209,7 +209,7 @@ const DATOS = {
       incidenteId: 'incendio',
       palabrasClave: ['incendio', 'fuego', 'se quema', 'quemando', 'humo', 'llamas'],
       preguntas: [
-        { id: 'personas_dentro', texto: '¿Hay personas dentro del lugar que se quema?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', agregarCorporacion: 'cruz_roja', alerta: 'Personas dentro' }] },
+        { id: 'personas_dentro', texto: '¿Hay alguien adentro?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', agregarCorporacion: 'cruz_roja', alerta: 'Personas dentro' }] },
         {
           id: 'tipo_incendio', texto: '¿Qué se está quemando?', tipo: 'opcion',
           opciones: [
@@ -227,7 +227,7 @@ const DATOS = {
       incidenteId: 'fuga-gas',
       palabrasClave: ['gas', 'huele a gas', 'olor a gas', 'fuga', 'tanque estacionario', 'cilindro'],
       preguntas: [
-        { id: 'evacuado', texto: '¿Ya salieron todas las personas del lugar?', tipo: 'si_no', efectos: [{ cuando: NO, prioridad: 'alta', alerta: 'Personas dentro con fuga de gas' }] },
+        { id: 'evacuado', texto: '¿Ya salieron todos?', tipo: 'si_no', efectos: [{ cuando: NO, prioridad: 'alta', alerta: 'Personas dentro con fuga de gas' }] },
         { id: 'origen_gas', texto: '¿Sabe de dónde sale el gas (tanque, cilindro, tubería)?', tipo: 'texto', obligatoria: false },
       ],
       recomendaciones: ['No encienda ni apague luces o aparatos, ni use encendedores.', 'Si puede hacerlo sin riesgo, cierre la llave de paso.', 'Salga y espere afuera, lejos del lugar.'],
@@ -236,7 +236,7 @@ const DATOS = {
       incidenteId: 'inundacion',
       palabrasClave: ['inundacion', 'inundando', 'se inunda', 'agua', 'arroyo', 'se desbordo', 'corriente'],
       preguntas: [
-        { id: 'atrapados', texto: '¿Hay personas atrapadas por el agua?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', agregarCorporacion: 'bomberos', alerta: 'Personas atrapadas por el agua' }] },
+        { id: 'atrapados', texto: '¿Hay alguien atrapado por el agua?', tipo: 'si_no', efectos: [{ cuando: SI, prioridad: 'alta', agregarCorporacion: 'bomberos', alerta: 'Personas atrapadas por el agua' }] },
         {
           id: 'nivel_agua', texto: '¿Hasta dónde llega el agua?', tipo: 'opcion',
           opciones: [
@@ -270,7 +270,7 @@ const DATOS = {
       incidenteId: 'otro',
       palabrasClave: [],
       preguntas: [
-        { id: 'descripcion', texto: 'Describa con sus palabras qué está pasando.', tipo: 'texto' },
+        { id: 'descripcion', texto: 'Cuénteme en pocas palabras qué pasa.', tipo: 'texto' },
         HERIDOS, ARMAS,
       ],
       recomendaciones: ['Manténgase en un lugar seguro mientras llega la unidad.'],

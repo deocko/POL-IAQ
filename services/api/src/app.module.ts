@@ -6,10 +6,14 @@ import { AuthController } from './auth/auth.controller';
 import { CiudadanoGuard } from './auth/auth.guard';
 import { OtpService } from './auth/otp.service';
 import { CadController } from './cad/cad.controller';
+import { EventosCadService } from './cad/eventos-cad.service';
 import { DespachadorCadService } from './cad/despachador.service';
 import { CatalogoController } from './catalogo/catalogo.controller';
 import { BusService } from './comun/bus.service';
 import { CONFIG, cargarConfig, type Config } from './config';
+import { OperacionGateway } from './operador/operacion.gateway';
+import { OperadorController } from './operador/operador.controller';
+import { OperadorGuard } from './operador/operador.guard';
 import { PerfilController } from './perfil/perfil.controller';
 import { ProtocolosService } from './protocolos/protocolos.service';
 import { ReportesController } from './reportes/reportes.controller';
@@ -26,7 +30,7 @@ export async function crearAlmacen(config: Config): Promise<Almacen> {
 
 export function crearAppModule(config: Config = cargarConfig(), opciones: { almacen?: Almacen; sms?: ProveedorSms } = {}) {
   @Module({
-    controllers: [AuthController, CatalogoController, ReportesController, PerfilController, CadController],
+    controllers: [AuthController, CatalogoController, ReportesController, PerfilController, CadController, OperadorController],
     providers: [
       { provide: CONFIG, useValue: config },
       opciones.almacen ? { provide: Almacen, useValue: opciones.almacen } : { provide: Almacen, useFactory: () => crearAlmacen(config) },
@@ -37,8 +41,11 @@ export function crearAppModule(config: Config = cargarConfig(), opciones: { alma
       DespachadorCadService,
       ProtocolosService,
       ReportesService,
+      EventosCadService,
       CiudadanoGuard,
+      OperadorGuard,
       SeguimientoGateway,
+      OperacionGateway,
     ],
   })
   class AppModule implements OnApplicationShutdown {

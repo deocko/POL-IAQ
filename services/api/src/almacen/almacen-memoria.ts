@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { PERFIL_VACIO, type Perfil } from '@pol-iaq/shared';
+import { ESTADOS_FINALES, PERFIL_VACIO, type Perfil } from '@pol-iaq/shared';
 import { Almacen } from './almacen';
 import type { Auditoria, Ciudadano, Envio, Otp, Reporte } from './modelos';
 
@@ -53,6 +53,14 @@ export class AlmacenMemoria extends Almacen {
   }
   async reportesDe(ciudadanoId: string) {
     return [...this.reportes.values()].filter((r) => r.ciudadanoId === ciudadanoId).sort((a, b) => b.creadoEn.localeCompare(a.creadoEn)).map(copia);
+  }
+  async reportesPorCad(cadIds: string[], soloActivos: boolean) {
+    const todos = !cadIds.length || cadIds.includes('*');
+    return [...this.reportes.values()]
+      .filter((r) => (todos || cadIds.includes(r.cadId)) && (!soloActivos || !ESTADOS_FINALES.includes(r.estado)))
+      .sort((a, b) => b.creadoEn.localeCompare(a.creadoEn))
+      .slice(0, 200)
+      .map(copia);
   }
   async contarReportesDesde(ciudadanoId: string, desdeIso: string) {
     return [...this.reportes.values()].filter((r) => r.ciudadanoId === ciudadanoId && r.creadoEn >= desdeIso).length;

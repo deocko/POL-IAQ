@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
-import { referenciaDeLugar, respuestasDe, type Escenario, type Perfil } from '@pol-iaq/shared/movil';
+import { referenciaDeLugar, respuestasDe, preguntasHechas, type Escenario, type Perfil } from '@pol-iaq/shared/movil';
 import { api, type IncidenteCatalogoPublico, type ReporteVista } from '../api';
 import { colores, e } from '../estilos';
 import { avisarFallo, ubicacionActual } from '../ubicacion';
@@ -32,7 +32,7 @@ export function Inicio({
 
   /** Tras crear el folio, la despachadora pregunta lo que falte; si no falta nada, al seguimiento. */
   function despues(r: ReporteVista) {
-    if (r.cuestionario.pendientes.length) alAsistente({ folio: r.folio, incidenteId: r.incidenteId, respuestas: respuestasDe(r.cuestionario.entradas) });
+    if (r.cuestionario.pendientes.length) alAsistente({ folio: r.folio, incidenteId: r.incidenteId, respuestas: respuestasDe(r.cuestionario.entradas), accesoRapido: !!r.escenarioId, yaHechas: preguntasHechas(r.cuestionario.entradas) });
     else alCrear(r.folio);
   }
 

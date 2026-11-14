@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } f
 import { createHmac, randomUUID } from 'node:crypto';
 import { CAD_ESTATAL_ID, firmar, transcripcion, type EventoHaciaCad } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
+import { BusService } from '../comun/bus.service';
 import type { Ciudadano, Envio, Evidencia, Reporte } from '../almacen/modelos';
 import { CONFIG, type Config } from '../config';
 
@@ -31,7 +32,11 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
   /** Envíos de este proceso (para diagnóstico y pruebas; la fuente de verdad es la bandeja en la base). */
   readonly bandeja: Envio[] = [];
 
-  constructor(@Inject(CONFIG) private readonly config: Config, @Inject(Almacen) private readonly almacen: Almacen) {}
+  constructor(
+    @Inject(CONFIG) private readonly config: Config,
+    @Inject(Almacen) private readonly almacen: Almacen,
+    @Inject(BusService) private readonly bus: BusService,
+  ) {}
 
   async onApplicationBootstrap() {
     if (!this.config.despachoActivo) return;
@@ -123,13 +128,18 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
       r.cadId = CAD_ESTATAL_ID;
       await this.enviarCreado(r, ciudadano, escenario);
       await this.almacen.guardarReporte(r);
+      this.bus.reporteCambio(r, cadId);
     });
   }
 
   private async encolar(cadId: string, evento: EventoHaciaCad) {
     const envio: Envio = { cadId, evento, intentos: 0, estado: 'pendiente' };
     this.bandeja.push(envio);
-    if (this.config.despachoActivo && !this.config.cads[cadId]) {
+    const cad = this.config.cads[cadId];
+    if (cad?.modo === 'consola') {
+      // El operador lo ve en la consola web de Pol-IAQ; no hay webhook que llamar.
+      envio.estado = 'consola';
+    } else if (this.config.despachoActivo && !cad?.webhookUrl) {
       envio.estado = 'sin_configuracion';
       this.log.warn(`Sin configuración para ${cadId}; ${evento.tipo} de ${evento.folio} queda en bandeja`);
     }
@@ -140,9 +150,10 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
   /** Arranca los intentos de entrega en segundo plano, fuera de la transacción. */
   private lanzar(envio: Envio) {
     const destino = this.config.cads[envio.cadId];
-    if (!destino) return;
+    const { webhookUrl, secreto } = destino ?? {};
+    if (!webhookUrl || !secreto || destino?.modo === 'consola') return;
     this.almacen.aparte(() => {
-      void this.intentar(envio, destino.webhookUrl, destino.secreto).catch((err) => this.log.error(`Bandeja: ${(err as Error).message}`));
+      void this.intentar(envio, webhookUrl, secreto).catch((err) => this.log.error(`Bandeja: ${(err as Error).message}`));
     });
   }
 

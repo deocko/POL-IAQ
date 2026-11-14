@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Pool, type PoolClient, type QueryResultRow } from 'pg';
-import { PERFIL_VACIO, type Perfil } from '@pol-iaq/shared';
+import { ESTADOS_FINALES, PERFIL_VACIO, type Perfil } from '@pol-iaq/shared';
 import { Almacen } from './almacen';
 import { migrar } from './migraciones';
 import type { Auditoria, Ciudadano, Envio, Evidencia, Mensaje, Otp, Reporte } from './modelos';
@@ -244,6 +244,14 @@ export class AlmacenPostgres extends Almacen {
 
   async reportesDe(ciudadanoId: string) {
     return this.cargarReportes('WHERE ciudadano_id = $1 ORDER BY creado_en DESC LIMIT 100', [ciudadanoId]);
+  }
+
+  async reportesPorCad(cadIds: string[], soloActivos: boolean) {
+    const todos = !cadIds.length || cadIds.includes('*');
+    return this.cargarReportes(
+      `WHERE ($1::boolean OR cad_id = ANY($2)) AND (NOT $3::boolean OR estado <> ALL($4)) ORDER BY creado_en DESC LIMIT 200`,
+      [todos, cadIds, soloActivos, [...ESTADOS_FINALES]],
+    );
   }
 
   async contarReportesDesde(ciudadanoId: string, desdeIso: string) {
