@@ -271,7 +271,7 @@ function Registro({ alRegistrar }: { alRegistrar: (c: Ciudadano) => void }) {
       <form className="c-tarjeta d-form" onSubmit={enviar} noValidate>
         {!enviado ? (
           <>
-            <label>Tu nombre <span className="suave">(opcional)</span>
+            <label><span>Tu nombre <span className="suave">(opcional)</span></span>
               <input value={nombre} onChange={(e) => setNombre(e.target.value)} autoComplete="name" placeholder="Como quieras que te llamen" />
             </label>
             <label>Tu teléfono
@@ -917,7 +917,7 @@ function Opinar({ r }: { r: ReporteDemo }) {
           ))}
         </div>
       </fieldset>
-      <label className="d-campo">Comentario o queja <span className="suave">(opcional)</span><textarea value={comentario} onChange={(e) => setComentario(e.target.value)} rows={2} maxLength={500} /></label>
+      <label className="d-campo"><span>Comentario o queja <span className="suave">(opcional)</span></span><textarea value={comentario} onChange={(e) => setComentario(e.target.value)} rows={2} maxLength={500} /></label>
       {error && <p className="c-error" role="alert">{error}</p>}
       <button className="c-boton c-grande c-ancho">Enviar</button>
       <p className="suave d-nota">Si no llegó nadie o calificas con 1 o 2 estrellas, se registra como queja para supervisión.</p>
