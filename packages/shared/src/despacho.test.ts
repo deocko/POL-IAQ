@@ -101,6 +101,17 @@ describe('tiempos de respuesta', () => {
     // En ninguna etapa la mediana queda en 0 s.
     for (const f of r) expect(f.medianaSegundos, f.id).not.toBe(0);
   });
+
+  it('la misma acción guarda los hitos con milisegundos de diferencia y sigue siendo el mismo paso', () => {
+    const ms = (n: number) => new Date(t0 + n).toISOString();
+    const m = medirTiempos([
+      { estado: 'recibido', en: ms(0) }, { estado: 'validado', en: ms(20_000) }, { estado: 'asignado', en: ms(20_003) },
+      { estado: 'en_camino', en: ms(60_000) }, { estado: 'en_sitio', en: ms(60_400) },
+    ], 'alta', t0 + 100_000);
+    expect(m.etapas[1]).toMatchObject({ segundos: null, simultanea: true });
+    expect(m.etapas[3]).toMatchObject({ segundos: null, simultanea: true });
+    expect(m.etapas[2]).toMatchObject({ segundos: 40, estado: 'cumplida' });
+  });
 });
 
 describe('identidad, opinión y cola', () => {

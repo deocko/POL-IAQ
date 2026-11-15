@@ -56,6 +56,12 @@ export interface TiemposReporte {
   metasVersion: string;
 }
 
+/**
+ * Dos hitos a menos de 1 s son el mismo paso (una sola acción guarda los dos con milisegundos de diferencia):
+ * ninguna etapa real de atención dura menos de un segundo.
+ */
+export const MISMO_PASO_MS = 1000;
+
 const FINALES: EstadoIncidente[] = ['cerrado', 'improcedente', 'cancelado'];
 
 /** Mide cada etapa con la primera vez que el reporte llegó a cada estado. */
@@ -77,7 +83,7 @@ export function medirTiempos(
     const inicio = primera.get(e.desde) ?? finAnterior;
     const fin = primera.get(e.hasta);
     let r: Pick<TiempoEtapa, 'segundos' | 'estado' | 'simultanea'>;
-    if (inicio !== undefined && fin !== undefined && fin <= inicio) {
+    if (inicio !== undefined && fin !== undefined && fin - inicio < MISMO_PASO_MS) {
       // La etapa empezó y terminó en el mismo paso (p. ej. "recibir" asigna sola la unidad más cercana, o se
       // marcó la llegada sin haber salido): no hay tiempo de esa etapa que medir. Contarla como 0 s bajaría
       // la mediana a 0 y daría un cumplimiento falso, en cualquier etapa.
