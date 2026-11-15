@@ -19,6 +19,7 @@
 .c-salir { min-height: 38px; padding: 0 .875rem; background: transparent; color: #fff; border-color: rgba(255, 255, 255, .5); }
 .c-conexion { display: inline-flex; align-items: center; gap: 6px; font-size: .875rem; font-weight: 600; color: #ffd38a; }
 .c-conexion.ok { color: #8ff0b8; }
+.c-reloj { font-size: .875rem; font-weight: 700; font-variant-numeric: tabular-nums; color: #fff; white-space: nowrap; }
 .c-punto { width: 10px; height: 10px; border-radius: 50%; background: currentColor; display: inline-block; }
 .c-subcabecera { display: flex; gap: var(--e2); align-items: center; flex-wrap: wrap; padding: var(--e2) var(--e4) 0; font-size: .875rem; color: var(--suave); }
 

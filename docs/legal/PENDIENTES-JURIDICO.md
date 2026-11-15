@@ -1,59 +1,64 @@
-# Datos que debe proporcionar el área jurídica
+# Datos que debe proporcionar el área jurídica (lista cerrada)
 
-**Fecha:** 2026-11-15 (actualizada el mismo día) · Aplica a los borradores de `docs/legal/` versión 2026-11-14.
+**Fecha:** 2026-11-15 · **Borradores:** `docs/legal/` versión 2026-11-14 · **Total:** 22 datos y 7 decisiones. No falta nada fuera de esta lista para publicar la versión definitiva.
 
-Mientras falten estos datos, las páginas publicadas **no muestran huecos ni frases que prometan el dato**: cada dato que falta se omite, la sección que queda vacía se quita (4. Fundamento legal del aviso integral y 13. Contacto de los Términos) y la tabla de plazos de conservación se sustituye por las reglas que no dependen de un número. Arriba de cada página, el aviso "Versión preliminar en revisión jurídica" dice qué datos faltan en ese documento. Las sustituciones exactas están en `apps/web/lib/legal.ts`. **Ninguno se llenó con un valor inventado.** Al recibir un dato, se escribe en el `.md` y se quita su sustitución. Los valores entre corchetes con números (por ejemplo `[12 meses]`) son propuestas del borrador, no plazos aprobados.
+El bloqueo de las páginas legales es de **datos, no de código**. Ningún dato se llenó con un valor inventado. Mientras falten, las tres páginas muestran arriba «Versión preliminar en revisión jurídica» con lo que falta en cada una, y el texto omite el dato (sin huecos ni promesas). Las omisiones exactas están en `apps/web/lib/legal.ts`.
 
-## Antes de llenar: decisiones de fondo
+## Cómo entregar
 
-1. **Quién es el responsable del tratamiento.** El borrador asume que es una autoridad pública (municipios piloto y/o Gobierno del Estado). Por eso se apoya en la Ley General de Protección de Datos Personales en Posesión de Sujetos Obligados y en la ley estatal de Querétaro. Si quien opera POL-IAQ fuera un particular, aplica la Ley Federal de Protección de Datos Personales en Posesión de los Particulares y el aviso debe reescribirse.
-2. **Referencias vigentes tras la reforma de 2025.** Las leyes de protección de datos se reformaron en 2025 y cambió la autoridad garante. Hay que confirmar las leyes, los artículos y la autoridad ante la que se presentan quejas.
-3. **Secciones de los Términos que requieren validación** de cada municipio piloto y del C5: 6 (sanciones), 9 (responsabilidad) y 12 (jurisdicción).
-4. **Nuevo en 2026-11-14:** reporte con seudónimo o anónimo (el teléfono verificado se conserva y solo se entrega a una autoridad cuando la ley lo exige), calificación y quejas después del cierre, y medición de tiempos de respuesta. Hay que confirmar que este tratamiento y su redacción son correctos.
+- Llenar la columna «Valor aprobado» de las tablas A y B (o responder con el **ID** y el valor) en el **formato** indicado.
+- Si un mismo dato sirve para varios lugares, se escribe una vez: el ID dice todos los lugares donde va.
+- Las secciones se nombran por su título. Mientras una sección esté oculta por falta de datos, la página publicada renumera las demás, así que el número publicado puede ser uno menos que el del borrador.
 
-## Resumen: lo indispensable para publicar la versión definitiva
+## Páginas
 
-1. **Responsable**: nombre oficial y área (#1, #21, #23, #26).
-2. **Domicilio** del responsable (#2).
-3. **Fundamento legal** del tratamiento (#5, #6, #25).
-4. **Plazos de conservación numéricos**: reportes sin investigación (#8), bitácoras (#9) y cuenta cancelada (#10).
-5. **Datos de contacto**: Unidad de Transparencia (#4, #11 a #15) y contacto de los Términos (#30 a #32).
+| Página | Dirección en la demo | Borrador |
+| --- | --- | --- |
+| Aviso de Privacidad Integral | `/legal/aviso-privacidad/` | `docs/legal/aviso-privacidad.md` |
+| Aviso de Privacidad Simplificado | `/legal/aviso-simplificado/` y pantalla de registro de la app | `docs/legal/aviso-simplificado.md` |
+| Términos y Condiciones | `/legal/terminos/` | `docs/legal/terminos.md` |
 
-## Lista exacta de datos
+## A. Datos que se capturan (22)
 
-| # | Documento | Sección | Marcador | Qué se necesita |
+| ID | Dato | Dónde va (página › sección del borrador) | Formato | Valor aprobado |
 | --- | --- | --- | --- | --- |
-| 1 | Aviso de Privacidad Integral | 1. Responsable | `[NOMBRE DEL RESPONSABLE …]` | Nombre oficial del responsable y área (p. ej. dependencia de seguridad pública) |
-| 2 | Aviso de Privacidad Integral | 1. Responsable | `[DOMICILIO]` | Domicilio del responsable |
-| 3 | Aviso de Privacidad Integral | 2. Datos | `[CURP, si se solicita]` | Decidir si se pedirá la CURP; si no, se elimina |
-| 4 | Aviso de Privacidad Integral | 3. Finalidades | `[CORREO DE LA UNIDAD DE TRANSPARENCIA]` | Correo para negarse a finalidades adicionales |
-| 5 | Aviso de Privacidad Integral | 4. Fundamento legal | `[COMPLETAR …]` | Artículos aplicables: ley general y estatal de datos personales, Ley General del Sistema Nacional de Seguridad Pública, Ley de Seguridad para el Estado de Querétaro y reglamentos municipales |
-| 6 | Aviso de Privacidad Integral | 5. Transferencias | `[CONFIRMAR: no requieren tu consentimiento …]` | Confirmar si las comunicaciones entre autoridades no requieren consentimiento, con fundamento |
-| 7 | Aviso de Privacidad Integral | 5. Transferencias | `[PAÍS/REGIÓN …]` | País o región donde se alojan los datos |
-| 8 | Aviso de Privacidad Integral | 6. Conservación | `[12 meses]` | Plazo para reportes atendidos sin investigación abierta |
-| 9 | Aviso de Privacidad Integral | 6. Conservación | `[5 años]` | Plazo para bitácoras de auditoría |
-| 10 | Aviso de Privacidad Integral | 6. Conservación | `[30 días]` | Plazo para eliminar una cuenta cancelada |
-| 11 | Aviso de Privacidad Integral | 7. Derechos ARCO | `[RESPONSABLE]` | Nombre de la Unidad de Transparencia |
-| 12 | Aviso de Privacidad Integral | 7. Derechos ARCO | `[DOMICILIO]` | Domicilio de la Unidad de Transparencia |
-| 13 | Aviso de Privacidad Integral | 7. Derechos ARCO | `[HORARIO]` | Horario de atención |
-| 14 | Aviso de Privacidad Integral | 7. Derechos ARCO | `[CORREO]` | Correo de la Unidad de Transparencia |
-| 15 | Aviso de Privacidad Integral | 7. Derechos ARCO | `[TELÉFONO]` | Teléfono de la Unidad de Transparencia |
-| 16 | Aviso de Privacidad Integral | 7. Derechos ARCO | `[CONFIRMAR denominación vigente]` | Nombre vigente de la Plataforma Nacional de Transparencia |
-| 17 | Aviso de Privacidad Integral | 7. Derechos ARCO | `[20 días hábiles]` | Plazo legal de respuesta |
-| 18 | Aviso de Privacidad Integral | 8. Quejas | `[AUTORIDAD GARANTE …]` | Autoridad garante competente en Querétaro tras la reforma de 2025 |
-| 19 | Aviso de Privacidad Integral | 9. Menores | `[CONFIRMAR CON JURÍDICO …]` | Si se permitirá el registro de adolescentes con consentimiento de madre, padre o tutor |
-| 20 | Aviso de Privacidad Integral | 10. Cambios | `[URL]` | URL oficial donde se publicará el aviso vigente (en la demo apunta a la propia página) |
-| 21 | Aviso Simplificado | Aviso simplificado | `[RESPONSABLE]` | Mismo dato que el #1 |
-| 22 | Aviso Simplificado | Aviso simplificado | `[URL]` | URL oficial del aviso integral (en la demo apunta a la página del aviso integral) |
-| 23 | Términos y Condiciones | 1. Qué es POL-IAQ | `[RESPONSABLE]` | Mismo dato que el #1 |
-| 24 | Términos y Condiciones | 3. Quién puede usarla | `[CONFIRMAR política para adolescentes]` | Igual que el #19 |
-| 25 | Términos y Condiciones | 6. Falsas alarmas | `[CITAR la disposición aplicable …]` | Disposición estatal o municipal que sanciona las falsas alarmas |
-| 26 | Términos y Condiciones | 9. Responsabilidad | `[RESPONSABLE]` | Mismo dato que el #1 |
-| 27 | Términos y Condiciones | 9. Responsabilidad | `[REVISAR CON JURÍDICO …]` | Alcance de la limitación de responsabilidad de una autoridad pública |
-| 28 | Términos y Condiciones | 10. Suspensión | `[MEDIO]` | Medio para inconformarse por una suspensión de cuenta |
-| 29 | Términos y Condiciones | 12. Jurisdicción | `[AUTORIDADES O TRIBUNALES COMPETENTES …]` | Autoridades o tribunales competentes |
-| 30 | Términos y Condiciones | 13. Contacto | `[CORREO]` | Correo de contacto |
-| 31 | Términos y Condiciones | 13. Contacto | `[TELÉFONO]` | Teléfono de contacto |
-| 32 | Términos y Condiciones | 13. Contacto | `[DOMICILIO]` | Domicilio de contacto |
+| A1 | Nombre oficial del responsable del tratamiento y área que lo opera | Aviso integral › 1. Quién es responsable de tus datos; Aviso simplificado › Aviso simplificado (inicio); Términos › 1. Qué es POL-IAQ y 9. Responsabilidad | Texto en una línea, como debe leerse: «[Dependencia], a través de [área]» | |
+| A2 | Domicilio del responsable | Aviso integral › 1. Quién es responsable de tus datos | Calle, número exterior e interior, colonia, código postal, municipio y estado | |
+| A3 | Fundamento legal del tratamiento | Aviso integral › 4. Fundamento legal (sección completa, hoy oculta) | Lista, un ordenamiento por renglón: nombre oficial completo, artículos y fracciones, y fecha de la última reforma que se consideró | |
+| A4 | País o región donde se alojan los datos | Aviso integral › 5. Con quién compartimos tus datos | Nombre del país (y región o estado, si se quiere precisar) | |
+| A5 | Plazo de conservación de reportes atendidos sin investigación abierta, con su evidencia | Aviso integral › 6. Cuánto tiempo los conservamos (tabla) | Número y unidad (días, meses o años) contados desde el cierre, y qué pasa después: «se eliminan» o «se anonimizan» | |
+| A6 | Plazo de conservación de las bitácoras de auditoría | Aviso integral › 6. Cuánto tiempo los conservamos (tabla) | Número y unidad (meses o años) | |
+| A7 | Plazo para eliminar una cuenta cancelada | Aviso integral › 6. Cuánto tiempo los conservamos (tabla) | Número de días, indicando si son naturales o hábiles | |
+| A8 | Nombre de la Unidad de Transparencia | Aviso integral › 8. Tus derechos ARCO y cómo ejercerlos | Nombre oficial completo | |
+| A9 | Domicilio de la Unidad de Transparencia | Aviso integral › 8. Tus derechos ARCO y cómo ejercerlos | Igual que A2 | |
+| A10 | Horario de atención de la Unidad de Transparencia | Aviso integral › 8. Tus derechos ARCO y cómo ejercerlos | Días y horas, formato de 24 h: «lunes a viernes, HH:MM a HH:MM» | |
+| A11 | Correo de la Unidad de Transparencia | Aviso integral › 3. Para qué usamos tus datos (negarse a finalidades adicionales) y 8. Tus derechos ARCO | Una dirección de correo institucional | |
+| A12 | Teléfono de la Unidad de Transparencia | Aviso integral › 8. Tus derechos ARCO y cómo ejercerlos | 10 dígitos, con extensión si la hay | |
+| A13 | Denominación vigente de la Plataforma Nacional de Transparencia (o la que la sustituya tras la reforma de 2025) | Aviso integral › 8. Tus derechos ARCO y cómo ejercerlos | Nombre oficial y dirección web (https) | |
+| A14 | Plazo legal de respuesta a una solicitud ARCO | Aviso integral › 8. Tus derechos ARCO y cómo ejercerlos | Número de días hábiles y artículo que lo fija | |
+| A15 | Autoridad garante ante la que se presenta una queja (Querétaro, tras la reforma de 2025) | Aviso integral › 8. Tus derechos ARCO (último párrafo) | Nombre oficial vigente y dirección web (https) | |
+| A16 | Dirección oficial donde se publica el aviso vigente | Aviso integral › 10. Cambios a este aviso; Aviso simplificado › Aviso simplificado (final) | Dirección web completa (https) | |
+| A17 | Disposición que sanciona las falsas alarmas | Términos › 6. Falsas alarmas y uso indebido | Nombre oficial del ordenamiento (estatal o municipal) y artículo | |
+| A18 | Medio para inconformarse por una suspensión de cuenta | Términos › 10. Suspensión y baja de la cuenta | Medio (correo, oficina o formulario) con su dato de contacto, y plazo para inconformarse si lo hay | |
+| A19 | Autoridades o tribunales competentes para controversias | Términos › 12. Ley aplicable y jurisdicción | Nombre de la autoridad o los tribunales y su sede | |
+| A20 | Correo de contacto de los Términos | Términos › 13. Contacto (sección completa, hoy oculta) | Una dirección de correo; puede ser la misma que A11 | |
+| A21 | Teléfono de contacto de los Términos | Términos › 13. Contacto | 10 dígitos; puede ser el mismo que A12 | |
+| A22 | Domicilio de contacto de los Términos | Términos › 13. Contacto | Igual que A2; puede ser el mismo | |
 
-Cuando lleguen los datos, se reemplazan en los archivos `.md` de esta carpeta, se sube la versión en `packages/shared/src/legal.ts` y el API pide a cada persona aceptar de nuevo.
+## B. Decisiones (7)
+
+| ID | Decisión | Dónde cambia el texto | Formato de la respuesta | Respuesta |
+| --- | --- | --- | --- | --- |
+| B1 | Quién es el responsable: autoridad pública (municipios piloto y/o Gobierno del Estado) o un particular. El borrador asume autoridad pública; si fuera un particular, el aviso se reescribe con la ley federal de particulares | Todo el aviso integral | «Autoridad pública» o «Particular» | |
+| B2 | ¿Se pedirá la CURP? | Aviso integral › 2. Qué datos personales tratamos | Sí / No (si es No, se elimina la mención) | |
+| B3 | ¿Las comunicaciones entre autoridades para atender el reporte no requieren consentimiento? | Aviso integral › 5. Con quién compartimos tus datos | Sí / No, con el artículo que lo fundamenta | |
+| B4 | ¿Se permite el registro de adolescentes con consentimiento de madre, padre o tutor? | Aviso integral › 9. Personas menores de edad; Términos › 3. Quién puede usarla | Sí (con edad mínima) / No | |
+| B5 | Alcance de la limitación de responsabilidad de una autoridad pública | Términos › 9. Responsabilidad | Texto aprobado del párrafo, o «se queda como está» | |
+| B6 | Validación de los municipios piloto y del C5 de las secciones de sanciones, responsabilidad y jurisdicción | Términos › 6, 9 y 12 | Aprobado / cambios, por municipio y por el C5 | |
+| B7 | Validación del tratamiento nuevo: reporte con seudónimo o anónimo (el teléfono verificado se conserva y solo se entrega a una autoridad cuando la ley lo exige), calificación y quejas tras el cierre, y medición de tiempos de respuesta | Aviso integral › 2, 3 y 5 | Aprobado / cambios | |
+
+## Al recibir los datos
+
+1. Se escriben en los `.md` de esta carpeta y se quita su omisión en `apps/web/lib/legal.ts`.
+2. Se sube la versión en `packages/shared/src/legal.ts`; la app pide a cada persona aceptar de nuevo.
+3. El aviso «Versión preliminar en revisión jurídica» desaparece solo cuando no queda ningún dato de esta lista.

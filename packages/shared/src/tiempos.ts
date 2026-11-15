@@ -45,6 +45,8 @@ export interface TiempoEtapa {
   segundos: number | null;
   metaSegundos: number;
   estado: EstadoEtapa;
+  /** La etapa empezó y terminó en el mismo paso que la anterior: no se mide (no cuenta como 0 s). */
+  simultanea?: true;
 }
 
 export interface TiemposReporte {
@@ -74,11 +76,12 @@ export function medirTiempos(
     const meta = metas.etapas[e.id][prioridad];
     const inicio = primera.get(e.desde) ?? finAnterior;
     const fin = primera.get(e.hasta);
-    let r: Pick<TiempoEtapa, 'segundos' | 'estado'>;
-    if (inicio !== undefined && fin !== undefined && e.id === 'traslado' && fin <= inicio) {
-      // "En camino" y "en sitio" a la vez: no hubo traslado que medir (se marcó la llegada sin salir).
-      // Contarlo como 0 s bajaría la mediana a 0 y daría un cumplimiento falso.
-      r = { segundos: null, estado: 'omitida' };
+    let r: Pick<TiempoEtapa, 'segundos' | 'estado' | 'simultanea'>;
+    if (inicio !== undefined && fin !== undefined && fin <= inicio) {
+      // La etapa empezó y terminó en el mismo paso (p. ej. "recibir" asigna sola la unidad más cercana, o se
+      // marcó la llegada sin haber salido): no hay tiempo de esa etapa que medir. Contarla como 0 s bajaría
+      // la mediana a 0 y daría un cumplimiento falso, en cualquier etapa.
+      r = { segundos: null, estado: 'omitida', simultanea: true };
     } else if (inicio !== undefined && fin !== undefined) {
       const s = Math.max(0, Math.round((fin - inicio) / 1000));
       r = { segundos: s, estado: s <= meta ? 'cumplida' : 'excedida' };
@@ -116,20 +119,25 @@ export interface ResumenEtapa {
   medianaSegundos: number | null;
   /** Porcentaje de mediciones terminadas dentro de la meta (0-100). */
   enMeta: number | null;
+  /** Veces que la etapa se hizo en el mismo paso que la anterior (no entran en el promedio ni la mediana). */
+  sinMedir: number;
 }
 
 /** Tablero: promedio, mediana y cumplimiento de meta por etapa. */
 export function resumirTiempos(mediciones: TiemposReporte[]): ResumenEtapa[] {
-  const filas: { id: ResumenEtapa['id']; nombre: string; valores: { s: number; ok: boolean }[] }[] = [
-    ...ETAPAS.map((e) => ({ id: e.id as ResumenEtapa['id'], nombre: e.nombre, valores: [] as { s: number; ok: boolean }[] })),
-    { id: 'llegada', nombre: 'Llegada total', valores: [] },
+  const filas: { id: ResumenEtapa['id']; nombre: string; valores: { s: number; ok: boolean }[]; sinMedir: number }[] = [
+    ...ETAPAS.map((e) => ({ id: e.id as ResumenEtapa['id'], nombre: e.nombre, valores: [] as { s: number; ok: boolean }[], sinMedir: 0 })),
+    { id: 'llegada', nombre: 'Llegada total', valores: [], sinMedir: 0 },
   ];
   for (const m of mediciones) {
-    m.etapas.forEach((e, i) => { if (e.segundos !== null && (e.estado === 'cumplida' || e.estado === 'excedida')) filas[i].valores.push({ s: e.segundos, ok: e.estado === 'cumplida' }); });
+    m.etapas.forEach((e, i) => {
+      if (e.simultanea) filas[i].sinMedir++;
+      else if (e.segundos !== null && (e.estado === 'cumplida' || e.estado === 'excedida')) filas[i].valores.push({ s: e.segundos, ok: e.estado === 'cumplida' });
+    });
     if (m.llegada.segundos !== null && (m.llegada.estado === 'cumplida' || m.llegada.estado === 'excedida')) filas[ETAPAS.length].valores.push({ s: m.llegada.segundos, ok: m.llegada.estado === 'cumplida' });
   }
-  return filas.map(({ id, nombre, valores }) => {
-    if (!valores.length) return { id, nombre, n: 0, promedioSegundos: null, medianaSegundos: null, enMeta: null };
+  return filas.map(({ id, nombre, valores, sinMedir }) => {
+    if (!valores.length) return { id, nombre, n: 0, promedioSegundos: null, medianaSegundos: null, enMeta: null, sinMedir };
     const orden = valores.map((v) => v.s).sort((a, b) => a - b);
     const mitad = Math.floor(orden.length / 2);
     return {
@@ -139,6 +147,7 @@ export function resumirTiempos(mediciones: TiemposReporte[]): ResumenEtapa[] {
       promedioSegundos: Math.round(orden.reduce((a, b) => a + b, 0) / orden.length),
       medianaSegundos: orden.length % 2 ? orden[mitad] : Math.round((orden[mitad - 1] + orden[mitad]) / 2),
       enMeta: Math.round((valores.filter((v) => v.ok).length / valores.length) * 100),
+      sinMedir,
     };
   });
 }

@@ -10,6 +10,8 @@ import {
 import { Mapa } from '../../lib/mapa/Mapa';
 import { SelectorTema } from '../../lib/tema';
 import { Marca } from '../../lib/marca';
+import { horaLocal, ZONA_HORARIA } from '../../lib/hora';
+import { etiquetaVersion } from '../../lib/version-script';
 import * as demo from '../../lib/demo/motor';
 import {
   CORPORACION, DEMO, ERRORES, IDENTIDAD, LLEGO, ahoraMs, conectarOperacion, distanciaTexto, ESTADO, ErrorApi, api, esFinal, hace, hora, ordenar,
@@ -169,6 +171,7 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
           <span className="c-cabecera-titulo">Consola<span className="suave c-ocultable">{` · ${yo.operador.nombre}`}</span></span>
         </div>
         <div className="c-cabecera-der">
+          <Reloj />
           <span className={`c-conexion ${enLinea ? 'ok' : ''}`} role="status"><span className="c-punto" aria-hidden="true" />{enLinea ? 'En línea' : 'Reconectando…'}</span>
           <SelectorTema />
           <button className="c-boton-sec c-salir" onClick={alSalir}>Salir</button>
@@ -178,7 +181,7 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
         <span>{supervision ? 'Supervisión: todos los CAD' : misCads.map((c) => c.nombre).join(', ')}</span>
         {misCads.some((c) => c.modo === 'webhook') && <span className="c-chip">Los CAD con sistema propio se ven en solo lectura</span>}
       </div>
-      {DEMO && <div className="c-demo c-demo-barra c-linea"><span>{'Demo: el API, el CAD y el GPS de las unidades corren simulados en tu navegador. Nada aquí es una emergencia real.'}</span><Link href="/demo/">Abrir la app ciudadana</Link><Velocidad /></div>}
+      {DEMO && <div className="c-demo c-demo-barra c-linea"><span>{'Demo: el API, el CAD y el GPS de las unidades corren simulados en tu navegador. Nada aquí es una emergencia real.'}</span><Link href="/demo/">Abrir la app ciudadana</Link><Velocidad /><span className="suave" data-testid="version">{etiquetaVersion()}</span></div>}
       <nav className="c-pestanas" aria-label="Vistas de la consola">
         {([['bandeja', 'Bandeja'], ['unidades', 'Unidades (GPS)'], ['tiempos', 'Tiempos y quejas']] as const).map(([v, t]) => (
           <button key={v} className={vista === v ? 'activa' : ''} aria-pressed={vista === v} onClick={() => setVista(v)}>{t}</button>
@@ -490,7 +493,6 @@ const ESTADO_ETAPA: Record<TiempoEtapa['estado'], string> = {
   cumplida: 'En meta', excedida: 'Fuera de meta', en_curso: 'En curso', en_riesgo: 'Por vencer', pendiente: 'Pendiente', omitida: '—',
 };
 
-/** Tiempo desde el reporte contra la meta de llegada, para la bandeja. */
 const ORIGEN_CNIE: Record<string, string> = {
   catalogo: 'Código de la opción que eligió el ciudadano',
   respuestas: 'Afinado con lo que contestó el ciudadano',
@@ -602,10 +604,16 @@ function TablaCnie({ titulo, grupos }: { titulo: string; grupos: GrupoCnie[] }) 
   );
 }
 
+/** Tiempo desde el reporte contra la meta de llegada, para la bandeja; dice en palabras si va fuera de meta. */
 function ChipLlegada({ t }: { t: Reporte['tiempos']['llegada'] }) {
   if (t.segundos == null) return null;
   const cls = t.estado === 'excedida' ? 'c-chip-alerta' : t.estado === 'en_riesgo' ? 'c-chip-aviso' : t.estado === 'cumplida' ? 'c-chip-ok' : '';
-  return <span className={`c-chip ${cls}`} title="Desde el reporte hasta la llegada, contra la meta">{`${duracionTexto(t.segundos)} / meta ${Math.round(t.metaSegundos / 60)} min`}</span>;
+  const aviso = t.estado === 'excedida' ? 'Fuera de meta · ' : t.estado === 'en_riesgo' ? 'Por vencer · ' : '';
+  return (
+    <span className={`c-chip ${cls}`} data-testid="chip-llegada" data-estado={t.estado} title="Desde el reporte hasta la llegada de la unidad, contra la meta de llegada">
+      {`${aviso}${duracionTexto(t.segundos)} / meta ${Math.round(t.metaSegundos / 60)} min`}
+    </span>
+  );
 }
 
 function Tiempos({ t }: { t: Reporte['tiempos'] }) {
@@ -622,7 +630,7 @@ function Tiempos({ t }: { t: Reporte['tiempos'] }) {
               <th scope="row">{e.nombre}</th>
               <td>{e.segundos == null ? '—' : duracionTexto(e.segundos)}</td>
               <td>{duracionTexto(e.metaSegundos)}</td>
-              <td><span className={`c-chip t-chip-${e.estado}`}>{ESTADO_ETAPA[e.estado]}</span></td>
+              <td><span className={`c-chip t-chip-${e.estado}`}>{e.simultanea ? 'Mismo paso que la anterior' : ESTADO_ETAPA[e.estado]}</span></td>
             </tr>
           ))}
           <tr className={`t-${t.llegada.estado} c-total`}>
@@ -704,7 +712,7 @@ function VistaTiempos({ token, ahora, nombreCad, alAbrir }: { token: string; aho
               const metas = x.id === 'llegada' ? t.metas.llegada : t.metas.etapas[x.id];
               return (
                 <tr key={x.id}>
-                  <th scope="row">{x.nombre}<div className="suave c-pequeno">{`${x.n} ${x.n === 1 ? 'medido' : 'medidos'}`}</div></th>
+                  <th scope="row">{x.nombre}<div className="suave c-pequeno">{`${x.n} ${x.n === 1 ? 'medido' : 'medidos'}${x.sinMedir ? ` · ${x.sinMedir} en el mismo paso que la etapa anterior, sin tiempo propio` : ''}`}</div></th>
                   <td>{x.promedioSegundos == null ? '—' : duracionTexto(x.promedioSegundos)}</td>
                   <td>{x.medianaSegundos == null ? '—' : duracionTexto(x.medianaSegundos)}</td>
                   <td className="c-pequeno">{`${duracionTexto(metas.alta)} / ${duracionTexto(metas.media)} / ${duracionTexto(metas.baja)}`}</td>
@@ -741,6 +749,18 @@ function VistaTiempos({ token, ahora, nombreCad, alAbrir }: { token: string; aho
         </ul>
       </div>
     </section>
+  );
+}
+
+/** Hora actual de Querétaro (America/Mexico_City) en el encabezado; se actualiza cada segundo. */
+function Reloj() {
+  const [ahora, setAhora] = useState<number | null>(null);
+  useEffect(() => { setAhora(Date.now()); const t = setInterval(() => setAhora(Date.now()), 1000); return () => clearInterval(t); }, []);
+  if (ahora === null) return null;
+  return (
+    <time className="c-reloj" dateTime={new Date(ahora).toISOString()} data-testid="reloj" title={`Hora actual de Querétaro (${ZONA_HORARIA})`}>
+      {`${horaLocal(ahora, true)} · Querétaro`}
+    </time>
   );
 }
 

@@ -2,8 +2,8 @@
  * Prepara los borradores de docs/legal para publicarlos en la web: sin notas
  * internas, sin marcadores ni huecos "por definir". No inventa ningún dato:
  * cada dato que falta se omite (y la sección que queda vacía se quita); el aviso
- * de arriba de la página dice qué datos faltan, sin prometer ninguno. La lista exacta de lo que debe entregar el área
- * jurídica está en docs/legal/PENDIENTES-JURIDICO.md.
+ * de arriba de la página dice qué datos faltan, sin prometer ninguno. La lista cerrada de lo que debe entregar el
+ * área jurídica (qué dato, dónde va y en qué formato) está en docs/legal/PENDIENTES-JURIDICO.md.
  */
 
 /** Sustituciones exactas por documento: [texto del borrador, texto publicado]. */
@@ -48,9 +48,9 @@ const SUSTITUCIONES: Record<string, [string | RegExp, string][]> = {
 
 /** Qué datos faltan en cada documento: lo dice el aviso de arriba de la página, sin prometer ninguno. */
 export const FALTAN: Record<string, string> = {
-  'aviso-privacidad': 'la identidad y el domicilio del responsable, el fundamento legal, los plazos de conservación ni los datos de contacto de la Unidad de Transparencia',
-  terminos: 'la identidad del responsable ni sus datos de contacto',
-  'aviso-simplificado': 'la identidad del responsable',
+  'aviso-privacidad': 'la identidad y el domicilio del responsable, el fundamento legal, el país donde se alojan los datos, los plazos de conservación, los datos de contacto y el horario de la Unidad de Transparencia, el plazo de respuesta a una solicitud ARCO ni la autoridad garante ante la que puedes presentar una queja',
+  terminos: 'la identidad del responsable, la disposición que sanciona las falsas alarmas, el medio para inconformarte por una suspensión, las autoridades competentes ni los datos de contacto',
+  'aviso-simplificado': 'la identidad del responsable ni la dirección oficial del aviso integral',
 };
 
 /** Un marcador es un texto entre corchetes que no es un enlace Markdown. */

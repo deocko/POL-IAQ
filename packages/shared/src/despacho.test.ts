@@ -83,9 +83,23 @@ describe('tiempos de respuesta', () => {
     const cero = conTraslado(0);
     expect(cero.etapas[3]).toMatchObject({ segundos: null, estado: 'omitida' });
     const r = resumirTiempos([cero, cero, conTraslado(80), conTraslado(100)]);
-    expect(r[3]).toMatchObject({ id: 'traslado', n: 2, promedioSegundos: 90, medianaSegundos: 90 });
-    // La asignación automática sí puede durar 0 s: esa se mide.
-    expect(r[1]).toMatchObject({ id: 'asignacion', medianaSegundos: 0 });
+    expect(r[3]).toMatchObject({ id: 'traslado', n: 2, promedioSegundos: 90, medianaSegundos: 90, sinMedir: 2 });
+  });
+
+  it('ninguna etapa cuenta 0 s cuando empezó y terminó en el mismo paso (asignación automática al recibir)', () => {
+    const caso = (rec: number, asig: number, sale: number, llega: number) => medirTiempos([
+      { estado: 'recibido', en: en(0) }, { estado: 'validado', en: en(rec) }, { estado: 'asignado', en: en(rec + asig) },
+      { estado: 'en_camino', en: en(rec + asig + sale) }, { estado: 'en_sitio', en: en(rec + asig + sale + llega) },
+    ], 'alta', t0 + 5000_000);
+    // Como en la verificación en vivo: 4 asignaciones, 3 automáticas (0 s) y una de 16 s.
+    const ms = [caso(30, 0, 40, 300), caso(20, 0, 50, 400), caso(25, 0, 30, 0), caso(40, 16, 20, 200)];
+    expect(ms[0].etapas[1]).toMatchObject({ segundos: null, estado: 'omitida', simultanea: true });
+    const r = resumirTiempos(ms);
+    expect(r[1]).toMatchObject({ id: 'asignacion', n: 1, promedioSegundos: 16, medianaSegundos: 16, sinMedir: 3 });
+    expect(r[3]).toMatchObject({ id: 'traslado', n: 3, medianaSegundos: 300, sinMedir: 1 });
+    expect(r[0]).toMatchObject({ id: 'recepcion', n: 4, medianaSegundos: 28, sinMedir: 0 });
+    // En ninguna etapa la mediana queda en 0 s.
+    for (const f of r) expect(f.medianaSegundos, f.id).not.toBe(0);
   });
 });
 
