@@ -30,6 +30,15 @@ export const SUBTIPOS_CNIE: readonly SubtipoCnie[] = CNIE_V3.subtipos
   .filter((s) => s.vigente)
   .map((s) => ({ codigo: s.codigo, nombre: s.nombre, nombreCorto: s.nombreCorto, tipo: s.codigo[0] }));
 
+/**
+ * Subtipos dados de baja en la V 3.0. El PDF (p. 67) dice: "502 Subtipo Notificación de hallazgo: BAJA.
+ * Se crea el numeral 312"; sus incidentes 50201-50203 pasaron a 31201-31203 (tabla de la p. 22).
+ */
+export interface SubtipoCnieBaja extends SubtipoCnie { reemplazo: string }
+export const SUBTIPOS_CNIE_BAJA: readonly SubtipoCnieBaja[] = CNIE_V3.subtipos
+  .filter((s) => !s.vigente)
+  .map((s) => ({ codigo: s.codigo, nombre: s.nombre, nombreCorto: s.nombreCorto, tipo: s.codigo[0], reemplazo: ({ '502': '312' } as Record<string, string>)[s.codigo] ?? '' }));
+
 const TIPO = new Map(TIPOS_CNIE.map((t) => [t.codigo, t]));
 const SUBTIPO = new Map(SUBTIPOS_CNIE.map((s) => [s.codigo, s]));
 
@@ -50,6 +59,7 @@ export const tipoCnie = (codigo: string) => TIPO.get(codigo);
 export const subtipoCnie = (codigo: string) => SUBTIPO.get(codigo);
 export const incidenteCnie = (codigo: string) => INCIDENTE.get(codigo);
 export const subtiposDeTipo = (tipo: string) => SUBTIPOS_CNIE.filter((s) => s.tipo === tipo);
+export const subtiposDeBajaDeTipo = (tipo: string) => SUBTIPOS_CNIE_BAJA.filter((s) => s.tipo === tipo);
 export const incidentesDeSubtipo = (subtipo: string) => INCIDENTES_CNIE.filter((i) => i.subtipo.codigo === subtipo);
 
 export type ErrorCodigoCnie = 'formato' | 'inexistente' | 'retirado';

@@ -12,7 +12,7 @@ del sistema se escribió a mano sin verificarlo contra él.
 | Subtipo | 3 | `302` Armas y explosivos |
 | Incidente | 5 | `30202` Detonación por arma de fuego · ALTA |
 
-- 7 tipos, 26 subtipos (25 vigentes; el `502` está retirado).
+- 7 tipos, 26 subtipos: 25 vigentes y el `502` Notificación de hallazgo, que el PDF da de **BAJA** (p. 67: "502 Subtipo Notificación de hallazgo: BAJA. Se crea el numeral 312"). Sus incidentes 50201-50203 pasaron a 31201-31203 (tabla de la p. 22). Vigentes por tipo: Médicos 3, Protección Civil 4, Seguridad 12, Servicios Públicos 1, Asistencia 2 (501 y 503), Otros Servicios 2, Mal Uso 1. La app no lo ofrece como opción: en Asistencia explica la baja y lleva al 312 (`SUBTIPOS_CNIE_BAJA`).
 - 361 incidentes vigentes con nombre y prioridad (ALTA, MEDIA, BAJA).
 - 12 códigos retirados, listados aparte (`CODIGOS_CNIE_RETIRADOS`): `10212` y `30704` (dados de baja) y
   `30902`, `50201`, `50202`, `50203`, `60101`, `60102`, `70102`, `70103`, `70105`, `70108`.
@@ -73,7 +73,7 @@ clasificados. Solo "Otro" sin elegir incidente queda "Sin código CNIE".
 **Búsqueda.** `buscarCnie` separa la frase en palabras, quita las vacías ("en", "de", "a", "con"…) y ordena por
 cuántas palabras coinciden: "robo en curso" o "robo a casa con violencia" encuentran resultados (el segundo pone
 30413 primero). Un número busca por el inicio del código ("302" o "30202"). Cada resultado muestra su código.
-Una prueba recorre los 26 subtipos y los 361 incidentes vigentes (sin los 12 retirados) y confirma que todos se
+Una prueba recorre los 26 subtipos (25 vigentes y el 502 de baja) y los 361 incidentes vigentes (sin los 12 retirados) y confirma que todos se
 encuentran por código y por nombre.
 
 **Dos prioridades.** La **Prioridad CNIE (oficial)** es la del catálogo nacional para el incidente. La

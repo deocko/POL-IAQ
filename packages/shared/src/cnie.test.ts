@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CATALOGO_SEMILLA, CNIE_V3, CODIGOS_CNIE_RETIRADOS, CODIGOS_DEL_MAPEO, INCIDENTES_CNIE, PROTOCOLO_PROVISIONAL, SUBTIPOS_CNIE, TIPOS_CNIE,
+  CATALOGO_SEMILLA, CNIE_V3, CODIGOS_CNIE_RETIRADOS, CODIGOS_DEL_MAPEO, SUBTIPOS_CNIE_BAJA, INCIDENTES_CNIE, PROTOCOLO_PROVISIONAL, SUBTIPOS_CNIE, TIPOS_CNIE,
   buscarCnie, clasificarCnie, etiquetaCnie, incidenteCnie, incidentePorId, permiteAnonimo, preguntasPara, validarCodigoCnie,
 } from './index';
 
@@ -19,11 +19,23 @@ describe('CNIE V 3.0 cargado desde el PDF oficial', () => {
     expect(new Set(INCIDENTES_CNIE.map((i) => i.codigo)).size).toBe(361);
     const porTipo = Object.fromEntries(TIPOS_CNIE.map((t) => [t.codigo, SUBTIPOS_CNIE.filter((x) => x.tipo === t.codigo).length]));
     expect(Object.values(porTipo).reduce((a, b) => a + b, 0)).toBe(25);
+    // Conteo por tipo de la verificación en vivo (Mensaje 8): Seguridad 12, Médicos 3, Protección Civil 4,
+    // Servicios Públicos 1, Asistencia 2 (501 y 503; el 502 está de BAJA en el PDF), Otros Servicios 2, Mal Uso 1.
+    expect(porTipo).toEqual({ 1: 3, 2: 4, 3: 12, 4: 1, 5: 2, 6: 2, 7: 1 });
     for (const i of INCIDENTES_CNIE) {
       expect(buscarCnie(i.codigo).map((x) => x.codigo), i.codigo).toEqual([i.codigo]);
       expect(buscarCnie(i.nombre, 400).map((x) => x.codigo), i.nombre).toContain(i.codigo);
     }
     for (const r of CODIGOS_CNIE_RETIRADOS) expect(buscarCnie(r.codigo), r.codigo).toEqual([]);
+  });
+
+  it('el 502 Notificación de hallazgo está de BAJA (PDF p. 67) y sus casos viven en 312', () => {
+    expect(SUBTIPOS_CNIE_BAJA).toEqual([{ codigo: '502', nombre: 'Notificación de hallazgo', nombreCorto: 'Notificación de hallazgo', tipo: '5', reemplazo: '312' }]);
+    expect(INCIDENTES_CNIE.filter((i) => i.subtipo.codigo === '312').map((i) => i.codigo)).toEqual(['31201', '31202', '31203']);
+    for (const [viejo, nuevo] of [['50201', '31201'], ['50202', '31202'], ['50203', '31203']]) {
+      expect(validarCodigoCnie(viejo)).toMatchObject({ ok: false, error: 'retirado', reemplazo: nuevo });
+    }
+    expect(buscarCnie('hallazgo').map((i) => i.codigo)).toEqual(expect.arrayContaining(['31201', '31202', '31203']));
   });
 
   it('ningún código retirado aparece como vigente', () => {

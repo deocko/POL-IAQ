@@ -660,7 +660,8 @@ describe.each(ALMACENES)('API con almacén en %s', (_nombre, nuevoAlmacen) => {
       expect(v.unidad.unidadId).toBe('A-310'); // la ambulancia de El Marqués
       expect(v.unidad.etaMinutos).toBeGreaterThan(0);
       expect(v.unidad.lat).toBeTypeOf('number');
-      expect(v.tiempos.etapas[0]).toMatchObject({ id: 'recepcion', estado: 'cumplida' });
+      // La unidad se asigna en el mismo paso que se recibe: la asignación no se mide como 0 s.
+      expect(v.tiempos.etapas[1]).toMatchObject({ id: 'asignacion', segundos: null, simultanea: true });
       expect((await almacen.auditoria(folio)).some((a) => a.actor === 'sistema:asignacion_automatica')).toBe(true);
     });
 
