@@ -80,6 +80,11 @@ const MOSAICO: Record<string, [string, string]> = Object.fromEntries(demo.CATALO
 /** Nombre corto en el seguimiento, junto al subtipo CNIE: "Robo (CNIE 304)". */
 const SEGUIMIENTO: Record<string, string> = { 'robo-en-curso': 'Robo' };
 
+/** Código CNIE completo del reporte (5 dígitos; el subtipo solo si aún falta el incidente). */
+const codigoCnieDe = (r: Pick<ReporteDemo, 'cnie'>) => r.cnie?.incidente?.codigo ?? r.cnie?.subtipo.codigo ?? null;
+/** "Disparos (CNIE 30202)": así dos incidentes del mismo subtipo no se ven iguales. */
+const tituloConCodigo = (r: Pick<ReporteDemo, 'incidenteId' | 'asistenciaDirecta' | 'cnie'>) => `${tituloReporte(r)}${codigoCnieDe(r) ? ` (CNIE ${codigoCnieDe(r)})` : ''}`;
+
 /** Título del reporte para el ciudadano. En "Otra emergencia" con incidente elegido, su nombre. */
 function tituloReporte(r: Pick<ReporteDemo, 'incidenteId' | 'asistenciaDirecta' | 'cnie'>) {
   if (r.asistenciaDirecta) return 'Asistencia directa';
@@ -532,7 +537,7 @@ function ExplorarCatalogo({ alElegir, alVolver }: { alElegir: (codigo: string | 
   const Caso = ({ i, contexto }: { i: IncidenteCnie; contexto?: boolean }) => (
     <li>
       <button type="button" onClick={() => alElegir(i.codigo)}>
-        <span>{nombreLegible(i.nombre)}{contexto && <span className="suave c-pequeno">{i.tipo.nombre} · {i.subtipo.nombreCorto}</span>}</span>
+        <span>{nombreLegible(i.nombre)}<span className="suave c-pequeno" data-testid="codigo-caso">{contexto ? `${i.codigo} · ${i.tipo.nombre} · ${i.subtipo.nombreCorto}` : i.codigo}</span></span>
         <span aria-hidden="true">›</span>
       </button>
     </li>
@@ -800,7 +805,7 @@ function PantallaMiReporte({
             {mios.map((o) => (
               <li key={o.folio}>
                 <button type="button" onClick={() => alAbrir(o.folio)} aria-current={o.folio === folio ? 'true' : undefined} className={o.folio === folio ? 'actual' : ''}>
-                  <span><strong>{tituloReporte(o)}</strong><span className="suave c-pequeno">{o.folio}</span></span>
+                  <span><strong data-testid="cnie-lista">{tituloConCodigo(o)}</strong><span className="suave c-pequeno">{o.folio}</span></span>
                   <span className={`c-chip ${FINALES.includes(o.estado) ? 'c-chip-neutro' : ''}`}>{demo.etiquetaCiudadano(o.estado)}</span>
                 </button>
               </li>
@@ -850,7 +855,6 @@ function Seguimiento({ r, alNuevo }: { r: ReporteDemo; alNuevo: () => void }) {
     : null;
   const u = r.unidad;
   const enSitio = r.estado === 'en_sitio' || r.estado === 'cerrado';
-  const titulo = tituloReporte(r);
 
   function enviarMensaje(e: React.FormEvent) {
     e.preventDefault();
@@ -862,7 +866,7 @@ function Seguimiento({ r, alNuevo }: { r: ReporteDemo; alNuevo: () => void }) {
     <section className="d-seguimiento" aria-label={`Seguimiento del folio ${r.folio}`}>
       <div className="c-tarjeta d-hero">
         <div className="d-hero-fila">
-          <span className="suave c-pequeno d-subtitulo"><span data-testid="cnie-seguimiento">{`${titulo}${r.cnie ? ` (CNIE ${r.cnie.subtipo.codigo})` : ''}`}</span>{r.ubicacion.referencia && <span>{`· ${r.ubicacion.referencia}`}</span>}</span>
+          <span className="suave c-pequeno d-subtitulo"><span data-testid="cnie-seguimiento">{tituloConCodigo(r)}</span>{r.ubicacion.referencia && <span>{`· ${r.ubicacion.referencia}`}</span>}</span>
         </div>
         <p className={`d-estado d-${r.estado}`} data-testid="estado" role="status" aria-live="polite">{demo.etiquetaCiudadano(r.estado)}</p>
 

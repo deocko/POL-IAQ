@@ -219,8 +219,8 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
               <div className="c-etiquetas">
                 {r.asistenciaDirecta && <span className="c-chip c-chip-alerta">Asistencia directa</span>}
                 <span className={`c-chip e-${r.estado}`}>{ESTADO[r.estado]}</span>
-                <span className="c-chip">{`Prioridad ${r.prioridad}`}</span>
-                <span className={`c-chip ${r.cnie?.incidente ? '' : 'c-chip-aviso'}`}>{r.cnie ? `CNIE ${r.cnie.incidente?.codigo ?? r.cnie.subtipo.codigo}` : 'Sin código CNIE'}</span>
+                <span className="c-chip" title="La que usa POL-IAQ para despachar, según las respuestas">{`Prioridad operativa: ${r.prioridad}`}</span>
+                <span className={`c-chip ${r.cnie?.incidente ? '' : 'c-chip-aviso'}`} title="Código y prioridad oficial del CNIE V 3.0">{r.cnie ? `CNIE ${r.cnie.incidente?.codigo ?? r.cnie.subtipo.codigo}${r.cnie.prioridad ? ` · oficial ${r.cnie.prioridad}` : ''}` : 'Sin código CNIE'}</span>
                 {!r.operable && <span className="c-chip">Solo lectura</span>}
                 {r.automatico && <span className="c-chip c-chip-neutro">Demo automática</span>}
                 {r.opinion?.queja && <span className="c-chip c-chip-alerta">Queja</span>}
@@ -303,7 +303,7 @@ function Detalle({
         <div className="c-etiquetas">
           {r.asistenciaDirecta && <span className="c-chip c-chip-alerta">Botón de asistencia directa</span>}
           {r.escenarioId && <span className="c-chip">Acceso rápido de lugar guardado</span>}
-          <span className="c-chip">{`Prioridad ${r.prioridad}`}</span>
+          <span className="c-chip" data-testid="prioridad-operativa">{`Prioridad operativa (respuesta): ${r.prioridad}`}</span>
           {r.automatico && <span className="c-chip c-chip-neutro">Demo automática</span>}
         </div>
         {r.cerradoPorDemo && <p className="c-nota c-pequeno">Lo cerró la demo automática para acelerar el recorrido. En el servicio real, el reporte lo cierra el operador con “Cerrar como atendido”.</p>}
@@ -524,11 +524,12 @@ function ClasificacionCnie({ r, ocupado, hacer }: { r: Reporte; ocupado: boolean
         <>
           <p className="c-cnie-etiqueta" data-testid="cnie-etiqueta">{r.cnieEtiqueta}</p>
           <div className="c-etiquetas">
-            {c.prioridad && <span className={`c-chip ${c.prioridad === 'ALTA' ? 'c-chip-alerta' : ''}`}>{`Prioridad CNIE ${c.prioridad}`}</span>}
-            {difiere && <span className="c-chip">{`Operativa ${r.prioridad}`}</span>}
+            {c.prioridad && <span className={`c-chip ${c.prioridad === 'ALTA' ? 'c-chip-alerta' : ''}`} data-testid="prioridad-cnie">{`Prioridad CNIE (oficial): ${c.prioridad}`}</span>}
+            <span className="c-chip">{`Prioridad operativa (respuesta): ${r.prioridad}`}</span>
             {c.secundario && <span className="c-chip" title={nombreLegible(c.secundario.nombre)}>{`Secundario ${c.secundario.codigo} · ${nombreLegible(c.secundario.nombre)}`}</span>}
           </div>
-          <p className="suave c-pequeno">{ORIGEN_CNIE[c.origen]}{!c.incidente ? '. Falta el incidente: elígelo abajo.' : '.'}</p>
+          {difiere && <p className="suave c-pequeno" data-testid="prioridades-nota">{'No es un error que difieran: la prioridad CNIE es la oficial del catálogo nacional para este tipo de incidente; la operativa es la que usa POL-IAQ para despachar según lo que contestó el ciudadano (armas, heridos, si sigue ocurriendo). Las dos se guardan.'}</p>}
+          <p className="suave c-pequeno">{`${ORIGEN_CNIE[c.origen]}${!c.incidente ? '. Falta el incidente: elígelo abajo.' : '.'}`}</p>
         </>
       ) : (
         <p className="c-nota c-pequeno">Sin código CNIE. El ciudadano eligió “Otra emergencia”: asígnale el incidente que corresponda.</p>

@@ -92,7 +92,9 @@ const REGLAS: Record<string, (r: Respuestas) => Resultado> = {
   'accidente-vial': (r) => {
     if (r.heridos === false) return { codigo: '30309' }; // accidente de tránsito sin personas lesionadas (tipo 3)
     if (r.heridos !== true) return { codigo: null };
-    return { codigo: typeof r.tipo_accidente === 'string' ? ACCIDENTE[r.tipo_accidente] ?? null : null };
+    // Con heridos el incidente queda definido aunque no se sepa el vehículo: 10104 (vehículo automotor
+    // con persona(s) lesionada(s)), el caso general; la pregunta del tipo de accidente lo precisa.
+    return { codigo: (typeof r.tipo_accidente === 'string' ? ACCIDENTE[r.tipo_accidente] : undefined) ?? '10104' };
   },
   'emergencia-medica': (r) => {
     if (r.consciente === false && r.respira === false) return { codigo: '10313' }; // paro cardiorrespiratorio

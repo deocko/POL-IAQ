@@ -9,6 +9,7 @@ import { crearApp } from '../src/main';
 import { cargarConfig, hashClave } from '../src/config';
 import { emitirSesion } from '../src/auth/tokens';
 import { DespachadorCadService } from '../src/cad/despachador.service';
+import { ReportesService } from '../src/reportes/reportes.service';
 import type { Almacen } from '../src/almacen/almacen';
 import { AlmacenMemoria } from '../src/almacen/almacen-memoria';
 import { AlmacenPostgres } from '../src/almacen/almacen-postgres';
@@ -457,6 +458,16 @@ describe.each(ALMACENES)('API con almacén en %s', (_nombre, nuevoAlmacen) => {
       expect((await httpOp.get(`/v1/operador/reportes/${folio}`).set(ana)).status).toBe(404);
     });
 
+    it('usa el mismo nombre del incidente en la bandeja y en el detalle', async () => {
+      const token = await registrar('+524427770010');
+      const folio = await crear(token, 20.61, -100.32, { incidenteId: 'intrusion-domicilio' });
+      const ana = await entrar('ana', 'clave-de-ana-123');
+      const enBandeja = (await httpOp.get('/v1/operador/reportes').set(ana)).body.reportes.find((x: { folio: string }) => x.folio === folio);
+      const detalle = (await httpOp.get(`/v1/operador/reportes/${folio}`).set(ana)).body;
+      expect(enBandeja.incidente).toBe('Alguien quiere entrar');
+      expect(detalle.incidente).toBe(enBandeja.incidente);
+    });
+
     it('muestra el código CNIE, deja corregirlo con bitácora y agrupa el tablero por tipo y subtipo', async () => {
       const token = await registrar('+524427770009');
       const folio = await crear(token, 20.61, -100.32, { incidenteId: 'otro', descripcion: 'Hay humo saliendo de una alcantarilla' });
@@ -494,6 +505,17 @@ describe.each(ALMACENES)('API con almacén en %s', (_nombre, nuevoAlmacen) => {
     const reportar = (token: string, body: Record<string, unknown>) =>
       http.post('/v1/reportes').set({ authorization: `Bearer ${token}` }).send({ ubicacion: { lat: 20.539, lng: -100.442 }, ...body });
 
+    it('clasifica los folios guardados sin CNIE (migración) y lo deja en la auditoría', async () => {
+      const token = await registrar('+524428880009');
+      const creado = await reportar(token, { incidenteId: 'persona-sospechosa' });
+      const r = (await almacen.reporte(creado.body.folio))!;
+      r.cnie = null;
+      r.codigoCnie = null;
+      await almacen.guardarReporte(r);
+      expect(await app.get(ReportesService).clasificarSinCnie()).toBeGreaterThanOrEqual(1);
+      expect((await almacen.reporte(creado.body.folio))!.cnie).toMatchObject({ incidente: { codigo: '30904' }, origen: 'catalogo' });
+    });
+
     it('publica el catálogo vigente y el mapeo de cada opción', async () => {
       const cnie = (await http.get('/v1/cnie')).body;
       expect(cnie).toMatchObject({ version: '3.0' });
@@ -529,6 +551,12 @@ describe.each(ALMACENES)('API con almacén en %s', (_nombre, nuevoAlmacen) => {
       expect(accidente.body.cnieSubtipo).toBe('303');
       const altaAcc = app.get(DespachadorCadService).bandeja.find((e) => e.evento.folio === accidente.body.folio)!.evento.datos as Record<string, any>;
       expect(altaAcc.cnie).toMatchObject({ tipo: { codigo: '3' }, subtipo: { codigo: '303' }, incidente: { codigo: '30309' }, origen: 'respuestas' });
+      // Con heridos se afina solo, sin corrección manual: 10104 si no se sabe el tipo de vehículo.
+      const conHeridos = await reportar(token, { incidenteId: 'accidente-vial', cuestionario: { via: 'formulario', entradas: [{ preguntaId: 'heridos', respuesta: true }] } });
+      expect(conHeridos.body.cnieCodigo).toBe('10104');
+      const altaHer = app.get(DespachadorCadService).bandeja.find((e) => e.evento.folio === conHeridos.body.folio)!.evento.datos as Record<string, any>;
+      expect(altaHer.cnie).toMatchObject({ subtipo: { codigo: '101' }, incidente: { codigo: '10104' }, origen: 'respuestas' });
+      expect(accidente.body.cnieCodigo).toBe('30309');
 
       const robo = await reportar(token, { incidenteId: 'robo-en-curso' });
       const folio = robo.body.folio as string;

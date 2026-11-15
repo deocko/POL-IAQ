@@ -1,8 +1,8 @@
-import { ConflictException, ForbiddenException, HttpException, HttpStatus, Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { type OnModuleInit, ConflictException, ForbiddenException, HttpException, HttpStatus, Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   canalizar, clasificacionDe, clasificarCnie, enrutarPorUbicacion, esQueja, permiteAnonimo, generarFolio, incidentePorId, puedeTransicionar, resolverEntradas, respuestasDe,
-  validarCodigoCnie, ESTADOS_FINALES, type ClasificacionCnie,
+  validarCodigoCnie, CAD_ESTATAL_ID, ESTADOS_FINALES, MUNICIPIOS_PILOTO, type ClasificacionCnie,
   type CrearReporte, type EntradaGuardada, type EstadoIncidente, type IncidenteCatalogo, type Opinion, type Prioridad, type ResponderCuestionario, type SolicitarEvidencia,
 } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
@@ -25,7 +25,7 @@ export function validarCnieOFallar(codigo: string, campo: string) {
 }
 
 @Injectable()
-export class ReportesService {
+export class ReportesService implements OnModuleInit {
   constructor(
     @Inject(CONFIG) private readonly config: Config,
     @Inject(Almacen) private readonly almacen: Almacen,
@@ -33,6 +33,35 @@ export class ReportesService {
     @Inject(DespachadorCadService) private readonly despachador: DespachadorCadService,
     @Inject(ProtocolosService) private readonly protocolos: ProtocolosService,
   ) {}
+
+  async onModuleInit() {
+    await this.clasificarSinCnie();
+  }
+
+  /**
+   * Migración: los folios creados antes del CNIE (o sembrados sin él) se clasifican con la
+   * misma regla que uno nuevo (catálogo + respuestas guardadas). "Otra emergencia" sin código
+   * queda sin clasificar para que la asigne el operador. Cada cambio queda en la auditoría.
+   */
+  async clasificarSinCnie(): Promise<number> {
+    const cads = [...new Set([...MUNICIPIOS_PILOTO.map((m) => m.cadId), CAD_ESTATAL_ID])];
+    let n = 0;
+    for (const r of await this.almacen.reportesPorCad(cads, false)) {
+      if (r.cnie) continue;
+      const cnie = clasificarCnie(r.incidenteId, { ...respuestasDe(r.cuestionario.entradas), ...r.respuestas });
+      if (!cnie) continue;
+      await this.almacen.conReporte(r.folio, async () => {
+        const actual = await this.almacen.reporte(r.folio);
+        if (!actual || actual.cnie) return;
+        actual.cnie = cnie;
+        actual.codigoCnie = cnie.incidente?.codigo ?? null;
+        await this.almacen.guardarReporte(actual);
+        await this.almacen.auditar({ actor: 'sistema:migracion_cnie', accion: 'cnie_migrado', folio: r.folio, detalle: { a: codigoDe(cnie) } });
+        n++;
+      });
+    }
+    return n;
+  }
 
   async crear(ciudadano: Ciudadano, datos: CrearReporte): Promise<Reporte> {
     const incidente = incidentePorId(datos.incidenteId);
