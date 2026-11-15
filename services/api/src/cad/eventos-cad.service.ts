@@ -4,7 +4,7 @@ import { minutosDe, type EventoDesdeCad } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
 import { AvlService, RutasService } from '../despacho/avl.service';
 import type { Reporte } from '../almacen/modelos';
-import { ReportesService } from '../reportes/reportes.service';
+import { ReportesService, validarCnieOFallar } from '../reportes/reportes.service';
 import { AvisosSmsService } from '../sms/avisos-sms.service';
 
 export type ResultadoEvento = { aceptado: true; duplicado?: true; descartado?: 'secuencia_antigua' };
@@ -37,6 +37,12 @@ export class EventosCadService {
       if (r.cadId !== cadId) throw new ForbiddenException({ codigo: 'folio_de_otra_jurisdiccion' });
       if (op.secuenciaSiguiente) ev = { ...ev, secuencia: r.secuenciaEntrada + 1 };
       op.antes?.(r);
+      // Los códigos CNIE se validan antes de marcar el evento: uno inválido da 400 y no se aplica.
+      if (ev.tipo === 'incidente.reclasificado') {
+        validarCnieOFallar(ev.datos.codigoCnie, 'codigoCnie');
+        if (ev.datos.codigoCnieSecundario) validarCnieOFallar(ev.datos.codigoCnieSecundario, 'codigoCnieSecundario');
+      }
+      if (ev.tipo === 'incidente.recibido' && ev.datos.codigoCnie) validarCnieOFallar(ev.datos.codigoCnie, 'codigoCnie');
       if (!(await this.almacen.marcarEventoProcesado(ev.eventoId, cadId, ev.folio))) return { aceptado: true, duplicado: true };
       // Las posiciones pueden llegar desordenadas: se descartan las viejas sin error.
       if (ev.secuencia <= r.secuenciaEntrada) return { aceptado: true, descartado: 'secuencia_antigua' };
@@ -60,6 +66,13 @@ export class EventosCadService {
       case 'incidente.recibido':
         r.folioCad = ev.datos.folioCad;
         this.reportes.cambiarEstado(r, 'validado', 'Recibido por el CAD');
+        // El CAD registró otro código: cuenta como corrección (queda en la bitácora).
+        if (ev.datos.codigoCnie && ev.datos.codigoCnie !== r.codigoCnie) {
+          await this.reportes.corregirCnie(r, { codigoCnie: ev.datos.codigoCnie, motivo: 'Código con el que el CAD registró el folio' }, actor);
+        }
+        break;
+      case 'incidente.reclasificado':
+        await this.reportes.corregirCnie(r, ev.datos, actor);
         break;
       case 'unidad.asignada':
         r.unidad = { unidadId: ev.datos.unidadId, corporacion: ev.datos.corporacion, etiqueta: ev.datos.etiqueta, etaMinutos: ev.datos.etaMinutos };

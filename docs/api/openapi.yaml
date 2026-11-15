@@ -98,7 +98,10 @@ paths:
       summary: Catálogo de incidentes en lenguaje ciudadano
       operationId: catalogo
       security: []
-      description: Cada opción se mapea a un código del Catálogo Nacional de Incidentes de Emergencia (CNIE), que no se expone al ciudadano.
+      description: |
+        Cada opción se mapea al Catálogo Nacional de Incidentes de Emergencia (CNIE) V 3.0: tipo, subtipo
+        e incidente cuando es fijo. La app no muestra códigos en el flujo de reporte; solo el seguimiento
+        enseña el subtipo ("Robo (CNIE 304)"). Mapeo completo en `docs/cnie/README.md`.
       responses:
         '200':
           description: OK
@@ -108,7 +111,32 @@ paths:
                 type: object
                 properties:
                   version: { type: string }
+                  cnie: { type: string, example: '3.0', description: Versión del CNIE del mapeo. }
                   incidentes: { type: array, items: { $ref: '#/components/schemas/IncidenteCatalogo' } }
+  /v1/cnie:
+    get:
+      tags: [Catálogo]
+      summary: Catálogo Nacional de Incidentes de Emergencia vigente (CNIE V 3.0, junio 2024)
+      operationId: cnie
+      security: []
+      description: |
+        Datos generados desde el PDF oficial del SESNSP (`docs/cnie/CNIE_V_3.0_Oficial_junio_24.pdf`).
+        7 tipos, 25 subtipos vigentes, 361 incidentes vigentes. Los 12 códigos retirados (dados de baja o
+        cambiados de numeral) se listan aparte y la API los rechaza.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: { type: string, example: '3.0' }
+                  fuente: { type: string }
+                  tipos: { type: array, items: { $ref: '#/components/schemas/CodigoNombre' } }
+                  subtipos: { type: array, items: { type: object, properties: { codigo: { type: string, example: '304' }, nombre: { type: string }, nombreCorto: { type: string, example: Patrimonio }, tipo: { type: string, example: '3' } } } }
+                  incidentes: { type: array, items: { type: object, properties: { codigo: { type: string, example: '30421' }, nombre: { type: string }, prioridad: { $ref: '#/components/schemas/PrioridadCnie' }, tipo: { type: string }, subtipo: { type: string } } } }
+                  retirados: { type: array, items: { type: object, properties: { codigo: { type: string, example: '30902' }, motivo: { type: string }, reemplazo: { type: [string, 'null'], example: '10112' } } } }
   /v1/municipios:
     get:
       tags: [Catálogo]
@@ -140,7 +168,15 @@ paths:
             schema: { $ref: '#/components/schemas/CrearReporte' }
       responses:
         '201': { description: Creado, content: { application/json: { schema: { $ref: '#/components/schemas/Reporte' } } } }
-        '400': { description: '`datos_invalidos`, `incidente_desconocido` o `escenario_desconocido`' }
+        '400':
+          description: |
+            `datos_invalidos`, `incidente_desconocido`, `escenario_desconocido`, `anonimo_no_permitido`, `falta_seudonimo`,
+            o código CNIE no válido: `cnie_formato` (no tiene 5 dígitos), `cnie_inexistente`, `cnie_retirado` (incluye `reemplazo`
+            cuando el CNIE V 3.0 lo cambió de numeral) o `cnie_no_aplica` (solo "Otra emergencia" acepta `codigoCnie`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorCnie' }
+              example: { codigo: cnie_retirado, campo: codigoCnie, mensaje: 'El código CNIE 30902 ya no está vigente en el CNIE V 3.0; ahora es 10112 (ACCIDENTE DE VEHÍCULO AUTOMOTOR CON PERSONA(S) FALLECIDA(S)).', reemplazo: '10112' }
         '401': { $ref: '#/components/responses/NoAutenticado' }
         '403': { description: '`cuenta_suspendida` o `aceptacion_legal_pendiente`' }
         '429': { description: '`limite_reportes`' }
@@ -324,7 +360,7 @@ paths:
           content:
             application/json:
               schema: { type: object, properties: { aceptado: { type: boolean }, duplicado: { type: boolean }, descartado: { type: string } } }
-        '400': { description: '`evento_invalido` o `json_invalido`' }
+        '400': { description: '`evento_invalido`, `json_invalido` o un código CNIE no vigente en `incidente.reclasificado` / `incidente.recibido` (`cnie_formato`, `cnie_inexistente`, `cnie_retirado`); el evento no se aplica.' }
         '401': { description: '`firma_invalida`' }
         '403': { description: '`folio_de_otra_jurisdiccion`' }
         '404': { description: '`folio_no_encontrado`' }
@@ -410,7 +446,11 @@ paths:
     post:
       tags: [Consola de operador]
       summary: Despacha desde la consola (solo CAD en modo consola). Al `recibir`, si AUTO_ASSIGN no es `off`, se asigna sola la unidad más cercana
-      description: Cada acción se aplica como el evento equivalente de un CAD (incidente.recibido, unidad.asignada, incidente.estado, mensaje.operador, incidente.transferido). Una transferencia envía el alta completa al CAD destino.
+      description: |
+        Cada acción se aplica como el evento equivalente de un CAD (incidente.recibido, unidad.asignada, incidente.estado,
+        mensaje.operador, incidente.transferido, incidente.reclasificado). Una transferencia envía el alta completa al CAD destino.
+        `reclasificar` corrige el código CNIE (también con el reporte ya cerrado) y deja en la bitácora `cnie_corregido`
+        con el código anterior, el nuevo, el secundario y el motivo.
       operationId: accionOperador
       security: [{ operador: [] }]
       parameters: [{ name: folio, in: path, required: true, schema: { type: string } }]
@@ -426,9 +466,10 @@ paths:
                 - { type: object, required: [accion, estado], properties: { accion: { const: estado }, estado: { type: string, enum: [en_camino, en_sitio, cerrado, improcedente] }, nota: { type: string } } }
                 - { type: object, required: [accion, texto], properties: { accion: { const: mensaje }, texto: { type: string, maxLength: 1000 } } }
                 - { type: object, required: [accion, cadDestinoId], properties: { accion: { const: transferir }, cadDestinoId: { type: string }, motivo: { type: string } } }
+                - { type: object, required: [accion, codigoCnie], description: 'Incidente vigente del CNIE V 3.0. `codigoCnieSecundario` null lo quita; omitido conserva el anterior.', properties: { accion: { const: reclasificar }, codigoCnie: { type: string, pattern: '^\d{5}$', example: '31112' }, codigoCnieSecundario: { type: [string, 'null'], example: '10225' }, motivo: { type: string, maxLength: 500 } } }
       responses:
-        '200': { description: VistaOperador actualizada }
-        '400': { description: '`unidad_desconocida`, `cad_destino_invalido` o `datos_invalidos`' }
+        '200': { description: 'VistaOperador actualizada (incluye `cnie` y `cnieEtiqueta`, p. ej. "CNIE 30202 · Seguridad / Armas y explosivos / Detonación por arma de fuego · ALTA")' }
+        '400': { description: '`unidad_desconocida`, `cad_destino_invalido`, `datos_invalidos` o `cnie_formato` / `cnie_inexistente` / `cnie_retirado`', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorCnie' } } } }
         '404': { description: '`folio_no_encontrado`' }
         '409': { description: '`cad_con_sistema_propio`, `reporte_cerrado`, `ya_recibido`, `transicion_invalida` o `sin_unidades_disponibles`' }
   /v1/operador/unidades:
@@ -444,7 +485,7 @@ paths:
       summary: Tablero de tiempos de respuesta por etapa contra su meta (provisional), calificaciones y quejas
       operationId: tiemposOperador
       security: [{ operador: [] }]
-      responses: { '200': { description: '`metas`, `resumen` por etapa (promedio, mediana, % en meta), `reportes`, `quejas`, `calificacionPromedio`' } }
+      responses: { '200': { description: '`metas`, `resumen` por etapa (promedio, mediana, % en meta), `reportes` (con `cnie`), `quejas`, `calificacionPromedio` y `porCnie` { `tipos`, `subtipos` }: por grupo CNIE, `reportes`, `quejas` y `llegada` (promedio, mediana, % en meta). Los folios sin clasificación van en `sin`.' } }
 components:
   securitySchemes:
     ciudadano:
@@ -501,9 +542,14 @@ components:
       type: object
       properties:
         id: { type: string, example: robo-en-curso }
-        categoria: { type: string, enum: [seguridad, medico, proteccion_civil, servicios_publicos] }
+        categoria: { type: string, enum: [seguridad, medico, proteccion_civil, asistencia], description: 'Alineada con los tipos 3, 1, 2 y 5 del CNIE. `asistencia` sustituye a `servicios_publicos`.' }
         nombreCiudadano: { type: string }
-        prioridad: { type: string, enum: [alta, media, baja] }
+        codigoCnieTipo: { oneOf: [{ $ref: '#/components/schemas/CodigoNombre' }, { type: 'null' }], description: 'null solo en "Otra emergencia".' }
+        codigoCnieSubtipo: { oneOf: [{ $ref: '#/components/schemas/CodigoNombre' }, { type: 'null' }] }
+        codigoCnie: { oneOf: [{ $ref: '#/components/schemas/CodigoNombre' }, { type: 'null' }], description: 'Incidente de 5 dígitos; null cuando se afina con una respuesta o lo asigna el operador.' }
+        prioridadCnie: { oneOf: [{ $ref: '#/components/schemas/PrioridadCnie' }, { type: 'null' }], description: 'Prioridad del CNIE; puede diferir de `prioridad` (operativa).' }
+        codigoCnieSecundario: { $ref: '#/components/schemas/CodigoNombre' }
+        prioridad: { type: string, enum: [alta, media, baja], description: Prioridad operativa de Pol-IAQ. }
         corporacionSugerida: { type: string }
         preguntasGuia:
           type: array
@@ -522,6 +568,7 @@ components:
         ocultarIdentidadAUnidad: { type: boolean, default: false }
         identidad: { type: string, enum: [completa, seudonimo, anonimo], default: completa, description: 'Cómo lo ven operador, unidad y CAD. `anonimo` solo en incidentes no violentos (`anonimo_no_permitido`); `seudonimo` exige `alias`.' }
         alias: { type: string, minLength: 2, maxLength: 40 }
+        codigoCnie: { type: string, pattern: '^\d{5}$', description: 'Solo con incidenteId "otro": incidente vigente del CNIE V 3.0 que el ciudadano eligió en el catálogo completo. Inexistente o retirado da 400.' }
     ResponderCuestionario:
       type: object
       required: [entradas]
@@ -570,6 +617,24 @@ components:
       properties:
         lugares: { type: array, maxItems: 10, items: { $ref: '#/components/schemas/LugarGuardado' } }
         escenarios: { type: array, maxItems: 30, items: { $ref: '#/components/schemas/Escenario' } }
+    CodigoNombre:
+      type: object
+      required: [codigo, nombre]
+      properties:
+        codigo: { type: string, example: '30202' }
+        nombre: { type: string, example: DETONACIÓN POR ARMA DE FUEGO }
+    PrioridadCnie:
+      type: string
+      enum: [ALTA, MEDIA, BAJA]
+    ClasificacionCnie:
+      $ref: './asyncapi.yaml#/components/schemas/ClasificacionCnie'
+    ErrorCnie:
+      type: object
+      properties:
+        codigo: { type: string, enum: [cnie_formato, cnie_inexistente, cnie_retirado, cnie_no_aplica] }
+        campo: { type: string, enum: [codigoCnie, codigoCnieSecundario] }
+        mensaje: { type: string }
+        reemplazo: { type: string, description: Código vigente que sustituye a uno cambiado de numeral. }
     Reporte:
       type: object
       properties:
@@ -580,6 +645,7 @@ components:
         ubicacion: { $ref: '#/components/schemas/Ubicacion' }
         municipioClave: { type: [string, 'null'], example: '006' }
         asistenciaDirecta: { type: boolean }
+        cnieSubtipo: { type: [string, 'null'], example: '304', description: 'Subtipo CNIE para el seguimiento ("Robo (CNIE 304)").' }
         escenarioId: { type: [string, 'null'] }
         cuestionario:
           type: object

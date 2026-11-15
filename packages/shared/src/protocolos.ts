@@ -50,6 +50,12 @@ export const PreguntaProtocoloSchema = z.object({
   /** Solo se pregunta si se cumple esta condición. */
   mostrarSi: CondicionSchema.optional(),
   efectos: z.array(EfectoSchema).default([]),
+  /**
+   * Su respuesta afina el código CNIE del reporte (ver cnie-mapeo.ts). Es la
+   * única pregunta extra que se permite por incidente: la despachadora la hace
+   * aunque ya se haya llegado al tope de preguntas.
+   */
+  afinaCnie: z.boolean().default(false),
 });
 export type PreguntaProtocolo = z.infer<typeof PreguntaProtocoloSchema>;
 
@@ -87,6 +93,9 @@ export const ProtocoloSchema = z
     const ids = new Set<string>();
     for (const q of [...p.preguntasGenerales, ...p.incidentes.flatMap((i) => i.preguntas)]) {
       if (q.tipo === 'opcion' && !q.opciones?.length) ctx.addIssue({ code: 'custom', message: `La pregunta ${q.id} es de opción y no tiene opciones` });
+    }
+    for (const i of p.incidentes) {
+      if (i.preguntas.filter((q) => q.afinaCnie).length > 1) ctx.addIssue({ code: 'custom', message: `${i.incidenteId}: solo una pregunta puede afinar el código CNIE` });
     }
     for (const i of p.incidentes) {
       if (ids.has(i.incidenteId)) ctx.addIssue({ code: 'custom', message: `Incidente repetido: ${i.incidenteId}` });
@@ -202,16 +211,19 @@ export function preguntasDespachadora(
   { accesoRapido = false, yaHechas = 0 }: { accesoRapido?: boolean; yaHechas?: number } = {},
 ): PreguntaProtocolo[] {
   const tope = (accesoRapido ? MAX_PREGUNTAS_DESPACHADORA.accesoRapido : MAX_PREGUNTAS_DESPACHADORA.temaNuevo) - yaHechas;
-  if (tope <= 0) return [];
+  const pendientes = preguntasPendientes(protocolo, incidenteId, respuestas);
+  // La pregunta que afina el código CNIE va siempre, una sola vez, al final, fuera del tope.
+  const afina = pendientes.find((q) => q.afinaCnie);
   const propias = new Set(protocoloDe(protocolo, incidenteId)?.preguntas.map((q) => q.id));
   // Primero lo vital (del incidente y luego general), después lo demás.
   const peso = (q: PreguntaProtocolo) => (esVital(q) ? 0 : 2) + (propias.has(q.id) ? 0 : 1);
-  return preguntasPendientes(protocolo, incidenteId, respuestas)
-    .filter((q) => q.obligatoria && (!accesoRapido || esVital(q)))
+  const normales = tope <= 0 ? [] : pendientes
+    .filter((q) => q !== afina && q.obligatoria && (!accesoRapido || esVital(q)))
     .map((q, i) => ({ q, i }))
     .sort((a, b) => peso(a.q) - peso(b.q) || a.i - b.i)
     .slice(0, tope)
     .map((x) => x.q);
+  return afina ? [...normales, afina] : normales;
 }
 
 /** Cuántas preguntas contestó la persona en la llamada (no cuenta lo prellenado de un acceso rápido). */

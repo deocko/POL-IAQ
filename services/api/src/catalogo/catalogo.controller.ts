@@ -1,5 +1,7 @@
 import { Controller, Get, Inject } from '@nestjs/common';
-import { AVISO_PRIVACIDAD_VERSION, CATALOGO_SEMILLA, MUNICIPIOS_PILOTO, TERMINOS_VERSION } from '@pol-iaq/shared';
+import {
+  AVISO_PRIVACIDAD_VERSION, CATALOGO_SEMILLA, CNIE_FUENTE, CNIE_VERSION, CODIGOS_CNIE_RETIRADOS, INCIDENTES_CNIE, MUNICIPIOS_PILOTO, SUBTIPOS_CNIE, TERMINOS_VERSION, TIPOS_CNIE,
+} from '@pol-iaq/shared';
 import { ProtocolosService } from '../protocolos/protocolos.service';
 
 @Controller('v1')
@@ -12,9 +14,23 @@ export class CatalogoController {
     return this.protocolos.vigente();
   }
 
+  /** Opciones que ve el ciudadano. El código CNIE no se muestra en el flujo de reporte, pero viaja para el seguimiento. */
   @Get('catalogo')
   catalogo() {
-    return { version: 'semilla-dev', incidentes: CATALOGO_SEMILLA.map(({ codigoCnie: _c, ...publico }) => publico) };
+    return { version: 'semilla-dev', cnie: CNIE_VERSION, incidentes: CATALOGO_SEMILLA };
+  }
+
+  /** Catálogo Nacional de Incidentes de Emergencia vigente: tipos, subtipos, incidentes y códigos retirados. Es público. */
+  @Get('cnie')
+  cnie() {
+    return {
+      version: CNIE_VERSION,
+      fuente: CNIE_FUENTE,
+      tipos: TIPOS_CNIE,
+      subtipos: SUBTIPOS_CNIE,
+      incidentes: INCIDENTES_CNIE.map((i) => ({ codigo: i.codigo, nombre: i.nombre, prioridad: i.prioridad, tipo: i.tipo.codigo, subtipo: i.subtipo.codigo })),
+      retirados: CODIGOS_CNIE_RETIRADOS,
+    };
   }
 
   @Get('municipios')

@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './demo.css';
 import {
-  ESPERA_ANTES_DE_911_SEG, debeOfrecer911, duracionTexto, encolar, enmascararTelefono, vaciarCola,
-  type Identidad, type Opinion, type PendienteEnvio,
+  ESPERA_ANTES_DE_911_SEG, TIPOS_CNIE, buscarCnie, debeOfrecer911, duracionTexto, encolar, enmascararTelefono, incidenteCnie, incidentesDeSubtipo, nombreLegible,
+  subtiposDeTipo, vaciarCola, type IncidenteCnie, type Identidad, type Opinion, type PendienteEnvio,
 } from '@pol-iaq/shared/movil';
 import { CODIGO_SMS_DEMO } from '../../lib/demo/textos';
 import * as demo from '../../lib/demo/motor';
@@ -86,6 +86,15 @@ const MOSAICO: Record<string, [string, string]> = {
   'ruido-rina': ['🔊', 'Ruido o fiesta'],
   otro: ['➕', 'Otra emergencia'],
 };
+/** Nombre corto en el seguimiento, junto al subtipo CNIE: "Robo (CNIE 304)". */
+const SEGUIMIENTO: Record<string, string> = { 'robo-en-curso': 'Robo' };
+
+/** Título del reporte para el ciudadano. En "Otra emergencia" con incidente elegido, su nombre. */
+function tituloReporte(r: Pick<ReporteDemo, 'incidenteId' | 'asistenciaDirecta' | 'cnie'>) {
+  if (r.asistenciaDirecta) return 'Asistencia directa';
+  if (r.incidenteId === 'otro' && r.cnie?.incidente) return nombreLegible(r.cnie.incidente.nombre);
+  return SEGUIMIENTO[r.incidenteId] ?? MOSAICO[r.incidenteId]?.[1] ?? r.incidenteId;
+}
 
 // ---------------------------------------------------------------------------
 // App: barra superior, contenido por pestaña y barra de pestañas inferior
@@ -388,6 +397,8 @@ type Envio = Omit<DatosReporte, 'cadSimulado' | 'nombre' | 'telefono'>;
 
 function PantallaReportar({ enviar, hayActivo, alVerActivo, enLinea }: { enviar: (d: Envio) => string | null; hayActivo: boolean; alVerActivo: () => void; enLinea: boolean }) {
   const [incidenteId, setIncidenteId] = useState<string | null>(null);
+  const [explorar, setExplorar] = useState(false);
+  const [codigoCnie, setCodigoCnie] = useState<string | null>(null);
   const [lugarId, setLugarId] = useState(demo.LUGARES_DEMO[0].id);
   const [gps, setGps] = useState<Ubicacion | null>(null);
   const [error, setError] = useState('');
@@ -401,10 +412,20 @@ function PantallaReportar({ enviar, hayActivo, alVerActivo, enLinea }: { enviar:
     }
   }
 
+  if (explorar && !incidenteId) {
+    return (
+      <ExplorarCatalogo
+        alElegir={(codigo) => { setCodigoCnie(codigo); setIncidenteId('otro'); window.scrollTo({ top: 0 }); }}
+        alVolver={() => setExplorar(false)}
+      />
+    );
+  }
+
   if (incidenteId) {
     return (
       <Confirmar
         incidenteId={incidenteId}
+        codigoCnie={incidenteId === 'otro' ? codigoCnie : null}
         lugarId={lugarId}
         alLugar={setLugarId}
         gps={gps}
@@ -412,7 +433,7 @@ function PantallaReportar({ enviar, hayActivo, alVerActivo, enLinea }: { enviar:
         ubicacion={ubicacion}
         enviar={enviar}
         enLinea={enLinea}
-        alVolver={() => setIncidenteId(null)}
+        alVolver={() => { setIncidenteId(null); setCodigoCnie(null); }}
       />
     );
   }
@@ -433,7 +454,7 @@ function PantallaReportar({ enviar, hayActivo, alVerActivo, enLinea }: { enviar:
           {demo.CATALOGO.map((i) => {
             const [emoji, corto] = MOSAICO[i.id] ?? ['❗', i.nombreCiudadano];
             return (
-              <button key={i.id} type="button" className={`d-mosaico p-${i.prioridad}`} onClick={() => { setIncidenteId(i.id); window.scrollTo({ top: 0 }); }}>
+              <button key={i.id} type="button" className={`d-mosaico p-${i.prioridad}`} onClick={() => { if (i.id === 'otro') setExplorar(true); else setIncidenteId(i.id); window.scrollTo({ top: 0 }); }}>
                 <span className="d-mosaico-emoji" aria-hidden="true">{emoji}</span>
                 <span>{corto}</span>
               </button>
@@ -498,12 +519,67 @@ function ErrorEnvio({ mensaje, alReintentar }: { mensaje: string; alReintentar: 
   );
 }
 
+/**
+ * "Otra emergencia": todo el catálogo nacional en lenguaje simple (tipo, luego
+ * subtipo, luego el caso) o buscando con palabras. No muestra códigos.
+ */
+function ExplorarCatalogo({ alElegir, alVolver }: { alElegir: (codigo: string | null) => void; alVolver: () => void }) {
+  const [texto, setTexto] = useState('');
+  const [tipo, setTipo] = useState<string | null>(null);
+  const [subtipo, setSubtipo] = useState<string | null>(null);
+  const resultados = useMemo(() => (texto.trim().length >= 2 ? buscarCnie(texto, 25) : []), [texto]);
+  const atras = () => (subtipo ? setSubtipo(null) : tipo ? setTipo(null) : alVolver());
+  const nombreTipo = TIPOS_CNIE.find((t) => t.codigo === tipo)?.nombre;
+  const nombreSubtipo = subtipo ? subtiposDeTipo(tipo!).find((x) => x.codigo === subtipo)?.nombreCorto : null;
+
+  const Caso = ({ i, contexto }: { i: IncidenteCnie; contexto?: boolean }) => (
+    <li>
+      <button type="button" onClick={() => alElegir(i.codigo)}>
+        <span>{nombreLegible(i.nombre)}{contexto && <span className="suave c-pequeno">{i.tipo.nombre} · {i.subtipo.nombreCorto}</span>}</span>
+        <span aria-hidden="true">›</span>
+      </button>
+    </li>
+  );
+
+  return (
+    <div className="d-pantalla d-catalogo">
+      <div className="d-encabezado">
+        <button type="button" className="d-atras" onClick={atras} aria-label="Volver"><Icono d={ICONO.atras} /></button>
+        <h2>{nombreSubtipo ?? nombreTipo ?? 'Otra emergencia'}</h2>
+      </div>
+      <label className="d-campo">Busca con tus palabras
+        <input type="search" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Por ejemplo: árbol caído, persona perdida" data-testid="catalogo-buscar" autoComplete="off" />
+      </label>
+      {texto.trim().length >= 2 ? (
+        resultados.length ? (
+          <ul className="d-lista-catalogo" aria-label="Resultados">{resultados.map((i) => <Caso key={i.codigo} i={i} contexto />)}</ul>
+        ) : <p className="suave d-nota">No encontramos eso. Prueba con otra palabra o descríbelo con tus palabras.</p>
+      ) : !tipo ? (
+        <ul className="d-lista-catalogo" aria-label="Tipos de emergencia">
+          {TIPOS_CNIE.map((t) => (
+            <li key={t.codigo}><button type="button" onClick={() => setTipo(t.codigo)}><span>{t.nombre}</span><span aria-hidden="true">›</span></button></li>
+          ))}
+        </ul>
+      ) : !subtipo ? (
+        <ul className="d-lista-catalogo" aria-label={`Opciones de ${nombreTipo}`}>
+          {subtiposDeTipo(tipo).map((x) => (
+            <li key={x.codigo}><button type="button" onClick={() => setSubtipo(x.codigo)}><span>{x.nombreCorto}</span><span aria-hidden="true">›</span></button></li>
+          ))}
+        </ul>
+      ) : (
+        <ul className="d-lista-catalogo" aria-label={`Casos de ${nombreSubtipo}`}>{incidentesDeSubtipo(subtipo).map((i) => <Caso key={i.codigo} i={i} />)}</ul>
+      )}
+      <button type="button" className="c-boton-sec c-ancho" onClick={() => alElegir(null)}>No lo encuentro: lo cuento con mis palabras</button>
+    </div>
+  );
+}
+
 const IDENTIDADES: [Identidad, string][] = [['completa', 'Con mi nombre'], ['seudonimo', 'Seudónimo'], ['anonimo', 'Anónimo']];
 
 function Confirmar({
-  incidenteId, lugarId, alLugar, gps, alGps, ubicacion, enviar, enLinea, alVolver,
+  incidenteId, codigoCnie, lugarId, alLugar, gps, alGps, ubicacion, enviar, enLinea, alVolver,
 }: {
-  incidenteId: string; lugarId: string; alLugar: (l: string) => void; gps: Ubicacion | null; alGps: (u: Ubicacion | null) => void;
+  incidenteId: string; codigoCnie: string | null; lugarId: string; alLugar: (l: string) => void; gps: Ubicacion | null; alGps: (u: Ubicacion | null) => void;
   ubicacion: () => Pick<DatosReporte, 'lugarId' | 'ubicacion'>; enviar: (d: Envio) => string | null; enLinea: boolean; alVolver: () => void;
 }) {
   const [descripcion, setDescripcion] = useState('');
@@ -516,9 +592,11 @@ function Confirmar({
   const [ciudadanoTel, setCiudadanoTel] = useState('');
 
   const incidente = demo.CATALOGO.find((i) => i.id === incidenteId) ?? demo.CATALOGO[0];
-  const [emoji, corto] = MOSAICO[incidente.id] ?? ['❗', incidente.nombreCiudadano];
+  const elegido = codigoCnie ? incidenteCnie(codigoCnie) : undefined;
+  const [emoji, corto] = elegido ? ['📋', nombreLegible(elegido.nombre)] : MOSAICO[incidente.id] ?? ['❗', incidente.nombreCiudadano];
   const preguntas = useMemo(() => demo.preguntasPara(incidente.id, respuestas), [incidente.id, respuestas]);
-  const anonimoPermitido = demo.permiteAnonimo(incidente.id);
+  // El anónimo depende del tipo de emergencia y, a veces, de lo que se contesta (por ejemplo, si hay heridos).
+  const anonimoPermitido = demo.permiteAnonimo(incidente.id, respuestas, codigoCnie);
   const aliasRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setCiudadanoTel(leerLocal<Ciudadano>(CLAVE_CIUDADANO)?.telefono ?? ''); }, []);
@@ -561,6 +639,7 @@ function Confirmar({
         respuestas: Object.entries(respuestas).filter(([k]) => vigentes.has(k)).map(([preguntaId, respuesta]) => ({ preguntaId, respuesta })),
         identidad,
         ...(identidad === 'seudonimo' && { alias: alias.trim() }),
+        ...(codigoCnie && { codigoCnie }),
         fotos,
       });
     } catch (err) {
@@ -641,7 +720,7 @@ function Confirmar({
           </label>
         )}
         <p className="d-vera" data-testid="vera-policia"><strong>La policía verá:</strong> {veraLaPolicia}</p>
-        {!anonimoPermitido && <p className="suave d-nota">Anónimo no está disponible en robos, agresiones, disparos o violencia: el operador necesita poder contactarte.</p>}
+        {!anonimoPermitido && <p className="suave d-nota">Anónimo no está disponible en esta emergencia (robos, agresiones, disparos, violencia o algo que pasa contra una persona): el operador necesita poder contactarte.</p>}
       </fieldset>
 
       <div className="d-bloque">
@@ -703,7 +782,7 @@ function PantallaMiReporte({
             {otros.map((o) => (
               <li key={o.folio}>
                 <button type="button" onClick={() => alAbrir(o.folio)}>
-                  <span><strong>{o.asistenciaDirecta ? 'Asistencia directa' : MOSAICO[o.incidenteId]?.[1] ?? o.incidenteId}</strong><span className="suave c-pequeno">{o.folio}</span></span>
+                  <span><strong>{tituloReporte(o)}</strong><span className="suave c-pequeno">{o.folio}</span></span>
                   <span className={`c-chip ${FINALES.includes(o.estado) ? 'c-chip-neutro' : ''}`}>{demo.etiquetaCiudadano(o.estado)}</span>
                 </button>
               </li>
@@ -750,7 +829,7 @@ function Seguimiento({ r, alNuevo }: { r: ReporteDemo; alNuevo: () => void }) {
     : null;
   const u = r.unidad;
   const enSitio = r.estado === 'en_sitio' || r.estado === 'cerrado';
-  const titulo = r.asistenciaDirecta ? 'Asistencia directa' : MOSAICO[r.incidenteId]?.[1] ?? r.incidenteId;
+  const titulo = tituloReporte(r);
 
   function enviarMensaje(e: React.FormEvent) {
     e.preventDefault();
@@ -762,7 +841,7 @@ function Seguimiento({ r, alNuevo }: { r: ReporteDemo; alNuevo: () => void }) {
     <section className="d-seguimiento" aria-label={`Seguimiento del folio ${r.folio}`}>
       <div className="c-tarjeta d-hero">
         <div className="d-hero-fila">
-          <span className="suave c-pequeno">{titulo} · {r.ubicacion.referencia}</span>
+          <span className="suave c-pequeno"><span data-testid="cnie-seguimiento">{titulo}{r.cnie ? ` (CNIE ${r.cnie.subtipo.codigo})` : ''}</span> · {r.ubicacion.referencia}</span>
         </div>
         <p className={`d-estado d-${r.estado}`} data-testid="estado" role="status" aria-live="polite">{demo.etiquetaCiudadano(r.estado)}</p>
 

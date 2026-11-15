@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { IdentidadSchema } from './identidad';
 import { EstadoSchema, UbicacionSchema } from './schemas';
+import { ClasificacionCnieSchema } from './cnie';
 
 /**
  * Contrato "API Pol-IAQ CAD v1": eventos que viajan entre Pol-IAQ y cada CAD.
@@ -44,7 +45,10 @@ export const IncidenteCreadoSchema = Base.extend({
   tipo: z.literal('incidente.creado'),
   datos: z.object({
     incidenteId: z.string(),
+    /** Incidente CNIE de 5 dígitos; `null` si falta afinarlo (ver `cnie`). */
     codigoCnie: z.string().nullable(),
+    /** Tipo, subtipo, incidente con nombres y prioridad del CNIE V 3.0. `null` si aún no hay ni subtipo ("Otra emergencia"). */
+    cnie: ClasificacionCnieSchema.nullable().optional(),
     prioridad: z.enum(['alta', 'media', 'baja']),
     corporacionSugerida: z.string(),
     ubicacion: UbicacionSchema,
@@ -71,13 +75,30 @@ export const IncidenteActualizadoSchema = Base.extend({
     /** Cuestionario completo tras nuevas respuestas (reemplaza al anterior). */
     cuestionario: CuestionarioSchema.optional(),
     canalizacion: CanalizacionSchema.optional(),
+    /** Clasificación CNIE nueva (afinada con respuestas o corregida por un operador). */
+    cnie: ClasificacionCnieSchema.nullable().optional(),
   }),
 });
 
 // ---- CAD -> Pol-IAQ ----
 export const IncidenteRecibidoSchema = Base.extend({
   tipo: z.literal('incidente.recibido'),
-  datos: z.object({ folioCad: z.string(), operador: z.string().optional() }),
+  datos: z.object({
+    folioCad: z.string(),
+    operador: z.string().optional(),
+    /** Incidente CNIE con el que el CAD registró el folio. Si difiere del de Pol-IAQ, cuenta como corrección. */
+    codigoCnie: z.string().optional(),
+  }),
+});
+/** El CAD (o el operador en la consola) corrige el código CNIE. Solo incidentes vigentes del CNIE V 3.0. */
+export const IncidenteReclasificadoSchema = Base.extend({
+  tipo: z.literal('incidente.reclasificado'),
+  datos: z.object({
+    codigoCnie: z.string(),
+    codigoCnieSecundario: z.string().nullable().optional(),
+    motivo: z.string().max(500).optional(),
+    operador: z.string().optional(),
+  }),
 });
 export const UnidadAsignadaSchema = Base.extend({
   tipo: z.literal('unidad.asignada'),
@@ -102,6 +123,7 @@ export const MensajeOperadorSchema = Base.extend({
 
 export const EventoDesdeCadSchema = z.discriminatedUnion('tipo', [
   IncidenteRecibidoSchema,
+  IncidenteReclasificadoSchema,
   UnidadAsignadaSchema,
   UnidadPosicionSchema,
   IncidenteEstadoSchema,

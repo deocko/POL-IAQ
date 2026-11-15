@@ -3,7 +3,9 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { ESTADOS_FINALES, METAS_PROVISIONALES, candidatasPorCercania, medirTiempos, minutosDe, resumirTiempos, type EventoDesdeCad, type UnidadAvl } from '@pol-iaq/shared';
+import {
+  ESTADOS_FINALES, METAS_PROVISIONALES, agruparPorCnie, candidatasPorCercania, medirTiempos, minutosDe, resumirTiempos, subtipoCnie, type EventoDesdeCad, type UnidadAvl,
+} from '@pol-iaq/shared';
 import { AvlService, RutasService } from '../despacho/avl.service';
 import { Almacen } from '../almacen/almacen';
 import type { Reporte } from '../almacen/modelos';
@@ -32,6 +34,13 @@ const AccionSchema = z.discriminatedUnion('accion', [
   z.object({ accion: z.literal('estado'), estado: z.enum(['en_camino', 'en_sitio', 'cerrado', 'improcedente']), nota: z.string().max(500).optional() }),
   z.object({ accion: z.literal('mensaje'), texto: z.string().trim().min(1).max(1000) }),
   z.object({ accion: z.literal('transferir'), cadDestinoId: z.string().min(1), motivo: z.string().max(500).optional() }),
+  /** Corrige el código CNIE (incidente vigente de 5 dígitos). Queda en la bitácora con el código anterior y el motivo. */
+  z.object({
+    accion: z.literal('reclasificar'),
+    codigoCnie: z.string().trim().min(1).max(10),
+    codigoCnieSecundario: z.string().trim().max(10).nullable().optional(),
+    motivo: z.string().trim().max(500).optional(),
+  }),
 ]);
 type Accion = z.infer<typeof AccionSchema>;
 
@@ -117,9 +126,13 @@ export class OperadorController {
     return {
       metas: METAS_PROVISIONALES,
       resumen: resumirTiempos(mediciones.map((m) => m.t)),
-      reportes: mediciones.map(({ r, t }) => ({ folio: r.folio, cadId: r.cadId, prioridad: r.prioridad, estado: r.estado, creadoEn: r.creadoEn, tiempos: t, opinion: r.opinion ?? null })),
+      reportes: mediciones.map(({ r, t }) => ({ folio: r.folio, cadId: r.cadId, prioridad: r.prioridad, estado: r.estado, creadoEn: r.creadoEn, cnie: r.cnie ?? null, tiempos: t, opinion: r.opinion ?? null })),
       quejas: lista.filter((r) => r.opinion?.queja).length,
       calificacionPromedio: promedio(lista.flatMap((r) => (r.opinion ? [r.opinion.calificacion] : []))),
+      porCnie: agruparPorCnie(
+        mediciones.map(({ r, t }) => ({ cnie: r.cnie, tiempos: t, queja: !!r.opinion?.queja })),
+        (c, n) => subtipoCnie(c)?.nombreCorto ?? n,
+      ),
     };
   }
 
@@ -162,7 +175,8 @@ export class OperadorController {
       actor: `operador:${op.usuario}`,
       secuenciaSiguiente: true,
       antes: (r) => {
-        if (ESTADOS_FINALES.includes(r.estado)) throw new ConflictException({ codigo: 'reporte_cerrado' });
+        // La clasificación se puede corregir aun cerrado el reporte (sirve a la estadística).
+        if (ESTADOS_FINALES.includes(r.estado) && body.accion !== 'reclasificar') throw new ConflictException({ codigo: 'reporte_cerrado' });
         if (body.accion === 'recibir' && r.estado !== 'recibido' && r.estado !== 'transferido') throw new ConflictException({ codigo: 'ya_recibido' });
       },
     });
@@ -212,6 +226,8 @@ export class OperadorController {
         return { ...base, tipo: 'incidente.estado', datos: { estado: a.estado, nota: a.nota } };
       case 'mensaje':
         return { ...base, tipo: 'mensaje.operador', datos: { texto: a.texto, autor: op.nombre } };
+      case 'reclasificar':
+        return { ...base, tipo: 'incidente.reclasificado', datos: { codigoCnie: a.codigoCnie, codigoCnieSecundario: a.codigoCnieSecundario, motivo: a.motivo, operador: op.nombre } };
       case 'transferir':
         if (a.cadDestinoId === cadId || !CADS_CONOCIDOS.some((c) => c.id === a.cadDestinoId)) throw new BadRequestException({ codigo: 'cad_destino_invalido' });
         return { ...base, tipo: 'incidente.transferido', datos: { cadDestinoId: a.cadDestinoId, motivo: a.motivo } };

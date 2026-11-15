@@ -181,7 +181,7 @@ describe.each(ALMACENES)('API con almacén en %s', (_nombre, nuevoAlmacen) => {
       expect(creado.body.escenarioId).toBe('casa-ruidos');
       expect(creado.body.cuestionario.entradas.map((e: { preguntaId: string }) => e.preguntaId)).toEqual(['dentro_casa', 'lugar_seguro']);
       // Acceso rápido: no repite lo prellenado y solo queda lo vital (tope de 2, ya contestó 1).
-      expect(creado.body.cuestionario.pendientes).toEqual(['intruso_visto']);
+      expect(creado.body.cuestionario.pendientes).toEqual(['intruso_visto', 'robo_casa']);
       expect(creado.body.cuestionario.protocoloEstado).toBe('provisional');
       expect(creado.body.recomendaciones.length).toBeGreaterThan(0);
 
@@ -194,7 +194,8 @@ describe.each(ALMACENES)('API con almacén en %s', (_nombre, nuevoAlmacen) => {
       const resp = await http.post(`/v1/reportes/${folio}/cuestionario`).set(auth).send({ via: 'texto', entradas: [{ preguntaId: 'intruso_visto', respuesta: true }, { preguntaId: 'armas', respuesta: true }, { preguntaId: 'inventada', respuesta: true }] });
       expect(resp.status).toBe(201);
       expect(resp.body.canalizacion.alertas).toEqual(expect.arrayContaining(['Persona ajena vista en el domicilio', 'Posible persona armada']));
-      expect(resp.body.cuestionario.pendientes).toEqual([]);
+      // Solo queda la pregunta que afina el código CNIE (¿se están llevando cosas?).
+      expect(resp.body.cuestionario.pendientes).toEqual(['robo_casa']);
       const act = bandeja.filter((e) => e.evento.folio === folio && e.evento.tipo === 'incidente.actualizado').at(-1)!.evento.datos as Record<string, any>;
       expect(act.cuestionario.entradas).toHaveLength(4);
       expect(act.canalizacion.prioridad).toBe('alta');
@@ -454,6 +455,127 @@ describe.each(ALMACENES)('API con almacén en %s', (_nombre, nuevoAlmacen) => {
       const alta = appOp.get(DespachadorCadService).bandeja.find((e) => e.evento.folio === folio && e.cadId === 'c5-queretaro');
       expect(alta?.evento.tipo).toBe('incidente.creado');
       expect((await httpOp.get(`/v1/operador/reportes/${folio}`).set(ana)).status).toBe(404);
+    });
+
+    it('muestra el código CNIE, deja corregirlo con bitácora y agrupa el tablero por tipo y subtipo', async () => {
+      const token = await registrar('+524427770009');
+      const folio = await crear(token, 20.61, -100.32, { incidenteId: 'otro', descripcion: 'Hay humo saliendo de una alcantarilla' });
+      const ana = await entrar('ana', 'clave-de-ana-123');
+      const antes = (await httpOp.get(`/v1/operador/reportes/${folio}`).set(ana)).body;
+      expect(antes).toMatchObject({ codigoCnie: null, cnie: null, cnieEtiqueta: null });
+
+      const malo = await accion(ana, folio, { accion: 'reclasificar', codigoCnie: '60101' });
+      expect(malo.status).toBe(400);
+      expect(malo.body).toMatchObject({ codigo: 'cnie_retirado', reemplazo: '40114' });
+      expect((await accion(ana, folio, { accion: 'reclasificar', codigoCnie: '12345' })).body.codigo).toBe('cnie_inexistente');
+
+      const bien = await accion(ana, folio, { accion: 'reclasificar', codigoCnie: '40114', motivo: 'Alcantarilla tapada con humo' });
+      expect(bien.status).toBe(200);
+      expect(bien.body).toMatchObject({ codigoCnie: '40114', cnie: { tipo: { codigo: '4' }, subtipo: { codigo: '401' }, prioridad: 'ALTA', origen: 'operador' } });
+      expect(bien.body.cnieEtiqueta).toBe('CNIE 40114 · Servicios Públicos / Infraestructura / Alcantarilla obstruida · ALTA');
+      for (const a of [{ accion: 'recibir' }, { accion: 'estado', estado: 'improcedente' }]) expect((await accion(ana, folio, a)).status).toBe(200);
+      // Aun cerrado se puede corregir (la estadística usa el código final).
+      expect((await accion(ana, folio, { accion: 'reclasificar', codigoCnie: '60205', motivo: 'Ya estaba reportado' })).body.codigoCnie).toBe('60205');
+
+      const audit = (await almacen.auditoria(folio)).filter((a) => a.accion === 'cnie_corregido');
+      expect(audit.map((a) => [a.actor, a.detalle?.de, a.detalle?.a, a.detalle?.motivo])).toEqual([
+        ['operador:ana', null, '40114', 'Alcantarilla tapada con humo'],
+        ['operador:ana', '40114', '60205', 'Ya estaba reportado'],
+      ]);
+
+      const tablero = (await httpOp.get('/v1/operador/tiempos').set(ana)).body;
+      expect(tablero.porCnie.tipos.find((g: { codigo: string }) => g.codigo === '6')).toMatchObject({ nombre: 'Otros Servicios', reportes: 1 });
+      expect(tablero.porCnie.subtipos.find((g: { codigo: string }) => g.codigo === '602')).toMatchObject({ nombre: 'Gestión de llamadas' });
+      expect(tablero.porCnie.tipos.some((g: { codigo: string }) => g.codigo === '1')).toBe(true);
+    });
+  });
+
+  describe('Catálogo Nacional de Incidentes de Emergencia (CNIE V 3.0)', () => {
+    const reportar = (token: string, body: Record<string, unknown>) =>
+      http.post('/v1/reportes').set({ authorization: `Bearer ${token}` }).send({ ubicacion: { lat: 20.539, lng: -100.442 }, ...body });
+
+    it('publica el catálogo vigente y el mapeo de cada opción', async () => {
+      const cnie = (await http.get('/v1/cnie')).body;
+      expect(cnie).toMatchObject({ version: '3.0' });
+      expect(cnie.tipos).toHaveLength(7);
+      expect(cnie.incidentes).toHaveLength(361);
+      expect(cnie.retirados).toHaveLength(12);
+      const catalogo = (await http.get('/v1/catalogo')).body;
+      expect(catalogo.incidentes.find((i: { id: string }) => i.id === 'disparos')).toMatchObject({
+        codigoCnieTipo: { codigo: '3', nombre: 'Seguridad' }, codigoCnieSubtipo: { codigo: '302' }, codigoCnie: { codigo: '30202', nombre: 'DETONACIÓN POR ARMA DE FUEGO' }, prioridadCnie: 'ALTA',
+      });
+    });
+
+    it('el folio lleva tipo, subtipo, incidente y prioridad CNIE hasta el CAD y el C5', async () => {
+      const token = await registrar('+524428880001');
+      const creado = await reportar(token, { incidenteId: 'disparos' });
+      expect(creado.status).toBe(201);
+      expect(creado.body.cnieSubtipo).toBe('302');
+      const folio = creado.body.folio as string;
+      const alta = app.get(DespachadorCadService).bandeja.find((e) => e.evento.folio === folio && e.cadId === 'cad-corregidora')!.evento.datos as Record<string, any>;
+      expect(alta.codigoCnie).toBe('30202');
+      expect(alta.cnie).toMatchObject({ version: '3.0', tipo: { codigo: '3' }, subtipo: { codigo: '302' }, incidente: { codigo: '30202' }, prioridad: 'ALTA', origen: 'catalogo' });
+      // Sin acuse del CAD municipal se escala al C5 con la misma clasificación.
+      await new Promise((r) => setTimeout(r, 700));
+      const c5 = app.get(DespachadorCadService).bandeja.find((e) => e.evento.folio === folio && e.cadId === 'c5-queretaro');
+      expect(c5?.evento.tipo).toBe('incidente.creado');
+      expect((c5!.evento.datos as Record<string, any>).cnie.incidente.codigo).toBe('30202');
+    });
+
+    it('afina el código con las respuestas: accidente sin heridos pasa a 30309 y el robo se precisa al contestar', async () => {
+      const token = await registrar('+524428880002');
+      const auth = { authorization: `Bearer ${token}` };
+      const accidente = await reportar(token, { incidenteId: 'accidente-vial', cuestionario: { via: 'formulario', entradas: [{ preguntaId: 'heridos', respuesta: false }] } });
+      expect(accidente.body.cnieSubtipo).toBe('303');
+      const altaAcc = app.get(DespachadorCadService).bandeja.find((e) => e.evento.folio === accidente.body.folio)!.evento.datos as Record<string, any>;
+      expect(altaAcc.cnie).toMatchObject({ tipo: { codigo: '3' }, subtipo: { codigo: '303' }, incidente: { codigo: '30309' }, origen: 'respuestas' });
+
+      const robo = await reportar(token, { incidenteId: 'robo-en-curso' });
+      const folio = robo.body.folio as string;
+      const altaRobo = app.get(DespachadorCadService).bandeja.find((e) => e.evento.folio === folio)!.evento.datos as Record<string, any>;
+      expect(altaRobo.codigoCnie).toBeNull();
+      expect(altaRobo.cnie).toMatchObject({ subtipo: { codigo: '304' }, incidente: null });
+      const r = await http.post(`/v1/reportes/${folio}/cuestionario`).set(auth).send({ via: 'texto', entradas: [{ preguntaId: 'que_roban', respuesta: 'negocio' }, { preguntaId: 'armas', respuesta: true }] });
+      expect(r.status).toBe(201);
+      const act = app.get(DespachadorCadService).bandeja.filter((e) => e.evento.folio === folio && e.evento.tipo === 'incidente.actualizado').at(-1)!.evento.datos as Record<string, any>;
+      expect(act.cnie).toMatchObject({ incidente: { codigo: '30419', nombre: 'ROBO A NEGOCIO CON VIOLENCIA' }, prioridad: 'ALTA', origen: 'respuestas' });
+      expect((await almacen.auditoria(folio)).some((a) => a.accion === 'cnie_afinado')).toBe(true);
+    });
+
+    it('"Otra emergencia" acepta un código vigente elegido por el ciudadano y rechaza los inexistentes o retirados con 400', async () => {
+      const token = await registrar('+524428880003');
+      const retirado = await reportar(token, { incidenteId: 'otro', codigoCnie: '30902' });
+      expect(retirado.status).toBe(400);
+      expect(retirado.body).toMatchObject({ codigo: 'cnie_retirado', reemplazo: '10112' });
+      expect(retirado.body.mensaje).toContain('30902');
+      expect((await reportar(token, { incidenteId: 'otro', codigoCnie: '99999' })).body).toMatchObject({ codigo: 'cnie_inexistente' });
+      expect((await reportar(token, { incidenteId: 'otro', codigoCnie: '304' })).body).toMatchObject({ codigo: 'cnie_formato' });
+      expect((await reportar(token, { incidenteId: 'robo-en-curso', codigoCnie: '30421' })).body).toMatchObject({ codigo: 'cnie_no_aplica' });
+      const ok = await reportar(token, { incidenteId: 'otro', codigoCnie: '20202', identidad: 'anonimo' });
+      expect(ok.status).toBe(201);
+      expect(ok.body.cnieSubtipo).toBe('202');
+    });
+
+    it('decide el anónimo por subtipo CNIE', async () => {
+      const token = await registrar('+524428880004');
+      expect((await reportar(token, { incidenteId: 'disparos', identidad: 'anonimo' })).body.codigo).toBe('anonimo_no_permitido');
+      expect((await reportar(token, { incidenteId: 'otro', codigoCnie: '30202', identidad: 'anonimo' })).body.codigo).toBe('anonimo_no_permitido');
+      expect((await reportar(token, { incidenteId: 'persona-sospechosa', identidad: 'anonimo' })).status).toBe(201);
+    });
+
+    it('el CAD puede corregir el código; uno retirado da 400 y no se aplica', async () => {
+      const token = await registrar('+524428880005');
+      const folio = (await reportar(token, { incidenteId: 'agresion' })).body.folio as string;
+      const malo = await eventoCad('cad-corregidora', SECRETO_CORR, { folio, secuencia: 1, tipo: 'incidente.reclasificado', datos: { codigoCnie: '30704' } });
+      expect(malo.status).toBe(400);
+      expect(malo.body).toMatchObject({ codigo: 'cnie_retirado' });
+      const bien = await eventoCad('cad-corregidora', SECRETO_CORR, { folio, secuencia: 1, tipo: 'incidente.reclasificado', datos: { codigoCnie: '31112', motivo: 'Riña entre vecinos', operador: 'CAD Corregidora' } });
+      expect(bien.status).toBe(202);
+      const recibido = await eventoCad('cad-corregidora', SECRETO_CORR, { folio, secuencia: 2, tipo: 'incidente.recibido', datos: { folioCad: 'CORR-9', codigoCnie: '31112' } });
+      expect(recibido.status).toBe(202);
+      const audit = (await almacen.auditoria(folio)).filter((a) => a.accion === 'cnie_corregido');
+      expect(audit).toHaveLength(1);
+      expect(audit[0]).toMatchObject({ actor: 'cad:cad-corregidora', detalle: { de: '30909', a: '31112', motivo: 'Riña entre vecinos' } });
     });
   });
 

@@ -1,7 +1,8 @@
 import { ConflictException, ForbiddenException, HttpException, HttpStatus, Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import {
-  canalizar, enrutarPorUbicacion, esQueja, permiteAnonimo, generarFolio, incidentePorId, puedeTransicionar, resolverEntradas, respuestasDe, ESTADOS_FINALES,
+  canalizar, clasificacionDe, clasificarCnie, enrutarPorUbicacion, esQueja, permiteAnonimo, generarFolio, incidentePorId, puedeTransicionar, resolverEntradas, respuestasDe,
+  validarCodigoCnie, ESTADOS_FINALES, type ClasificacionCnie,
   type CrearReporte, type EntradaGuardada, type EstadoIncidente, type IncidenteCatalogo, type Opinion, type Prioridad, type ResponderCuestionario, type SolicitarEvidencia,
 } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
@@ -12,6 +13,16 @@ import { DespachadorCadService } from '../cad/despachador.service';
 import { ProtocolosService } from '../protocolos/protocolos.service';
 
 const ORDEN: Record<Prioridad, number> = { baja: 0, media: 1, alta: 2 };
+
+/** Código más preciso de una clasificación (incidente o, si falta, subtipo). */
+export const codigoDe = (c: ClasificacionCnie | null | undefined) => c?.incidente?.codigo ?? c?.subtipo.codigo ?? null;
+
+/** 400 con mensaje claro si el código no es un incidente vigente del CNIE V 3.0. */
+export function validarCnieOFallar(codigo: string, campo: string) {
+  const v = validarCodigoCnie(codigo);
+  if (!v.ok) throw new BadRequestException({ codigo: `cnie_${v.error}`, campo, mensaje: v.mensaje, ...(v.reemplazo && { reemplazo: v.reemplazo }) });
+  return v.incidente;
+}
 
 @Injectable()
 export class ReportesService {
@@ -26,8 +37,11 @@ export class ReportesService {
   async crear(ciudadano: Ciudadano, datos: CrearReporte): Promise<Reporte> {
     const incidente = incidentePorId(datos.incidenteId);
     if (!incidente) throw new BadRequestException({ codigo: 'incidente_desconocido' });
-    if (datos.identidad === 'anonimo' && !permiteAnonimo(incidente.id)) {
-      throw new BadRequestException({ codigo: 'anonimo_no_permitido', mensaje: 'Para este tipo de emergencia necesitamos poder contactarte. Puedes usar un seudónimo.' });
+    if (datos.codigoCnie) {
+      if (incidente.id !== 'otro') {
+        throw new BadRequestException({ codigo: 'cnie_no_aplica', mensaje: 'Solo "Otra emergencia" acepta un código CNIE elegido por el ciudadano; las demás opciones ya tienen el suyo.' });
+      }
+      validarCnieOFallar(datos.codigoCnie, 'codigoCnie');
     }
     if (datos.identidad === 'seudonimo' && !datos.alias) throw new BadRequestException({ codigo: 'falta_seudonimo' });
 
@@ -49,6 +63,12 @@ export class ReportesService {
     }
     if (datos.cuestionario) entradas.push(...resolverEntradas(protocolo, incidente.id, datos.cuestionario.entradas, datos.cuestionario.via).validas);
     const respuestas = respuestasDe(entradas);
+    const todas = { ...datos.respuestas, ...respuestas };
+    // El anónimo depende del subtipo CNIE, incluido el que resulta de las respuestas o del código elegido.
+    if (datos.identidad === 'anonimo' && !permiteAnonimo(incidente.id, todas, datos.codigoCnie)) {
+      throw new BadRequestException({ codigo: 'anonimo_no_permitido', mensaje: 'Para este tipo de emergencia necesitamos poder contactarte. Puedes usar un seudónimo.' });
+    }
+    const cnie = clasificarCnie(incidente.id, todas, datos.codigoCnie);
     const canalizacion = canalizar(protocolo, incidente, respuestas, { asistenciaDirecta: datos.asistenciaDirecta });
 
     const ruta = enrutarPorUbicacion(datos.ubicacion.lat, datos.ubicacion.lng);
@@ -61,14 +81,15 @@ export class ReportesService {
       folio,
       ciudadanoId: ciudadano.id,
       incidenteId: incidente.id,
-      codigoCnie: incidente.codigoCnie,
+      codigoCnie: cnie?.incidente?.codigo ?? null,
+      cnie,
       prioridad: canalizacion.prioridad,
       corporacionSugerida: canalizacion.corporaciones[0],
       ubicacion: datos.ubicacion,
       municipioClave: clave,
       cadId: ruta.cadId,
       descripcion: datos.descripcion,
-      respuestas: { ...datos.respuestas, ...respuestas },
+      respuestas: todas,
       asistenciaDirecta: datos.asistenciaDirecta,
       escenarioId: escenario?.id,
       cuestionario: { protocoloVersion: protocolo.version, protocoloEstado: protocolo.estado, entradas },
@@ -86,7 +107,7 @@ export class ReportesService {
       secuenciaEntrada: 0,
     };
     await this.almacen.guardarReporte(reporte);
-    await this.almacen.auditar({ actor: `ciudadano:${ciudadano.id}`, accion: 'reporte_creado', folio, detalle: { cadId: ruta.cadId, escenarioId: escenario?.id, protocolo: protocolo.version } });
+    await this.almacen.auditar({ actor: `ciudadano:${ciudadano.id}`, accion: 'reporte_creado', folio, detalle: { cadId: ruta.cadId, escenarioId: escenario?.id, protocolo: protocolo.version, cnie: cnie?.incidente?.codigo ?? cnie?.subtipo.codigo ?? null } });
     // El envío al CAD modifica la secuencia de salida: va con el reporte bloqueado.
     return this.almacen.conReporte(folio, async () => {
       const r = (await this.almacen.reporte(folio))!;
@@ -160,6 +181,15 @@ export class ReportesService {
       const prioridad = ORDEN[nueva.prioridad] >= ORDEN[r.prioridad] ? nueva.prioridad : r.prioridad;
       r.canalizacion = { ...nueva, prioridad, corporaciones: [r.corporacionSugerida, ...nueva.corporaciones.filter((c) => c !== r.corporacionSugerida)] };
       r.prioridad = prioridad;
+      // El código CNIE se afina con las respuestas, salvo que ya lo haya fijado un operador o el ciudadano en el catálogo.
+      if (!r.cnie || r.cnie.origen === 'catalogo' || r.cnie.origen === 'respuestas') {
+        const cnie = clasificarCnie(r.incidenteId, r.respuestas);
+        if (JSON.stringify(cnie) !== JSON.stringify(r.cnie ?? null)) {
+          await this.almacen.auditar({ actor: `ciudadano:${ciudadano.id}`, accion: 'cnie_afinado', folio, detalle: { de: codigoDe(r.cnie), a: codigoDe(cnie) } });
+          r.cnie = cnie;
+          r.codigoCnie = cnie?.incidente?.codigo ?? null;
+        }
+      }
       await this.despachador.enviarCuestionario(r);
       await this.almacen.auditar({ actor: `ciudadano:${ciudadano.id}`, accion: 'cuestionario_respondido', folio, detalle: { preguntas: validas.map((v) => v.preguntaId), via: datos.via } });
       await this.tocar(r);
@@ -222,6 +252,28 @@ export class ReportesService {
     });
     if (res.rechazada) throw new BadRequestException({ codigo: 'hash_no_coincide' });
     return res.evidencia;
+  }
+
+  /**
+   * Corrección del código CNIE por un operador (consola) o por el CAD. Valida
+   * contra el CNIE V 3.0 y deja en la bitácora el código anterior, el nuevo y el motivo.
+   * Quien llama guarda el reporte.
+   */
+  async corregirCnie(r: Reporte, datos: { codigoCnie: string; codigoCnieSecundario?: string | null; motivo?: string }, actor: string) {
+    validarCnieOFallar(datos.codigoCnie, 'codigoCnie');
+    if (datos.codigoCnieSecundario) validarCnieOFallar(datos.codigoCnieSecundario, 'codigoCnieSecundario');
+    const antes = r.cnie ?? null;
+    const nuevo = clasificacionDe(datos.codigoCnie, 'operador', datos.codigoCnieSecundario ?? antes?.secundario?.codigo ?? null);
+    if (datos.codigoCnieSecundario === null) nuevo.secundario = null;
+    r.cnie = nuevo;
+    r.codigoCnie = nuevo.incidente!.codigo;
+    (r.correccionesCnie ??= []).push({ en: new Date().toISOString(), actor, de: codigoDe(antes), a: nuevo.incidente!.codigo, secundario: nuevo.secundario?.codigo ?? null, motivo: datos.motivo ?? null });
+    await this.almacen.auditar({
+      actor,
+      accion: 'cnie_corregido',
+      folio: r.folio,
+      detalle: { de: codigoDe(antes), a: nuevo.incidente!.codigo, secundarioDe: antes?.secundario?.codigo ?? null, secundarioA: nuevo.secundario?.codigo ?? null, motivo: datos.motivo ?? null },
+    });
   }
 
   /** Guarda el reporte y avisa en tiempo real al ciudadano y a la consola. */

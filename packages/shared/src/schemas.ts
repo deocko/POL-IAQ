@@ -31,6 +31,11 @@ export const CrearReporteSchema = z.object({
   identidad: IdentidadSchema.default('completa'),
   /** Seudónimo, cuando `identidad` es `seudonimo`. */
   alias: z.string().trim().min(2).max(40).optional(),
+  /**
+   * Solo con "Otra emergencia": incidente del CNIE V 3.0 (5 dígitos) que eligió
+   * el ciudadano en el catálogo completo. Un código inexistente o retirado da 400.
+   */
+  codigoCnie: z.string().trim().max(10).optional(),
 });
 export type CrearReporte = z.infer<typeof CrearReporteSchema>;
 

@@ -16,6 +16,8 @@ export function vistaCiudadano(r: Reporte, protocolo: Protocolo) {
     ubicacion: r.ubicacion,
     municipioClave: r.municipioClave,
     asistenciaDirecta: r.asistenciaDirecta,
+    /** Subtipo CNIE para el seguimiento ("Robo (CNIE 304)"). El flujo de reporte no muestra códigos. */
+    cnieSubtipo: r.cnie?.subtipo.codigo ?? null,
     escenarioId: r.escenarioId ?? null,
     unidad: r.unidad ? { etiqueta: r.unidad.etiqueta, corporacion: r.unidad.corporacion, etaMinutos: r.unidad.etaMinutos, lat: r.unidad.lat, lng: r.unidad.lng, rumbo: r.unidad.rumbo, actualizadoEn: r.unidad.actualizadoEn } : null,
     cuestionario: {

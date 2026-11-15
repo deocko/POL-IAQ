@@ -5,7 +5,7 @@
  * API (services/api) y el CAD simulado (services/cad-simulator), con la misma
  * lógica del paquete compartido: folio unificado, enrutamiento por geocerca,
  * máquina de estados, cuestionario, canalización, identidad (seudónimo o
- * anónimo), asignación por cercanía con el GPS (AVL) de las unidades, tiempo
+ * anónimo), clasificación CNIE V 3.0 (y su corrección por el operador), asignación por cercanía con el GPS (AVL) de las unidades, tiempo
  * de llegada, tiempos por etapa contra su meta y calificación tras el cierre.
  *
  * Los datos viven en el localStorage de quien abre la demo y se comparten entre
@@ -18,10 +18,10 @@
 import {
   CAD_ESTATAL_ID, CATALOGO_SEMILLA, ESTADOS, ESTADOS_FINALES, ETIQUETAS_CIUDADANO, FACTOR_CALLES, METAS_PROVISIONALES, MUNICIPIOS_PILOTO,
   PROTOCOLO_PROVISIONAL, UNIDADES_EJEMPLO, VELOCIDAD_EMERGENCIA_KMH,
-  aplica, candidatasPorCercania, canalizar, distanciaMetros, enrutarPorUbicacion, esQueja, estimarRuta, generarFolio, incidentePorId, medirTiempos,
+  agruparPorCnie, aplica, candidatasPorCercania, canalizar, clasificacionDe, clasificarCnie, distanciaMetros, etiquetaCnie, subtipoCnie, validarCodigoCnie, enrutarPorUbicacion, esQueja, estimarRuta, generarFolio, incidentePorId, medirTiempos,
   minutosDe, permiteAnonimo, preguntasPara as preguntasProtocolo, preguntasPendientes, protocoloDe, puedeTransicionar, reportanteVisible, resolverEntradas,
   respuestasDe, resumirTiempos, transcripcion,
-  type Canalizacion, type Cuestionario, type EntradaCuestionario, type EstadoIncidente, type Identidad, type Opinion, type OpinionGuardada,
+  type Canalizacion, type ClasificacionCnie, type Cuestionario, type EntradaCuestionario, type EstadoIncidente, type Identidad, type Opinion, type OpinionGuardada,
   type PreguntaProtocolo, type Punto, type UnidadAvl, type ValorRespuesta,
 } from '@pol-iaq/shared/movil';
 
@@ -61,6 +61,10 @@ export interface ReporteDemo {
   cadId: string;
   municipioClave: string | null;
   incidenteId: string;
+  /** Clasificación del CNIE V 3.0. Los reportes guardados antes del CNIE no la tienen. */
+  cnie?: ClasificacionCnie | null;
+  /** Correcciones del código hechas en la consola (bitácora). */
+  correccionesCnie?: CorreccionCnie[];
   prioridad: Canalizacion['prioridad'];
   estado: EstadoIncidente;
   asistenciaDirecta: boolean;
@@ -84,6 +88,8 @@ export interface ReporteDemo {
   /** Lo cerró la demo automática, no un operador. */
   cerradoPorDemo?: boolean;
 }
+
+export interface CorreccionCnie { en: string; actor: string; de: string | null; a: string; secundario: string | null; motivo: string | null }
 
 interface PosicionAvl { lat: number; lng: number; rumbo?: number; en: string }
 
@@ -187,8 +193,16 @@ export function borrarTodo() {
 // ---------------------------------------------------------------------------
 
 export class ErrorDemo extends Error {
-  constructor(readonly status: number, readonly codigo: string) { super(codigo); }
+  constructor(readonly status: number, readonly codigo: string, readonly mensaje?: string) { super(mensaje ?? codigo); }
 }
+
+/** El mismo 400 que el API para un código CNIE inexistente, retirado o mal formado. */
+function exigirCnie(codigo: string) {
+  const v = validarCodigoCnie(codigo);
+  if (!v.ok) throw new ErrorDemo(400, `cnie_${v.error}`, v.mensaje);
+  return v.incidente;
+}
+const codigoDe = (c: ClasificacionCnie | null | undefined) => c?.incidente?.codigo ?? c?.subtipo.codigo ?? null;
 
 const id = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
@@ -231,6 +245,8 @@ export interface NuevoReporte {
   alias?: string;
   asistenciaDirecta?: boolean;
   fotos?: Omit<EvidenciaDemo, 'id'>[];
+  /** Solo "Otra emergencia": incidente CNIE elegido en el catálogo completo. */
+  codigoCnie?: string;
   /** true: el CAD simulado lo despacha solo; false: lo despacha quien use la consola. */
   cadSimulado: boolean;
 }
@@ -240,8 +256,14 @@ export function crearReporte(d: NuevoReporte): ReporteDemo {
   const lugar = d.ubicacion ?? LUGARES_DEMO.find((l) => l.id === d.lugarId);
   if (!incidente || !lugar) throw new ErrorDemo(400, 'datos_invalidos');
   const identidad = d.identidad ?? 'completa';
-  if (identidad === 'anonimo' && !permiteAnonimo(incidente.id)) throw new ErrorDemo(400, 'anonimo_no_permitido');
+  if (d.codigoCnie) {
+    if (incidente.id !== 'otro') throw new ErrorDemo(400, 'cnie_no_aplica');
+    exigirCnie(d.codigoCnie);
+  }
+  const respuestasDadas = respuestasDe(resolverEntradas(PROTOCOLO, incidente.id, d.respuestas, 'formulario').validas);
+  if (identidad === 'anonimo' && !permiteAnonimo(incidente.id, respuestasDadas, d.codigoCnie)) throw new ErrorDemo(400, 'anonimo_no_permitido');
   if (identidad === 'seudonimo' && !d.alias?.trim()) throw new ErrorDemo(400, 'falta_seudonimo');
+  const cnie = clasificarCnie(incidente.id, respuestasDadas, d.codigoCnie);
   return cambiar((e) => {
     const ruta = enrutarPorUbicacion(lugar.lat, lugar.lng);
     const iso = new Date(virtual(e.reloj)).toISOString();
@@ -258,6 +280,8 @@ export function crearReporte(d: NuevoReporte): ReporteDemo {
       cadId: ruta.cadId,
       municipioClave: clave,
       incidenteId: incidente.id,
+      cnie,
+      correccionesCnie: [],
       prioridad: canalizacion.prioridad,
       estado: 'recibido',
       asistenciaDirecta: !!d.asistenciaDirecta,
@@ -400,7 +424,8 @@ export type AccionDemo =
   | { accion: 'asignar_cercana' }
   | { accion: 'estado'; estado: 'en_camino' | 'en_sitio' | 'cerrado' | 'improcedente'; nota?: string }
   | { accion: 'mensaje'; texto: string }
-  | { accion: 'transferir'; cadDestinoId: string; motivo?: string };
+  | { accion: 'transferir'; cadDestinoId: string; motivo?: string }
+  | { accion: 'reclasificar'; codigoCnie: string; codigoCnieSecundario?: string | null; motivo?: string };
 
 function yo() {
   return {
@@ -428,7 +453,10 @@ export function vistaOperador(r: ReporteDemo) {
     incidenteId: r.incidenteId,
     incidente: incidente?.nombreCiudadano ?? r.incidenteId,
     categoria: incidente?.categoria ?? null,
-    codigoCnie: incidente?.codigoCnie ?? null,
+    codigoCnie: r.cnie?.incidente?.codigo ?? null,
+    cnie: r.cnie ?? null,
+    cnieEtiqueta: r.cnie ? etiquetaCnie(r.cnie) : null,
+    correccionesCnie: r.correccionesCnie ?? [],
     prioridad: r.prioridad,
     estado: r.estado,
     asistenciaDirecta: r.asistenciaDirecta,
@@ -485,18 +513,23 @@ export const operador = {
     return {
       metas: METAS,
       resumen: resumirTiempos(mediciones.map((m) => m.t)),
-      reportes: mediciones.map(({ r, t }) => ({ folio: r.folio, cadId: r.cadId, prioridad: r.prioridad, estado: r.estado, creadoEn: r.creadoEn, tiempos: t, opinion: r.opinion })),
+      reportes: mediciones.map(({ r, t }) => ({ folio: r.folio, cadId: r.cadId, prioridad: r.prioridad, estado: r.estado, creadoEn: r.creadoEn, cnie: r.cnie ?? null, tiempos: t, opinion: r.opinion })),
       quejas: lista.filter((r) => r.opinion?.queja).length,
       calificacionPromedio: calificaciones.length ? Math.round((calificaciones.reduce((a, b) => a + b, 0) / calificaciones.length) * 10) / 10 : null,
+      porCnie: agruparPorCnie(
+        mediciones.map(({ r, t }) => ({ cnie: r.cnie, tiempos: t, queja: !!r.opinion?.queja })),
+        (c, n) => subtipoCnie(c)?.nombreCorto ?? n,
+      ),
     };
   },
   accion(token: string | null, folio: string, a: AccionDemo) {
     exigirToken(token);
     return cambiar((e) => {
       const r = delFolio(e, folio);
-      if (ESTADOS_FINALES.includes(r.estado)) throw new ErrorDemo(409, 'reporte_cerrado');
-      // Si alguien despacha a mano, el CAD simulado deja de mover ese reporte.
-      r.cadSimulado = null;
+      // La clasificación se puede corregir aun cerrado el reporte (sirve a la estadística).
+      if (ESTADOS_FINALES.includes(r.estado) && a.accion !== 'reclasificar') throw new ErrorDemo(409, 'reporte_cerrado');
+      // Si alguien despacha a mano, el CAD simulado deja de mover ese reporte (corregir el código no cuenta).
+      if (a.accion !== 'reclasificar') r.cadSimulado = null;
       aplicar(e, r, a, OPERADOR_DEMO.nombre);
       r.actualizadoEn = ahoraIso();
       return { resultado: vistaOperador(r), folios: [folio] };
@@ -529,6 +562,15 @@ function aplicar(e: Estado, r: ReporteDemo, a: AccionDemo, autor: string) {
     case 'mensaje':
       r.mensajes.push({ id: id(), autor: 'operador', nombreAutor: autor, texto: a.texto, en: ahoraIso() });
       break;
+    case 'reclasificar': {
+      exigirCnie(a.codigoCnie);
+      if (a.codigoCnieSecundario) exigirCnie(a.codigoCnieSecundario);
+      const antes = r.cnie ?? null;
+      const secundario = a.codigoCnieSecundario === null ? null : a.codigoCnieSecundario ?? antes?.secundario?.codigo ?? null;
+      r.cnie = clasificacionDe(a.codigoCnie, 'operador', secundario);
+      (r.correccionesCnie ??= []).push({ en: ahoraIso(), actor: `operador:${OPERADOR_DEMO.usuario}`, de: codigoDe(antes), a: a.codigoCnie, secundario, motivo: a.motivo?.trim() || null });
+      break;
+    }
     case 'transferir':
       if (a.cadDestinoId === r.cadId || !CADS_DEMO.some((c) => c.id === a.cadDestinoId)) throw new ErrorDemo(400, 'cad_destino_invalido');
       transicionar(r, 'transferido', a.motivo ?? `Transferido a ${nombreCad(a.cadDestinoId)}`);

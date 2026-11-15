@@ -146,3 +146,47 @@ export function duracionTexto(segundos: number): string {
   const s = segundos % 60;
   return s ? `${m} min ${String(s).padStart(2, '0')} s` : `${m} min`;
 }
+
+/** Reportes, quejas y llegada de un tipo o subtipo del CNIE. */
+export interface GrupoCnie {
+  codigo: string;
+  nombre: string;
+  reportes: number;
+  quejas: number;
+  /** Llegada total (desde que se levanta hasta que la unidad llega) de los reportes del grupo. */
+  llegada: ResumenEtapa;
+}
+
+/**
+ * Agrupa el tablero por tipo y por subtipo del CNIE. Los reportes sin
+ * clasificación (por ejemplo, "Otra emergencia" que el operador aún no
+ * clasifica, o folios anteriores al CNIE) van en "Sin clasificar".
+ */
+export function agruparPorCnie(
+  items: { cnie?: { tipo: { codigo: string; nombre: string }; subtipo: { codigo: string; nombre: string } } | null; tiempos: TiemposReporte; queja?: boolean }[],
+  nombreSubtipo: (codigo: string, nombre: string) => string = (_c, n) => n,
+): { tipos: GrupoCnie[]; subtipos: GrupoCnie[] } {
+  const agrupar = (clave: (i: (typeof items)[number]) => { codigo: string; nombre: string }) => {
+    const grupos = new Map<string, { nombre: string; lista: typeof items }>();
+    for (const i of items) {
+      const k = clave(i);
+      const g = grupos.get(k.codigo) ?? { nombre: k.nombre, lista: [] };
+      g.lista.push(i);
+      grupos.set(k.codigo, g);
+    }
+    return [...grupos.entries()]
+      .map(([codigo, g]): GrupoCnie => ({
+        codigo,
+        nombre: g.nombre,
+        reportes: g.lista.length,
+        quejas: g.lista.filter((x) => x.queja).length,
+        llegada: resumirTiempos(g.lista.map((x) => x.tiempos)).find((e) => e.id === 'llegada')!,
+      }))
+      .sort((a, b) => b.reportes - a.reportes || a.codigo.localeCompare(b.codigo));
+  };
+  const SIN = { codigo: 'sin', nombre: 'Sin clasificar' };
+  return {
+    tipos: agrupar((i) => (i.cnie ? i.cnie.tipo : SIN)),
+    subtipos: agrupar((i) => (i.cnie ? { codigo: i.cnie.subtipo.codigo, nombre: nombreSubtipo(i.cnie.subtipo.codigo, i.cnie.subtipo.nombre) } : SIN)),
+  };
+}

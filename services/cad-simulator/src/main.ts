@@ -10,7 +10,7 @@
  */
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { EventoHaciaCadSchema, firmar, verificarFirma, type CadConfigLike } from './tipos';
+import { EventoHaciaCadSchema, etiquetaCnie, firmar, validarCodigoCnie, verificarFirma, type CadConfigLike } from './tipos';
 
 const PORT = Number(process.env.SIM_PORT ?? 4000);
 const POLIAQ_URL = process.env.POLIAQ_URL ?? 'http://localhost:3000';
@@ -43,11 +43,16 @@ const ETIQUETA: Record<string, string> = {
   proteccion_civil: 'Protección Civil',
 };
 
-/** Despacha la unidad de la corporación principal que indica la canalización. */
-async function simular(cadId: string, folio: string, lat: number, lng: number, corporacion = 'policia_municipal') {
+/**
+ * Despacha la unidad de la corporación principal que indica la canalización.
+ * Al acusar recibo devuelve el código CNIE con el que registró el folio (el
+ * mismo que mandó Pol-IAQ si es un incidente vigente del CNIE V 3.0).
+ */
+async function simular(cadId: string, folio: string, lat: number, lng: number, corporacion = 'policia_municipal', codigoCnie?: string | null) {
   let s = 0;
   const unidadId = `U-${Math.floor(100 + Math.random() * 900)}`;
-  await enviar(cadId, folio, ++s, 'incidente.recibido', { folioCad: `${cadId.toUpperCase()}-${Date.now() % 100000}`, operador: 'Operador simulado' });
+  const registrado = codigoCnie && validarCodigoCnie(codigoCnie).ok ? { codigoCnie } : {};
+  await enviar(cadId, folio, ++s, 'incidente.recibido', { folioCad: `${cadId.toUpperCase()}-${Date.now() % 100000}`, operador: 'Operador simulado', ...registrado });
   await espera(PASO_MS);
   await enviar(cadId, folio, ++s, 'unidad.asignada', { unidadId, corporacion, etiqueta: `${ETIQUETA[corporacion] ?? 'Unidad'} ${unidadId.slice(2)}`, etaMinutos: 6 });
   await enviar(cadId, folio, ++s, 'mensaje.operador', { texto: 'Recibimos tu reporte, una unidad va en camino.', autor: 'Operador simulado' });
@@ -85,11 +90,17 @@ createServer((req, res) => {
     const ev = p.data;
     console.log(`[${cadId}] recibido ${ev.tipo} ${ev.folio}`);
     if (ev.tipo === 'incidente.creado') {
-      const { canalizacion, cuestionario } = ev.datos;
+      const { canalizacion, cuestionario, cnie, codigoCnie } = ev.datos;
+      console.log(`[${cadId}] ${cnie ? etiquetaCnie(cnie) : 'Sin clasificación CNIE (la asigna el operador)'}${cnie?.secundario ? ` · secundario ${cnie.secundario.codigo}` : ''}`);
+      const v = codigoCnie ? validarCodigoCnie(codigoCnie) : null;
+      if (v && !v.ok) console.warn(`[${cadId}] ${ev.folio}: ${v.mensaje}`);
       console.log(`[${cadId}] canalización: ${canalizacion.prioridad} -> ${canalizacion.corporaciones.join(', ')}${canalizacion.alertas.length ? ` (${canalizacion.alertas.join('; ')})` : ''}`);
       if (cuestionario.entradas.length) console.log(cuestionario.transcripcion);
-      void simular(cadId, ev.folio, ev.datos.ubicacion.lat, ev.datos.ubicacion.lng, canalizacion.corporaciones[0]).catch((e) => console.error(e));
-    } else if (ev.datos.cuestionario) {
+      void simular(cadId, ev.folio, ev.datos.ubicacion.lat, ev.datos.ubicacion.lng, canalizacion.corporaciones[0], codigoCnie).catch((e) => console.error(e));
+    } else if (ev.datos.cnie !== undefined) {
+      console.log(`[${cadId}] ${ev.folio} clasificación: ${ev.datos.cnie ? etiquetaCnie(ev.datos.cnie) : 'sin código'}`);
+    }
+    if (ev.tipo === 'incidente.actualizado' && ev.datos.cuestionario) {
       console.log(`[${cadId}] ${ev.folio} cuestionario actualizado:\n${ev.datos.cuestionario.transcripcion}`);
     }
   });

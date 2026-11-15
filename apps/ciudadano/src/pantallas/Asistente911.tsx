@@ -24,7 +24,7 @@ export interface ContinuarReporte {
   yaHechas?: number;
 }
 
-const SI_NO: PreguntaProtocolo = { id: 'confirmacion', texto: '', tipo: 'si_no', obligatoria: true, efectos: [] };
+const SI_NO: PreguntaProtocolo = { id: 'confirmacion', texto: '', tipo: 'si_no', obligatoria: true, efectos: [], afinaCnie: false };
 
 /**
  * Despachadora 911 virtual. Conduce la llamada según el protocolo de atención

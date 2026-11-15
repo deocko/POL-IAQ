@@ -114,3 +114,14 @@
   .c-tiempos { font-size: .8125rem; }
   .c-unidades td:nth-child(4), .c-unidades th:nth-child(4) { display: none; }
 }
+
+/* Clasificación CNIE */
+.c-cnie-etiqueta { font-weight: 700; margin: var(--e1) 0; overflow-wrap: anywhere; }
+.c-cnie-resultados { list-style: none; padding: 0; margin: var(--e2) 0 0; display: grid; gap: 4px; max-height: 320px; overflow: auto; }
+.c-cnie-resultados button { width: 100%; text-align: left; min-height: var(--toque); padding: var(--e2); border: 1px solid var(--borde); border-radius: var(--r-s); background: var(--superficie); color: var(--texto); cursor: pointer; font: inherit; }
+.c-cnie-resultados button:hover, .c-cnie-resultados button:focus-visible { border-color: var(--primario); }
+.c-cnie-elegido { display: grid; gap: var(--e2); margin-top: var(--e2); }
+.c-cnie-elegido p { margin: 0; overflow-wrap: anywhere; }
+.c-rejilla-cnie { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.c-campo { display: grid; gap: 4px; font-size: .875rem; font-weight: 600; margin-top: var(--e2); }
+.c-campo input { width: 100%; font-weight: 400; }

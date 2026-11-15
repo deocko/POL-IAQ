@@ -4,8 +4,8 @@ La despachadora virtual de la app no tiene preguntas escritas en el código: sig
 un **protocolo versionado** que es un archivo JSON validado por `ProtocoloSchema`
 (`packages/shared/src/protocolos.ts`).
 
-> **Estado actual: PROVISIONAL.** El archivo `2026.11-provisional.2.json` (vigente en el código;
-> `2026.11-provisional.1.json` queda como historial) lo
+> **Estado actual: PROVISIONAL.** El archivo `2026.11-provisional.3.json` (vigente en el código;
+> `2026.11-provisional.1.json` y `.2.json` quedan como historial) lo
 > redactó el equipo de Pol-IAQ siguiendo la estructura general de atención de
 > llamadas de emergencia. **No** es el texto oficial del *Protocolo Nacional de
 > Atención de Llamadas de Emergencia 9-1-1* ni del *Catálogo Nacional de
@@ -24,6 +24,7 @@ un **protocolo versionado** que es un archivo JSON validado por `ProtocoloSchema
 | `incidentes[].palabrasClave` | Con ellas la despachadora reconoce el incidente en el relato libre ("mi abuelo se desmayó"). Siempre pide confirmación. |
 | `incidentes[].preguntas` | Preguntas del incidente. Tipos `si_no`, `numero`, `texto`, `opcion`. `mostrarSi` las hace condicionales. |
 | `preguntas[].efectos` | Cómo cambia la **canalización** según la respuesta: subir prioridad, agregar una corporación de apoyo (Cruz Roja, Bomberos…) y una alerta corta para la unidad. |
+| `preguntas[].afinaCnie` | La respuesta afina el código del CNIE V 3.0 (ver `docs/cnie/README.md`). Máximo una por incidente; la despachadora la hace aunque ya llegó al tope de preguntas. |
 | `incidentes[].recomendaciones` | Indicaciones al ciudadano mientras llega la unidad. |
 
 Los `incidenteId` deben existir en el catálogo (`packages/shared/src/catalogo.ts`).
