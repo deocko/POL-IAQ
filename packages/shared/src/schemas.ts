@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { IdentidadSchema } from './identidad';
 import { ESTADOS } from './estados';
 import { ResponderCuestionarioSchema } from './protocolos';
 
@@ -26,6 +27,10 @@ export const CrearReporteSchema = z.object({
   cuestionario: ResponderCuestionarioSchema.optional(),
   /** Oculta el nombre y teléfono del ciudadano frente a la unidad (el operador sí los ve). */
   ocultarIdentidadAUnidad: z.boolean().default(false),
+  /** Cómo se identifica ante el operador y el CAD (ver identidad.ts). Anónimo solo en incidentes no violentos. */
+  identidad: IdentidadSchema.default('completa'),
+  /** Seudónimo, cuando `identidad` es `seudonimo`. */
+  alias: z.string().trim().min(2).max(40).optional(),
 });
 export type CrearReporte = z.infer<typeof CrearReporteSchema>;
 

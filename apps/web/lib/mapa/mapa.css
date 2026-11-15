@@ -1,0 +1,11 @@
+.m-mapa { width: 100%; border-radius: 12px; overflow: hidden; border: 1px solid var(--borde); margin-top: 10px; z-index: 0; position: relative; }
+.m-unidad, .m-asignada { border-radius: 50%; color: #fff; text-align: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+.m-unidad { width: 22px; height: 22px; font: 700 10px/18px system-ui, sans-serif; }
+.m-unidad.libre { background: #1f9d55; }
+.m-unidad.ocupada { background: #8a94a3; }
+.m-asignada { width: 30px; height: 30px; background: #2563c9; border-width: 3px; font: 700 13px/24px system-ui, sans-serif; }
+.m-etiqueta { font: 600 12px system-ui, sans-serif; }
+/* Modo oscuro: teselas atenuadas para no deslumbrar. */
+[data-tema="oscuro"] .m-mapa .leaflet-tile-pane { filter: brightness(0.7) invert(1) contrast(0.9) hue-rotate(200deg) saturate(0.4); }
+[data-tema="oscuro"] .leaflet-container { background: #1b2430; }
+[data-tema="oscuro"] .leaflet-control a, [data-tema="oscuro"] .leaflet-control-attribution { background: #26313f; color: #dfe7f1; }

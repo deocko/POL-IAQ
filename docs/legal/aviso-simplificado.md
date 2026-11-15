@@ -1,6 +1,6 @@
 # Aviso de Privacidad Simplificado y textos de consentimiento
 
-**Versión:** 2026-11-13 · **Estado:** borrador para revisión jurídica
+**Versión:** 2026-11-14 · **Estado:** borrador para revisión jurídica
 
 Este archivo reúne los textos cortos que aparecen en la app. El texto completo está en [aviso-privacidad.md](aviso-privacidad.md) y los términos en [terminos.md](terminos.md).
 

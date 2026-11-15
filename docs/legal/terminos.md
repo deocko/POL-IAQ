@@ -1,8 +1,7 @@
 # Términos y Condiciones de Uso de Pol-IAQ
 
-**Versión:** 2026-11-13 · **Estado:** borrador para revisión jurídica
+**Versión:** 2026-11-14 · **Estado:** borrador para revisión jurídica
 
-> Nota para el equipo (eliminar antes de publicar): completar lo que está entre [CORCHETES] y validar con el área jurídica de cada municipio piloto y del C5, en especial las secciones 6 (sanciones), 9 (responsabilidad) y 12 (jurisdicción).
 
 ## 1. Qué es Pol-IAQ
 
@@ -20,10 +19,13 @@ Debes ser mayor de 18 años [CONFIRMAR política para adolescentes], contar con 
 
 ## 4. Cómo se usa
 
-1. Elige el tipo de emergencia o usa el botón de pánico.
+1. Elige el tipo de emergencia o usa el botón de asistencia directa (botón de pánico).
 2. Confirma tu ubicación. Si puedes, agrega una descripción y evidencia.
 3. Recibirás un folio y verás el avance: recibido, validado, unidad asignada, en camino, en sitio y cerrado.
 4. Puedes escribir al operador, adjuntar más evidencia o cancelar tu reporte mientras no se haya cerrado.
+5. Al terminar, puedes calificar la atención o presentar una queja, por ejemplo si no llegó nadie.
+
+Puedes reportar con tu nombre, con un seudónimo o de forma anónima. El reporte anónimo solo está disponible para incidentes no violentos, porque en un robo, una agresión, disparos o violencia el operador necesita poder contactarte. Si no hay conexión, la app guarda tu reporte y lo envía sola al recuperarla; si no se puede enviar, llama al 911.
 
 El operador puede reclasificar tu reporte, canalizarlo a otra corporación o municipio, o declararlo improcedente. El folio no cambia.
 
@@ -67,4 +69,4 @@ Estos Términos se rigen por las leyes del Estado de Querétaro y, en lo que cor
 
 [CORREO] · [TELÉFONO] · [DOMICILIO]
 
-**Última actualización:** 13 de noviembre de 2026.
+**Última actualización:** 14 de noviembre de 2026.
