@@ -283,7 +283,10 @@ describe.each(ALMACENES)('API con almacén en %s', (_nombre, nuevoAlmacen) => {
       expect(r.body.mensajes).toHaveLength(8);
       // Cada aviso al CAD lleva una secuencia distinta y consecutiva.
       const secuencias = app.get(DespachadorCadService).bandeja.filter((e) => e.evento.folio === folio).map((e) => e.evento.secuencia).sort((a, b) => a - b);
-      expect(secuencias).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      // Creación + 8 mensajes. Si la corrida es lenta, el acuse de 0.3 s vence y se suma el escalamiento al C5:
+      // la secuencia sigue siendo única y consecutiva, que es lo que se prueba aquí.
+      expect(secuencias.length).toBeGreaterThanOrEqual(9);
+      expect(secuencias).toEqual(secuencias.map((_, i) => i + 1));
     });
 
     it('da folios distintos a reportes simultáneos', async () => {
