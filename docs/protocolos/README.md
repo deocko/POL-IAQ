@@ -6,7 +6,7 @@ un **protocolo versionado** que es un archivo JSON validado por `ProtocoloSchema
 
 > **Estado actual: PROVISIONAL.** El archivo `2026.11-provisional.3.json` (vigente en el código;
 > `2026.11-provisional.1.json` y `.2.json` quedan como historial) lo
-> redactó el equipo de Pol-IAQ siguiendo la estructura general de atención de
+> redactó el equipo de POL-IAQ siguiendo la estructura general de atención de
 > llamadas de emergencia. **No** es el texto oficial del *Protocolo Nacional de
 > Atención de Llamadas de Emergencia 9-1-1* ni del *Catálogo Nacional de
 > Incidentes de Emergencia* (SESNSP / Centro Nacional de Información). Antes del

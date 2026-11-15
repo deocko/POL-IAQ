@@ -36,7 +36,7 @@ export class OtpService {
     const codigo = this.config.otpDesarrollo || String(randomInt(0, 1_000_000)).padStart(6, '0');
     await this.almacen.registrarOtp({ telefono, codigoHash: this.hash(telefono, codigo), expiraEn: new Date(Date.now() + VIGENCIA_MS).toISOString() });
     try {
-      await this.sms.enviar(telefono, `Pol-IAQ: tu código es ${codigo}. Vence en 5 minutos. No lo compartas con nadie.`);
+      await this.sms.enviar(telefono, `POL-IAQ: tu código es ${codigo}. Vence en 5 minutos. No lo compartas con nadie.`);
     } catch (err) {
       this.log.error(`No se pudo enviar el código por ${this.sms.nombre}: ${(err as Error).message}`);
       throw new ServiceUnavailableException({ codigo: 'sms_no_enviado', mensaje: 'No pudimos enviar el SMS. Intenta de nuevo. Si es una emergencia, llama al 911.' });

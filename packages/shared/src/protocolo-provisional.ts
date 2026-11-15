@@ -3,7 +3,7 @@ import { ProtocoloSchema, type Protocolo } from './protocolos';
 /**
  * PROTOCOLO PROVISIONAL de la despachadora 911 virtual.
  *
- * NO es el texto oficial. Lo redactó el equipo de Pol-IAQ siguiendo la
+ * NO es el texto oficial. Lo redactó el equipo de POL-IAQ siguiendo la
  * estructura general de atención de llamadas de emergencia (motivo, ubicación,
  * seguridad de quien llama, preguntas por tipo de incidente, indicaciones
  * previas al arribo). Antes del piloto debe sustituirse, pregunta por pregunta,
@@ -43,16 +43,16 @@ const EDAD = {
 const DATOS = {
   version: '2026.11-provisional.3',
   estado: 'provisional',
-  nombre: 'Protocolo de atención Pol-IAQ (provisional, no oficial)',
+  nombre: 'Protocolo de atención POL-IAQ (provisional, no oficial)',
   fuentes: [
     { titulo: 'Protocolo Nacional de Atención de Llamadas de Emergencia 9-1-1 (SESNSP / CNI)', version: 'pendiente de confirmar' },
     { titulo: 'Catálogo Nacional de Incidentes de Emergencia (SESNSP / CNI)', version: 'V 3.0, junio 2024' },
     { titulo: 'Norma Técnica para la Estandarización de los Servicios de Llamadas de Emergencia (NT CALLE)', url: 'https://www.gob.mx/cms/uploads/attachment/file/895276/NT_CALLE_2023_II-2024_final.pdf' },
   ],
   publicadoEn: '2026-11-15',
-  aviso: 'Contenido provisional redactado por Pol-IAQ. No sustituye al protocolo oficial ni a una llamada al 9-1-1.',
+  aviso: 'Contenido provisional redactado por POL-IAQ. No sustituye al protocolo oficial ni a una llamada al 9-1-1.',
   apertura: {
-    saludo: '9-1-1 virtual de Pol-IAQ. Le atiende la despachadora virtual. Su ubicación ya se está compartiendo.',
+    saludo: '9-1-1 virtual de POL-IAQ. Le atiende la despachadora virtual. Su ubicación ya se está compartiendo.',
     preguntaMotivo: '¿Cuál es su emergencia?',
     confirmacion: '¿Se trata de: {incidente}?',
     cierre: 'Su folio es {folio}. La unidad ya fue canalizada; puede seguirla en el mapa. No cuelgue la app y manténgase en un lugar seguro.',

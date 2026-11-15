@@ -49,4 +49,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @pol-iaq/shared build
       - run: pnpm --filter @pol-iaq/ciudadano typecheck
+      - run: pnpm --filter @pol-iaq/web test
       - run: pnpm --filter @pol-iaq/web build

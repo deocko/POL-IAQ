@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './consola.css';
 import {
   buscarCnie, duracionTexto, estimarRuta, etiquetaCnie, incidenteCnie, nombreLegible, subtipoPermiteAnonimo, type GrupoCnie, type IncidenteCnie, type TiempoEtapa,
+  puedeDespachar, etaSuperaMeta,
 } from '@pol-iaq/shared/movil';
 import { Mapa } from '../../lib/mapa/Mapa';
 import { SelectorTema } from '../../lib/tema';
@@ -80,11 +81,11 @@ function Entrar({ alEntrar }: { alEntrar: (token: string, yo: Yo) => void }) {
         {error && <p className="c-error" role="alert">{error}</p>}
         <button className="c-boton c-grande" disabled={enviando}>{enviando ? 'Entrando…' : 'Entrar'}</button>
         {DEMO && (
-          <p className="c-demo">
-            Demo con datos de prueba. Usuario <code>operador</code>, clave <code>operador</code>.{' '}
+          <div className="c-demo c-linea">
+            <span>{'Demo con datos de prueba. Usuario: operador. Clave: operador.'}</span>
             <button type="button" className="c-enlace" onClick={() => { setUsuario('operador'); setClave('operador'); }}>Rellenar</button>
-            {' · '}<Link href="/demo/">Crear un reporte</Link>
-          </p>
+            <Link href="/demo/">Crear un reporte</Link>
+          </div>
         )}
       </form>
     </div>
@@ -165,7 +166,7 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
       <header className="c-cabecera">
         <div className="c-cabecera-izq">
           <Marca tam={34} />
-          <span className="c-cabecera-titulo">Consola<span className="suave c-ocultable"> · {yo.operador.nombre}</span></span>
+          <span className="c-cabecera-titulo">Consola<span className="suave c-ocultable">{` · ${yo.operador.nombre}`}</span></span>
         </div>
         <div className="c-cabecera-der">
           <span className={`c-conexion ${enLinea ? 'ok' : ''}`} role="status"><span className="c-punto" aria-hidden="true" />{enLinea ? 'En línea' : 'Reconectando…'}</span>
@@ -177,7 +178,7 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
         <span>{supervision ? 'Supervisión: todos los CAD' : misCads.map((c) => c.nombre).join(', ')}</span>
         {misCads.some((c) => c.modo === 'webhook') && <span className="c-chip">Los CAD con sistema propio se ven en solo lectura</span>}
       </div>
-      {DEMO && <p className="c-demo c-demo-barra">Demo: el API, el CAD y el GPS de las unidades corren simulados en tu navegador. Nada aquí es una emergencia real. <Link href="/demo/">Abrir la app ciudadana</Link> · <Velocidad /></p>}
+      {DEMO && <div className="c-demo c-demo-barra c-linea"><span>{'Demo: el API, el CAD y el GPS de las unidades corren simulados en tu navegador. Nada aquí es una emergencia real.'}</span><Link href="/demo/">Abrir la app ciudadana</Link><Velocidad /></div>}
       <nav className="c-pestanas" aria-label="Vistas de la consola">
         {([['bandeja', 'Bandeja'], ['unidades', 'Unidades (GPS)'], ['tiempos', 'Tiempos y quejas']] as const).map(([v, t]) => (
           <button key={v} className={vista === v ? 'activa' : ''} aria-pressed={vista === v} onClick={() => setVista(v)}>{t}</button>
@@ -198,14 +199,14 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
       {vista === 'bandeja' && <div className={`c-columnas ${actual ? 'con-detalle' : ''}`}>
         <section className="c-bandeja" aria-label="Bandeja de reportes">
           <div className="c-fila">
-            <h2>Bandeja {nuevos > 0 && <span className="c-contador">{nuevos} nuevos</span>}</h2>
+            <h2 className="c-linea">{'Bandeja'}{nuevos > 0 && <span className="c-contador">{`${nuevos} ${nuevos === 1 ? 'nuevo' : 'nuevos'}`}</span>}</h2>
             <label className="c-check"><input type="checkbox" checked={todos} onChange={(e) => setTodos(e.target.checked)} /> Ver cerrados</label>
           </div>
           {!cargado && !aviso && <div aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="esqueleto c-esq-item" />)}<span className="solo-lector">Cargando reportes…</span></div>}
           {cargado && !lista.length && (
             <div className="estado c-tarjeta">
               <span className="estado-icono" aria-hidden="true">✓</span>
-              <h3>Sin reportes {todos ? '' : 'activos '}por ahora</h3>
+              <h3>{todos ? 'Sin reportes por ahora' : 'Sin reportes activos por ahora'}</h3>
               <p>Los nuevos aparecen aquí al instante.</p>
             </div>
           )}
@@ -218,14 +219,14 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
               <div className="c-etiquetas">
                 {r.asistenciaDirecta && <span className="c-chip c-chip-alerta">Asistencia directa</span>}
                 <span className={`c-chip e-${r.estado}`}>{ESTADO[r.estado]}</span>
-                <span className="c-chip">Prioridad {r.prioridad}</span>
+                <span className="c-chip">{`Prioridad ${r.prioridad}`}</span>
                 <span className={`c-chip ${r.cnie?.incidente ? '' : 'c-chip-aviso'}`}>{r.cnie ? `CNIE ${r.cnie.incidente?.codigo ?? r.cnie.subtipo.codigo}` : 'Sin código CNIE'}</span>
                 {!r.operable && <span className="c-chip">Solo lectura</span>}
                 {r.automatico && <span className="c-chip c-chip-neutro">Demo automática</span>}
                 {r.opinion?.queja && <span className="c-chip c-chip-alerta">Queja</span>}
                 {!esFinal(r.estado) && <ChipLlegada t={r.tiempos.llegada} />}
               </div>
-              <div className="suave c-pequeno">{r.folio} · {nombreCad(r.cadId)}</div>
+              <div className="suave c-pequeno">{`${r.folio} · ${nombreCad(r.cadId)}`}</div>
               {r.escalaAlC5En && <Cuenta hasta={r.escalaAlC5En} ahora={ahora} />}
             </button>
           ))}
@@ -258,7 +259,8 @@ function Detalle({
   const [destino, setDestino] = useState('');
   const [motivo, setMotivo] = useState('');
 
-  const delCad = unidades.filter((u) => u.cadId === r.cadId);
+  // El C5 puede mandar unidades de cualquier CAD (coordina a todo el estado).
+  const delCad = unidades.filter((u) => puedeDespachar(r.cadId, u.cadId));
   const principal = r.canalizacion.corporaciones[0];
   // Llegada estimada por calles desde el GPS de cada unidad (el API usa ruta real si tiene servicio de rutas).
   const conRuta = delCad.map((u) => ({ u, ruta: u.posicion ? estimarRuta(u.posicion, r.ubicacion) : null }));
@@ -290,18 +292,18 @@ function Detalle({
     <section className="c-detalle" aria-label={`Reporte ${r.folio}`}>
       <div className="c-fila">
         <button className="c-enlace c-volver" onClick={alCerrar}>← Bandeja</button>
-        <span className="suave c-pequeno">Actualizado {hora(r.actualizadoEn)}</span>
+        <span className="suave c-pequeno">{`Actualizado ${hora(r.actualizadoEn)}`}</span>
       </div>
       <div className={`c-tarjeta c-titulo p-${r.prioridad}`}>
         <div className="c-fila">
           <h2>{r.incidente}</h2>
           <span className={`c-chip e-${r.estado}`}>{ESTADO[r.estado]}</span>
         </div>
-        <div className="suave">{r.folio}{r.folioCad && r.folioCad !== r.folio ? ` · CAD ${r.folioCad}` : ''} · {nombreCad(r.cadId)} · hace {hace(r.creadoEn, ahora)}</div>
+        <div className="suave">{`${r.folio}${r.folioCad && r.folioCad !== r.folio ? ` · CAD ${r.folioCad}` : ''} · ${nombreCad(r.cadId)} · hace ${hace(r.creadoEn, ahora)}`}</div>
         <div className="c-etiquetas">
           {r.asistenciaDirecta && <span className="c-chip c-chip-alerta">Botón de asistencia directa</span>}
           {r.escenarioId && <span className="c-chip">Acceso rápido de lugar guardado</span>}
-          <span className="c-chip">Prioridad {r.prioridad}</span>
+          <span className="c-chip">{`Prioridad ${r.prioridad}`}</span>
           {r.automatico && <span className="c-chip c-chip-neutro">Demo automática</span>}
         </div>
         {r.cerradoPorDemo && <p className="c-nota c-pequeno">Lo cerró la demo automática para acelerar el recorrido. En el servicio real, el reporte lo cierra el operador con “Cerrar como atendido”.</p>}
@@ -317,17 +319,17 @@ function Detalle({
       <div className="c-rejilla">
         <div className="c-tarjeta">
           <h3>Canalización sugerida</h3>
-          <ol className="c-lista">{r.canalizacion.corporaciones.map((c, i) => <li key={c}>{CORPORACION[c] ?? c}{i === 0 ? ' (principal)' : ' (apoyo)'}</li>)}</ol>
+          <ol className="c-lista">{r.canalizacion.corporaciones.map((c, i) => <li key={c}>{`${CORPORACION[c] ?? c} ${i === 0 ? '(principal)' : '(apoyo)'}`}</li>)}</ol>
         </div>
         <div className="c-tarjeta">
           <h3>Reportante</h3>
           {r.reportante ? (
             <>
-              <div>{r.reportante.nombre} {r.reportante.identidad && r.reportante.identidad !== 'completa' && <span className="c-chip">{IDENTIDAD[r.reportante.identidad]}</span>}</div>
+              <div className="c-linea"><span>{r.reportante.nombre}</span>{r.reportante.identidad && r.reportante.identidad !== 'completa' && <span className="c-chip">{IDENTIDAD[r.reportante.identidad]}</span>}</div>
               {r.reportante.identidad === 'completa' || !r.reportante.identidad
                 ? <a href={`tel:${r.reportante.telefono}`}>{r.reportante.telefono}</a>
-                : <div className="suave c-pequeno" data-testid="telefono-oculto">{r.reportante.telefono ? `Teléfono oculto, termina en ${r.reportante.telefono.slice(-4)}` : 'Sin teléfono'}. Contesta por el chat del folio.</div>}
-              <div className="suave c-pequeno">Confiabilidad {Math.round(r.reportante.confiabilidad * 100)}%</div>
+                : <div className="suave c-pequeno" data-testid="telefono-oculto">{`${r.reportante.telefono ? `Teléfono oculto, termina en ${r.reportante.telefono.slice(-4)}` : 'Sin teléfono'}. Contesta por el chat del folio.`}</div>}
+              <div className="suave c-pequeno">{`Confiabilidad ${Math.round(r.reportante.confiabilidad * 100)}%`}</div>
             </>
           ) : <div className="suave">No disponible</div>}
         </div>
@@ -342,10 +344,13 @@ function Detalle({
       <div className="c-tarjeta">
         <div className="c-fila">
           <h3>Mapa en vivo</h3>
-          {r.unidad && <span className="suave c-pequeno">{r.unidad.etiqueta}{r.unidad.distanciaMetros != null && r.unidad.distanciaMetros > 0 ? ` a ${distanciaTexto(r.unidad.distanciaMetros)}` : ''}{r.unidad.etaMinutos ? ` · llega en ~${r.unidad.etaMinutos} min` : r.estado === 'en_sitio' ? ' · en el lugar' : ''}</span>}
+          {r.unidad && <span className="suave c-pequeno">{`${r.unidad.etiqueta}${r.unidad.distanciaMetros != null && r.unidad.distanciaMetros > 0 ? ` a ${distanciaTexto(r.unidad.distanciaMetros)}` : ''}${r.unidad.etaMinutos ? ` · llega en ~${r.unidad.etaMinutos} min` : r.estado === 'en_sitio' ? ' · en el lugar' : ''}`}</span>}
         </div>
+        {r.unidad?.etaMinutos != null && !final && r.estado !== 'en_sitio' && etaSuperaMeta(Math.ceil((r.tiempos.llegada.segundos ?? 0) / 60) + r.unidad.etaMinutos, r.tiempos.llegada.metaSegundos) && (
+          <p className="c-aviso-meta" role="alert" data-testid="eta-meta">{`La llegada estimada (~${r.unidad.etaMinutos} min más) supera la meta de llegada (${Math.round(r.tiempos.llegada.metaSegundos / 60)} min). Busca una unidad más cercana o pide apoyo a otra corporación.`}</p>
+        )}
         <Mapa reporte={r.ubicacion} unidad={unidadMapa} unidades={otras} alto={240} titulo={`Mapa del reporte ${r.folio}${r.unidad ? ` con ${r.unidad.etiqueta}` : ''}`} />
-        {!final && <p className="suave c-pequeno c-leyenda"><span className="c-punto-l asignada" /> asignada <span className="c-punto-l libre" /> libre <span className="c-punto-l ocupada" /> ocupada</p>}
+        {!final && <p className="suave c-pequeno c-leyenda c-linea"><span><span className="c-punto-l asignada" />{'asignada'}</span><span><span className="c-punto-l libre" />{'libre'}</span><span><span className="c-punto-l ocupada" />{'ocupada'}</span></p>}
       </div>
 
       <Tiempos t={r.tiempos} />
@@ -365,7 +370,7 @@ function Detalle({
               <p className="c-nota c-pequeno">No había una unidad libre cuando se recibió. Asígnala en cuanto se libere una.</p>
               {sugerida && (
                 <button className="c-boton c-grande c-ancho" disabled={ocupado} onClick={() => hacer({ accion: 'asignar_cercana' })}>
-                  Asignar la más cercana: {sugerida.u.etiqueta} · {distanciaTexto(sugerida.ruta!.metros)} · ~{Math.max(1, Math.ceil(sugerida.ruta!.segundos / 60))} min
+                  {`Asignar la más cercana: ${sugerida.u.etiqueta} · ${distanciaTexto(sugerida.ruta!.metros)} · ~${Math.max(1, Math.ceil(sugerida.ruta!.segundos / 60))} min`}
                 </button>
               )}
             </>
@@ -379,7 +384,7 @@ function Detalle({
                   <option value="">Elige una unidad…</option>
                   {opciones.map(({ u, ruta }) => (
                     <option key={u.unidadId} value={u.unidadId} disabled={!!u.ocupadaEn}>
-                      {u.etiqueta} · {CORPORACION[u.corporacion] ?? u.corporacion}{ruta ? ` · ${distanciaTexto(ruta.metros)} · ~${Math.max(1, Math.ceil(ruta.segundos / 60))} min` : ' · sin GPS'}{u.ocupadaEn ? ` (ocupada en ${u.ocupadaEn})` : ''}
+                      {`${u.etiqueta} · ${CORPORACION[u.corporacion] ?? u.corporacion}${ruta ? ` · ${distanciaTexto(ruta.metros)} · ~${Math.max(1, Math.ceil(ruta.segundos / 60))} min` : ' · sin GPS'}${u.ocupadaEn ? ` (ocupada en ${u.ocupadaEn})` : ''}`}
                     </option>
                   ))}
                 </select>
@@ -431,7 +436,7 @@ function Detalle({
       {r.opinion && (
         <div className={`c-tarjeta ${r.opinion.queja ? 'c-queja' : ''}`}>
           <h3>{r.opinion.queja ? 'Queja del ciudadano' : 'Calificación del ciudadano'}</h3>
-          <div><span aria-label={`${r.opinion.calificacion} de 5`}>{'★'.repeat(r.opinion.calificacion)}{'☆'.repeat(5 - r.opinion.calificacion)}</span> · {LLEGO[r.opinion.llegoUnidad]}</div>
+          <div className="c-linea"><span aria-label={`${r.opinion.calificacion} de 5`}>{'★'.repeat(r.opinion.calificacion) + '☆'.repeat(5 - r.opinion.calificacion)}</span><span>{`· ${LLEGO[r.opinion.llegoUnidad]}`}</span></div>
           {r.opinion.comentario && <p className="c-cita">“{r.opinion.comentario}”</p>}
           <div className="suave c-pequeno">{hora(r.opinion.en)}</div>
         </div>
@@ -444,7 +449,7 @@ function Detalle({
             {r.evidencias.map((e) => (
               <li key={e.id}>
                 {e.url.startsWith('data:image/') ? <a href={e.url} target="_blank" rel="noreferrer"><img src={e.url} alt={`Foto del reporte ${r.folio}`} /></a> : <a href={e.url} target="_blank" rel="noreferrer">{e.tipo}</a>}
-                <span className="c-pequeno"><span className="suave">Huella SHA-256</span> <code className="c-hash" data-testid="hash-consola">{e.sha256}</code>{e.expiraEn ? <span className="suave"> · enlace vence {hora(e.expiraEn)}</span> : null}</span>
+                <span className="c-pequeno c-linea"><span className="suave">Huella SHA-256</span><code className="c-hash" data-testid="hash-consola">{e.sha256}</code>{e.expiraEn ? <span className="suave">{`· enlace vence ${hora(e.expiraEn)}`}</span> : null}</span>
               </li>
             ))}
           </ul>
@@ -472,7 +477,7 @@ function Detalle({
 
       <div className="c-tarjeta">
         <h3>Historial</h3>
-        <ul className="c-lista">{r.historial.map((h, i) => <li key={i}>{hora(h.en)} · {ESTADO[h.estado]}{h.nota ? ` (${h.nota})` : ''}</li>)}</ul>
+        <ul className="c-lista">{r.historial.map((h, i) => <li key={i}>{`${hora(h.en)} · ${ESTADO[h.estado]}${h.nota ? ` (${h.nota})` : ''}`}</li>)}</ul>
       </div>
     </section>
   );
@@ -513,15 +518,15 @@ function ClasificacionCnie({ r, ocupado, hacer }: { r: Reporte; ocupado: boolean
     <div className="c-tarjeta c-cnie" data-testid="cnie">
       <div className="c-fila">
         <h3>Clasificación CNIE</h3>
-        <span className="suave c-pequeno">V {c?.version ?? '3.0'}</span>
+        <span className="suave c-pequeno">{`V ${c?.version ?? '3.0'}`}</span>
       </div>
       {c ? (
         <>
           <p className="c-cnie-etiqueta" data-testid="cnie-etiqueta">{r.cnieEtiqueta}</p>
           <div className="c-etiquetas">
-            {c.prioridad && <span className={`c-chip ${c.prioridad === 'ALTA' ? 'c-chip-alerta' : ''}`}>Prioridad CNIE {c.prioridad}</span>}
-            {difiere && <span className="c-chip">Operativa {r.prioridad}</span>}
-            {c.secundario && <span className="c-chip" title={nombreLegible(c.secundario.nombre)}>Secundario {c.secundario.codigo} · {nombreLegible(c.secundario.nombre)}</span>}
+            {c.prioridad && <span className={`c-chip ${c.prioridad === 'ALTA' ? 'c-chip-alerta' : ''}`}>{`Prioridad CNIE ${c.prioridad}`}</span>}
+            {difiere && <span className="c-chip">{`Operativa ${r.prioridad}`}</span>}
+            {c.secundario && <span className="c-chip" title={nombreLegible(c.secundario.nombre)}>{`Secundario ${c.secundario.codigo} · ${nombreLegible(c.secundario.nombre)}`}</span>}
           </div>
           <p className="suave c-pequeno">{ORIGEN_CNIE[c.origen]}{!c.incidente ? '. Falta el incidente: elígelo abajo.' : '.'}</p>
         </>
@@ -542,8 +547,8 @@ function ClasificacionCnie({ r, ocupado, hacer }: { r: Reporte; ocupado: boolean
                 {resultados.map((i) => (
                   <li key={i.codigo}>
                     <button type="button" role="option" aria-selected={false} onClick={() => setElegido(i)}>
-                      <strong>{i.codigo}</strong> {nombreLegible(i.nombre)}
-                      <span className="suave c-pequeno"> · {i.tipo.nombre} / {i.subtipo.nombreCorto} · {i.prioridad}</span>
+                      <span className="c-linea"><strong>{i.codigo}</strong><span>{nombreLegible(i.nombre)}</span></span>
+                      <span className="suave c-pequeno">{`${i.tipo.nombre} / ${i.subtipo.nombreCorto} · ${i.prioridad}`}</span>
                     </button>
                   </li>
                 ))}
@@ -584,11 +589,11 @@ function TablaCnie({ titulo, grupos }: { titulo: string; grupos: GrupoCnie[] }) 
       <tbody>
         {grupos.map((g) => (
           <tr key={g.codigo}>
-            <th scope="row">{g.codigo === 'sin' ? g.nombre : <><span className="suave">{g.codigo}</span> {g.nombre}</>}</th>
+            <th scope="row">{g.codigo === 'sin' ? g.nombre : `${g.codigo} ${g.nombre}`}</th>
             <td>{g.reportes}</td>
             <td>{g.quejas ? <span className="c-chip c-chip-alerta">{g.quejas}</span> : 0}</td>
             <td>{g.llegada.promedioSegundos == null ? '—' : duracionTexto(g.llegada.promedioSegundos)}</td>
-            <td>{g.llegada.enMeta == null ? '—' : <span className={`c-chip ${g.llegada.enMeta >= 90 ? 'c-chip-ok' : g.llegada.enMeta >= 70 ? 'c-chip-aviso' : 'c-chip-alerta'}`}>{g.llegada.enMeta}%</span>}</td>
+            <td>{g.llegada.enMeta == null ? '—' : <span className={`c-chip ${g.llegada.enMeta >= 90 ? 'c-chip-ok' : g.llegada.enMeta >= 70 ? 'c-chip-aviso' : 'c-chip-alerta'}`}>{`${g.llegada.enMeta}%`}</span>}</td>
           </tr>
         ))}
       </tbody>
@@ -599,7 +604,7 @@ function TablaCnie({ titulo, grupos }: { titulo: string; grupos: GrupoCnie[] }) 
 function ChipLlegada({ t }: { t: Reporte['tiempos']['llegada'] }) {
   if (t.segundos == null) return null;
   const cls = t.estado === 'excedida' ? 'c-chip-alerta' : t.estado === 'en_riesgo' ? 'c-chip-aviso' : t.estado === 'cumplida' ? 'c-chip-ok' : '';
-  return <span className={`c-chip ${cls}`} title="Desde el reporte hasta la llegada, contra la meta">{duracionTexto(t.segundos)} / meta {Math.round(t.metaSegundos / 60)} min</span>;
+  return <span className={`c-chip ${cls}`} title="Desde el reporte hasta la llegada, contra la meta">{`${duracionTexto(t.segundos)} / meta ${Math.round(t.metaSegundos / 60)} min`}</span>;
 }
 
 function Tiempos({ t }: { t: Reporte['tiempos'] }) {
@@ -660,7 +665,7 @@ function VistaUnidades({ unidades, reportes, nombreCad }: { unidades: UnidadDisp
             <tr key={u.unidadId}>
               <th scope="row">{u.etiqueta}<div className="suave c-pequeno">{CORPORACION[u.corporacion] ?? u.corporacion}</div></th>
               <td>{nombreCad(u.cadId)}</td>
-              <td>{u.ocupadaEn ? <span className="c-chip">Atiende {u.ocupadaEn}</span> : <span className="c-chip c-chip-ok">Libre</span>}</td>
+              <td>{u.ocupadaEn ? <span className="c-chip">{`Atiende ${u.ocupadaEn}`}</span> : <span className="c-chip c-chip-ok">Libre</span>}</td>
               <td className="c-pequeno">{u.posicion ? `${u.posicion.lat.toFixed(4)}, ${u.posicion.lng.toFixed(4)}` : 'Sin señal'}</td>
             </tr>
           ))}
@@ -698,11 +703,11 @@ function VistaTiempos({ token, ahora, nombreCad, alAbrir }: { token: string; aho
               const metas = x.id === 'llegada' ? t.metas.llegada : t.metas.etapas[x.id];
               return (
                 <tr key={x.id}>
-                  <th scope="row">{x.nombre}<div className="suave c-pequeno">{x.n} medidos</div></th>
+                  <th scope="row">{x.nombre}<div className="suave c-pequeno">{`${x.n} ${x.n === 1 ? 'medido' : 'medidos'}`}</div></th>
                   <td>{x.promedioSegundos == null ? '—' : duracionTexto(x.promedioSegundos)}</td>
                   <td>{x.medianaSegundos == null ? '—' : duracionTexto(x.medianaSegundos)}</td>
-                  <td className="c-pequeno">{duracionTexto(metas.alta)} / {duracionTexto(metas.media)} / {duracionTexto(metas.baja)}</td>
-                  <td>{x.enMeta == null ? '—' : <span className={`c-chip ${x.enMeta >= 90 ? 'c-chip-ok' : x.enMeta >= 70 ? 'c-chip-aviso' : 'c-chip-alerta'}`}>{x.enMeta}%</span>}</td>
+                  <td className="c-pequeno">{`${duracionTexto(metas.alta)} / ${duracionTexto(metas.media)} / ${duracionTexto(metas.baja)}`}</td>
+                  <td>{x.enMeta == null ? '—' : <span className={`c-chip ${x.enMeta >= 90 ? 'c-chip-ok' : x.enMeta >= 70 ? 'c-chip-aviso' : 'c-chip-alerta'}`}>{`${x.enMeta}%`}</span>}</td>
                 </tr>
               );
             })}
@@ -724,9 +729,12 @@ function VistaTiempos({ token, ahora, nombreCad, alAbrir }: { token: string; aho
         <ul className="c-lista-plana">
           {[...quejas, ...t.reportes.filter((r) => r.opinion && !r.opinion.queja)].map((r) => (
             <li key={r.folio}>
-              <button className="c-enlace" onClick={() => alAbrir(r.folio)}>{r.folio}</button> · {nombreCad(r.cadId)} · {'★'.repeat(r.opinion!.calificacion)}{'☆'.repeat(5 - r.opinion!.calificacion)} · {LLEGO[r.opinion!.llegoUnidad]}
-              {r.opinion!.queja && <span className="c-chip c-chip-alerta">Queja</span>}
-              {r.opinion!.comentario && <div className="suave c-pequeno">“{r.opinion!.comentario}”</div>}
+              <div className="c-linea">
+                <button className="c-enlace" onClick={() => alAbrir(r.folio)}>{r.folio}</button>
+                <span>{`· ${nombreCad(r.cadId)} · ${'★'.repeat(r.opinion!.calificacion)}${'☆'.repeat(5 - r.opinion!.calificacion)} · ${LLEGO[r.opinion!.llegoUnidad]}`}</span>
+                {r.opinion!.queja && <span className="c-chip c-chip-alerta">Queja</span>}
+              </div>
+              {r.opinion!.comentario && <div className="suave c-pequeno">{`“${r.opinion!.comentario}”`}</div>}
             </li>
           ))}
         </ul>
@@ -740,7 +748,7 @@ function Velocidad() {
   const [v, setV] = useState(1);
   useEffect(() => { setV(demo.velocidad()); return demo.escuchar(() => setV(demo.velocidad())); }, []);
   return (
-    <label className="c-velocidad">Tiempo:{' '}
+    <label className="c-velocidad">{'Simulación: '}
       <select value={v} onChange={(e) => demo.fijarVelocidad(Number(e.target.value))} aria-label="Velocidad de la demo">
         <option value={1}>real (×1)</option>
         <option value={10}>acelerado (×10)</option>

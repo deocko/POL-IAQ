@@ -9,6 +9,8 @@ export const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'http://localhost:3001
 export interface IncidenteCatalogoPublico {
   id: string;
   categoria: string;
+  /** El mismo nombre que ve la consola. */
+  nombreCorto: string;
   nombreCiudadano: string;
   prioridad: 'alta' | 'media' | 'baja';
 }

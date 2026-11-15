@@ -1,15 +1,23 @@
 # Datos que debe proporcionar el área jurídica
 
-**Fecha:** 2026-11-15 · Aplica a los borradores de `docs/legal/` versión 2026-11-14.
+**Fecha:** 2026-11-15 (actualizada el mismo día) · Aplica a los borradores de `docs/legal/` versión 2026-11-14.
 
-Mientras falten estos datos, las páginas publicadas **no muestran huecos**: cada dato que falta se omite o se sustituye por una frase general que remite a la versión definitiva (por ejemplo, "La identidad y el domicilio del responsable se incluirán en la versión definitiva de este aviso"), y arriba de cada página aparece el aviso "Versión preliminar en revisión jurídica". Las sustituciones exactas están en `apps/web/lib/legal.ts`. **Ninguno se llenó con un valor inventado.** Al recibir un dato, se escribe en el `.md` y se quita su sustitución. Los valores entre corchetes con números (por ejemplo `[12 meses]`) son propuestas del borrador, no plazos aprobados.
+Mientras falten estos datos, las páginas publicadas **no muestran huecos ni frases que prometan el dato**: cada dato que falta se omite, la sección que queda vacía se quita (4. Fundamento legal del aviso integral y 13. Contacto de los Términos) y la tabla de plazos de conservación se sustituye por las reglas que no dependen de un número. Arriba de cada página, el aviso "Versión preliminar en revisión jurídica" dice qué datos faltan en ese documento. Las sustituciones exactas están en `apps/web/lib/legal.ts`. **Ninguno se llenó con un valor inventado.** Al recibir un dato, se escribe en el `.md` y se quita su sustitución. Los valores entre corchetes con números (por ejemplo `[12 meses]`) son propuestas del borrador, no plazos aprobados.
 
 ## Antes de llenar: decisiones de fondo
 
-1. **Quién es el responsable del tratamiento.** El borrador asume que es una autoridad pública (municipios piloto y/o Gobierno del Estado). Por eso se apoya en la Ley General de Protección de Datos Personales en Posesión de Sujetos Obligados y en la ley estatal de Querétaro. Si quien opera Pol-IAQ fuera un particular, aplica la Ley Federal de Protección de Datos Personales en Posesión de los Particulares y el aviso debe reescribirse.
+1. **Quién es el responsable del tratamiento.** El borrador asume que es una autoridad pública (municipios piloto y/o Gobierno del Estado). Por eso se apoya en la Ley General de Protección de Datos Personales en Posesión de Sujetos Obligados y en la ley estatal de Querétaro. Si quien opera POL-IAQ fuera un particular, aplica la Ley Federal de Protección de Datos Personales en Posesión de los Particulares y el aviso debe reescribirse.
 2. **Referencias vigentes tras la reforma de 2025.** Las leyes de protección de datos se reformaron en 2025 y cambió la autoridad garante. Hay que confirmar las leyes, los artículos y la autoridad ante la que se presentan quejas.
 3. **Secciones de los Términos que requieren validación** de cada municipio piloto y del C5: 6 (sanciones), 9 (responsabilidad) y 12 (jurisdicción).
 4. **Nuevo en 2026-11-14:** reporte con seudónimo o anónimo (el teléfono verificado se conserva y solo se entrega a una autoridad cuando la ley lo exige), calificación y quejas después del cierre, y medición de tiempos de respuesta. Hay que confirmar que este tratamiento y su redacción son correctos.
+
+## Resumen: lo indispensable para publicar la versión definitiva
+
+1. **Responsable**: nombre oficial y área (#1, #21, #23, #26).
+2. **Domicilio** del responsable (#2).
+3. **Fundamento legal** del tratamiento (#5, #6, #25).
+4. **Plazos de conservación numéricos**: reportes sin investigación (#8), bitácoras (#9) y cuenta cancelada (#10).
+5. **Datos de contacto**: Unidad de Transparencia (#4, #11 a #15) y contacto de los Términos (#30 a #32).
 
 ## Lista exacta de datos
 
@@ -37,7 +45,7 @@ Mientras falten estos datos, las páginas publicadas **no muestran huecos**: cad
 | 20 | Aviso de Privacidad Integral | 10. Cambios | `[URL]` | URL oficial donde se publicará el aviso vigente (en la demo apunta a la propia página) |
 | 21 | Aviso Simplificado | Aviso simplificado | `[RESPONSABLE]` | Mismo dato que el #1 |
 | 22 | Aviso Simplificado | Aviso simplificado | `[URL]` | URL oficial del aviso integral (en la demo apunta a la página del aviso integral) |
-| 23 | Términos y Condiciones | 1. Qué es Pol-IAQ | `[RESPONSABLE]` | Mismo dato que el #1 |
+| 23 | Términos y Condiciones | 1. Qué es POL-IAQ | `[RESPONSABLE]` | Mismo dato que el #1 |
 | 24 | Términos y Condiciones | 3. Quién puede usarla | `[CONFIRMAR política para adolescentes]` | Igual que el #19 |
 | 25 | Términos y Condiciones | 6. Falsas alarmas | `[CITAR la disposición aplicable …]` | Disposición estatal o municipal que sanciona las falsas alarmas |
 | 26 | Términos y Condiciones | 9. Responsabilidad | `[RESPONSABLE]` | Mismo dato que el #1 |

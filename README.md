@@ -1,4 +1,4 @@
-# Pol-IAQ
+# POL-IAQ
 
 Plataforma ciudadana para reportar emergencias a las policías municipales de Querétaro, con seguimiento en tiempo real bajo un **folio unificado** e integración por API con los CAD municipales y el C5 estatal.
 
@@ -94,6 +94,9 @@ Cada reporte lleva su código oficial del CNIE V 3.0 (junio 2024): tipo, subtipo
 - **Tablero de tiempos** (`GET /v1/operador/tiempos`): mide recibido → validado → asignado → en camino → en sitio contra metas en minutos por prioridad. **Las metas actuales son provisionales** (`METAS_PROVISIONALES` en `packages/shared/src/tiempos.ts`, versión `2026.11-provisional.1`) y deben acordarse con los municipios y el C5. El ciudadano ve cuánto falta y el operador si se cumple la meta.
 - **Sin conexión**: la app guarda el reporte en una cola y lo envía sola al volver la red; si después de 60 s no se ha podido enviar, ofrece llamar al 911 (`packages/shared/src/cola.ts`).
 - **Modo claro y oscuro**: la web sigue el tema del sistema y permite elegir Claro, Oscuro o Auto.
+- **Hora**: la app y la consola muestran siempre la hora de Querétaro (`America/Mexico_City`, `apps/web/lib/hora.ts`), sin importar la zona del navegador. En la demo, «Acelerada ×10» solo acelera al CAD simulado y el avance de las unidades; las horas del historial son las reales y el acuse antes de escalar al C5 se cuenta en segundos reales. Los reportes de prueba se borran solos a las 6 h.
+- **Escalado al C5**: el C5 coordina a todo el estado, así que al recibir un reporte escalado asigna la unidad libre más cercana de cualquier CAD (`puedeDespachar`). Si la llegada estimada supera la meta, la consola lo advierte.
+- **Un solo nombre por incidente**: `nombreCorto` del catálogo compartido es el mismo en la app ciudadana, la consola y el CAD.
 
 ## Identidad visual y experiencia
 

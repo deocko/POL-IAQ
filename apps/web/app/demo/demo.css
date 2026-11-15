@@ -179,3 +179,10 @@
 .d-lista-catalogo button > span:first-child { display: grid; gap: 2px; overflow-wrap: anywhere; }
 .d-lista-catalogo button:hover, .d-lista-catalogo button:focus-visible { border-color: var(--primario); }
 .d-catalogo .d-campo input { width: 100%; }
+.d-lista-reportes button.actual { box-shadow: inset 4px 0 0 var(--primario); padding-left: var(--e3); }
+.d-error-gps { background: var(--asistencia-suave); color: var(--texto); border-radius: var(--r-s); padding: var(--e3); margin-top: var(--e2); display: grid; gap: var(--e2); }
+.d-error-gps p { margin: 0; }
+/* Piezas de una misma línea como bloques con separación: así ningún lector las une sin espacio. */
+.d-linea, .d-subtitulo, .d-hito { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .3em; }
+.d-vera { display: grid; gap: .15em; }
+.d-enlace-bloque { display: block; margin-top: var(--e1, 4px); }

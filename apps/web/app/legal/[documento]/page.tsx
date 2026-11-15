@@ -3,7 +3,7 @@ import path from 'node:path';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { marked } from 'marked';
-import { paraPublicar } from '../../../lib/legal';
+import { FALTAN, paraPublicar } from '../../../lib/legal';
 import { Marca } from '../../../lib/marca';
 
 /** Los textos legales viven en docs/legal del repositorio: una sola fuente. */
@@ -33,7 +33,9 @@ export default async function PaginaLegal({ params }: { params: Promise<{ docume
         <Link href="/" aria-label="POL-IAQ, ir al inicio"><Marca tam={36} /></Link>
         <Link href="/demo/">Volver a la app</Link>
       </div>
-      <p className="legal-revision" role="note">Versión preliminar en revisión jurídica. La versión definitiva se publicará antes de que inicie el servicio y te pediremos aceptarla en la app.</p>
+      <p className="legal-revision" role="note" data-testid="legal-faltan">
+        <strong>Versión preliminar en revisión jurídica.</strong>{` Esta versión aún no incluye ${FALTAN[documento]}. No es la versión definitiva: antes de que inicie el servicio se publicará la versión aprobada y te pediremos aceptarla en la app.`}
+      </p>
       <article className="legal" dangerouslySetInnerHTML={{ __html: html }} />
     </main>
   );

@@ -75,7 +75,11 @@ export function medirTiempos(
     const inicio = primera.get(e.desde) ?? finAnterior;
     const fin = primera.get(e.hasta);
     let r: Pick<TiempoEtapa, 'segundos' | 'estado'>;
-    if (inicio !== undefined && fin !== undefined) {
+    if (inicio !== undefined && fin !== undefined && e.id === 'traslado' && fin <= inicio) {
+      // "En camino" y "en sitio" a la vez: no hubo traslado que medir (se marcó la llegada sin salir).
+      // Contarlo como 0 s bajaría la mediana a 0 y daría un cumplimiento falso.
+      r = { segundos: null, estado: 'omitida' };
+    } else if (inicio !== undefined && fin !== undefined) {
       const s = Math.max(0, Math.round((fin - inicio) / 1000));
       r = { segundos: s, estado: s <= meta ? 'cumplida' : 'excedida' };
     } else if (inicio !== undefined && !terminado) {

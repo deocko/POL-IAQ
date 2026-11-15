@@ -9,7 +9,7 @@
   "scripts": {
     "build": "pnpm -r --filter @pol-iaq/shared --filter @pol-iaq/api --filter @pol-iaq/cad-simulator build",
     "typecheck": "pnpm -r --filter @pol-iaq/shared --filter @pol-iaq/api --filter @pol-iaq/cad-simulator typecheck",
-    "test": "pnpm -r --filter @pol-iaq/shared --filter @pol-iaq/api --filter @pol-iaq/cad-simulator test",
+    "test": "pnpm -r --filter @pol-iaq/shared --filter @pol-iaq/api --filter @pol-iaq/cad-simulator --filter @pol-iaq/web test",
     "dev:api": "pnpm --filter @pol-iaq/api dev",
     "dev:cad": "pnpm --filter @pol-iaq/cad-simulator dev",
     "dev:web": "pnpm --filter @pol-iaq/web dev",

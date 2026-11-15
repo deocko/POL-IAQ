@@ -12,13 +12,16 @@
  * pestañas del mismo navegador (BroadcastChannel). Son SOLO de demostración:
  * nada sale del navegador ni llega a un CAD real.
  *
- * Reloj: la demo puede correr en tiempo real (×1) o acelerado (×10). Todos los
- * tiempos (historial, metas, llegada) se miden con ese mismo reloj.
+ * Reloj: todas las horas (historial, mensajes, folios) son la hora real del
+ * navegador, mostrada en la zona de Querétaro (America/Mexico_City). La opción
+ * ×10 solo acelera la simulación (pasos del CAD simulado y avance de las
+ * unidades); no adelanta el reloj. El acuse antes de escalar al C5 se cuenta
+ * siempre en segundos reales, para que el operador alcance a recibirlo.
  */
 import {
   CAD_ESTATAL_ID, CATALOGO_SEMILLA, ESTADOS, ESTADOS_FINALES, ETIQUETAS_CIUDADANO, FACTOR_CALLES, METAS_PROVISIONALES, MUNICIPIOS_PILOTO,
   PROTOCOLO_PROVISIONAL, UNIDADES_EJEMPLO, VELOCIDAD_EMERGENCIA_KMH,
-  agruparPorCnie, aplica, candidatasPorCercania, canalizar, clasificacionDe, clasificarCnie, distanciaMetros, etiquetaCnie, subtipoCnie, validarCodigoCnie, enrutarPorUbicacion, esQueja, estimarRuta, generarFolio, incidentePorId, medirTiempos,
+  agruparPorCnie, aplica, candidatasPorCercania, canalizar, puedeDespachar, clasificacionDe, clasificarCnie, distanciaMetros, etiquetaCnie, subtipoCnie, validarCodigoCnie, enrutarPorUbicacion, esQueja, estimarRuta, generarFolio, incidentePorId, medirTiempos,
   minutosDe, permiteAnonimo, preguntasPara as preguntasProtocolo, preguntasPendientes, protocoloDe, puedeTransicionar, reportanteVisible, resolverEntradas,
   respuestasDe, resumirTiempos, transcripcion,
   type Canalizacion, type ClasificacionCnie, type Cuestionario, type EntradaCuestionario, type EstadoIncidente, type Identidad, type Opinion, type OpinionGuardada,
@@ -94,12 +97,12 @@ export interface CorreccionCnie { en: string; actor: string; de: string | null; 
 interface PosicionAvl { lat: number; lng: number; rumbo?: number; en: string }
 
 interface Estado {
-  version: 2;
+  version: 3;
   consecutivos: Record<string, number>;
   reportes: ReporteDemo[];
   /** GPS (AVL) simulado de cada unidad. */
   avl: Record<string, PosicionAvl>;
-  /** Reloj de la demo: tiempo virtual = base + (real - baseReal) × factor. */
+  /** Reloj de la simulación: avance = base + (real - baseReal) × factor. No es la hora que se muestra. */
   reloj: { baseReal: number; baseVirtual: number; factor: number };
   /** Último avance del GPS simulado (compartido entre pestañas para no mover doble). */
   ultimoTic?: number;
@@ -110,7 +113,7 @@ interface Estado {
 // ---------------------------------------------------------------------------
 
 const vacio = (): Estado => ({
-  version: 2,
+  version: 3,
   consecutivos: {},
   reportes: [],
   avl: Object.fromEntries(UNIDADES_DEMO.map((u) => [u.unidadId, { ...u.base, en: new Date().toISOString() }])),
@@ -126,7 +129,7 @@ function leer(): Estado {
     const t = localStorage.getItem(CLAVE);
     if (t) {
       const e = JSON.parse(t) as Estado;
-      if (e.version === 2) memoria = e;
+      if (e.version === 3) memoria = depurar(e);
     }
   } catch { /* sin almacenamiento: queda en memoria */ }
   return memoria;
@@ -147,10 +150,21 @@ function cambiar<T>(f: (e: Estado) => { resultado: T; folios: string[] }): T {
   return resultado;
 }
 
+/** Reloj de la simulación (va ×10 si se acelera): solo mide el avance del CAD simulado y de las unidades. */
 const virtual = (r: Estado['reloj'], real = Date.now()) => r.baseVirtual + (real - r.baseReal) * r.factor;
-/** Hora de la demo en milisegundos (puede ir acelerada). */
-export const ahora = () => virtual(leer().reloj);
-const ahoraIso = () => new Date(ahora()).toISOString();
+/** Hora real, en milisegundos. Es la que se guarda en el historial y se muestra. */
+export const ahora = () => Date.now();
+const ahoraIso = () => new Date().toISOString();
+
+/** Los reportes de prueba se borran solos pasadas estas horas, para que la bandeja no muestre antigüedades de días. */
+export const HORAS_DATOS_DEMO = 6;
+function depurar(e: Estado): Estado {
+  const limite = Date.now() - HORAS_DATOS_DEMO * 3600_000;
+  const antes = e.reportes.length;
+  e.reportes = e.reportes.filter((r) => new Date(r.creadoEn).getTime() >= limite);
+  if (e.reportes.length !== antes) try { localStorage.setItem(CLAVE, JSON.stringify(e)); } catch { /* sin almacenamiento */ }
+  return e;
+}
 export const velocidad = () => leer().reloj.factor;
 
 /** Cambia la velocidad del reloj de la demo sin saltos. */
@@ -266,7 +280,7 @@ export function crearReporte(d: NuevoReporte): ReporteDemo {
   const cnie = clasificarCnie(incidente.id, respuestasDadas, d.codigoCnie);
   return cambiar((e) => {
     const ruta = enrutarPorUbicacion(lugar.lat, lugar.lng);
-    const iso = new Date(virtual(e.reloj)).toISOString();
+    const iso = ahoraIso();
     const anio = new Date(iso).getUTCFullYear();
     const clave = ruta.municipio?.claveInegi ?? null;
     const k = `${clave ?? '000'}-${anio}`;
@@ -371,13 +385,13 @@ const activos = (e: Estado) => e.reportes.filter((r) => !ESTADOS_FINALES.include
 
 function unidadesAvl(e: Estado, cadId: string): UnidadAvl[] {
   const ocupadas = new Set(activos(e).filter((r) => r.unidad).map((r) => r.unidad!.unidadId));
-  return UNIDADES_DEMO.filter((u) => u.cadId === cadId).map((u) => ({
+  return UNIDADES_DEMO.filter((u) => puedeDespachar(cadId, u.cadId)).map((u) => ({
     unidadId: u.unidadId, corporacion: u.corporacion, etiqueta: u.etiqueta, disponible: !ocupadas.has(u.unidadId), posicion: e.avl[u.unidadId],
   }));
 }
 
 function asignar(e: Estado, r: ReporteDemo, unidadId: string) {
-  const u = UNIDADES_DEMO.find((x) => x.unidadId === unidadId && x.cadId === r.cadId);
+  const u = UNIDADES_DEMO.find((x) => x.unidadId === unidadId && puedeDespachar(r.cadId, x.cadId));
   if (!u) throw new ErrorDemo(400, 'unidad_desconocida');
   const p = e.avl[u.unidadId] ?? u.base;
   const ruta = estimarRuta(p, r.ubicacion);
@@ -451,7 +465,7 @@ export function vistaOperador(r: ReporteDemo) {
     folioCad: r.folioCad,
     cadId: r.cadId,
     incidenteId: r.incidenteId,
-    incidente: incidente?.nombreCiudadano ?? r.incidenteId,
+    incidente: incidente?.nombreCorto ?? r.incidenteId,
     categoria: incidente?.categoria ?? null,
     codigoCnie: r.cnie?.incidente?.codigo ?? null,
     cnie: r.cnie ?? null,
@@ -585,13 +599,14 @@ function aplicar(e: Estado, r: ReporteDemo, a: AccionDemo, autor: string) {
 // Reloj: escalamiento al C5, CAD simulado y GPS de las unidades
 // ---------------------------------------------------------------------------
 
-/** Pasos del CAD simulado, en segundos del reloj de la demo desde que se creó el reporte. */
+/** Pasos del CAD simulado, en segundos del reloj de la simulación (×1 o ×10) desde que se creó el reporte. */
 /** El cierre automático solo existe en la demo, para no esperar al operador. */
 export const NOTA_CIERRE_DEMO = 'Cerrado automáticamente por la demo (en el servicio real lo cierra el operador)';
 const SIM = { recibe: 20, asigna: 35, mensaje: 45, sale: 60, cierraTrasLlegar: 90 };
 function tic() {
   cambiar((e) => {
     const t = virtual(e.reloj);
+    const real = Date.now();
     const dt = e.ultimoTic ? Math.min(2 * e.reloj.factor, Math.max(0, (t - e.ultimoTic) / 1000)) : 0;
     e.ultimoTic = t;
     const folios: string[] = [];
@@ -600,7 +615,7 @@ function tic() {
       let cambio = false;
       // Sin acuse a tiempo, el reporte pasa al C5 con el mismo folio.
       if (!r.cadSimulado && r.estado === 'recibido' && !r.folioCad && r.cadId !== CAD_ESTATAL_ID
-        && t - new Date(r.creadoEn).getTime() > ESPERA_ACUSE_SEG * 1000) {
+        && real - new Date(r.creadoEn).getTime() > ESPERA_ACUSE_SEG * 1000) {
         r.historial.push({ estado: 'recibido', en: ahoraIso(), nota: `${nombreCad(r.cadId)} no acusó en ${ESPERA_ACUSE_SEG} s; se escaló al C5` });
         r.cadId = CAD_ESTATAL_ID;
         cambio = true;
@@ -619,6 +634,16 @@ function tic() {
       if (cambio) {
         r.actualizadoEn = ahoraIso();
         folios.push(r.folio);
+      }
+    }
+    // Una unidad que terminó vuelve a su zona de patrullaje: si se quedara en el lugar del último
+    // reporte, el siguiente reporte en el mismo sitio mediría un traslado de 0 s.
+    const ocupadas = new Set(activos(e).filter((r) => r.unidad).map((r) => r.unidad!.unidadId));
+    for (const u of UNIDADES_DEMO) {
+      const p = e.avl[u.unidadId];
+      if (!ocupadas.has(u.unidadId) && p && distanciaMetros(p, u.base) > 15) {
+        e.avl[u.unidadId] = { ...u.base, en: ahoraIso() };
+        if (!folios.length) folios.push('*');
       }
     }
     return { resultado: null, folios };

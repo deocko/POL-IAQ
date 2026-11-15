@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native';
 
 /**
- * Tema claro de Pol-IAQ: fondos blancos y azules muy suaves, texto oscuro
+ * Tema claro de POL-IAQ: fondos blancos y azules muy suaves, texto oscuro
  * para buen contraste y un solo color fuerte (coral) reservado para el botón
  * de asistencia directa.
  */

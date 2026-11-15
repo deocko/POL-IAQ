@@ -20,7 +20,7 @@ if (require.main === module) {
   const config = cargarConfig();
   void crearApp(config)
     .then((app) => app.listen(config.puerto))
-    .then(() => console.log(`Pol-IAQ API en el puerto ${config.puerto} · almacén: ${config.databaseUrl ? 'PostgreSQL' : 'memoria'} · SMS: ${config.sms.proveedor}`))
+    .then(() => console.log(`POL-IAQ API en el puerto ${config.puerto} · almacén: ${config.databaseUrl ? 'PostgreSQL' : 'memoria'} · SMS: ${config.sms.proveedor}`))
     .catch((err) => {
       console.error(err);
       process.exit(1);

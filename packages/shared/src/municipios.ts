@@ -1,5 +1,5 @@
 /**
- * Municipios piloto de Pol-IAQ.
+ * Municipios piloto de POL-IAQ.
  *
  * `claveInegi` es la clave de municipio del Marco Geoestadístico de INEGI
  * (estado 22 = Querétaro) y se usa dentro del folio unificado.

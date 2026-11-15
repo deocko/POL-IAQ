@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Pol-IAQ",
+    "name": "POL-IAQ",
     "slug": "pol-iaq",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,10 +16,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "mx.poliaq.ciudadano",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Pol-IAQ usa tu ubicación para enviar a la unidad de emergencia al lugar exacto del reporte.",
-        "NSCameraUsageDescription": "Pol-IAQ usa la cámara para adjuntar fotos y videos como evidencia de tu reporte.",
-        "NSMicrophoneUsageDescription": "Pol-IAQ usa el micrófono para hablar con la despachadora 911 virtual y para grabar audio o video como evidencia de tu reporte.",
-        "NSSpeechRecognitionUsageDescription": "Pol-IAQ convierte tu voz en texto para contestar las preguntas de la despachadora 911 virtual."
+        "NSLocationWhenInUseUsageDescription": "POL-IAQ usa tu ubicación para enviar a la unidad de emergencia al lugar exacto del reporte.",
+        "NSCameraUsageDescription": "POL-IAQ usa la cámara para adjuntar fotos y videos como evidencia de tu reporte.",
+        "NSMicrophoneUsageDescription": "POL-IAQ usa el micrófono para hablar con la despachadora 911 virtual y para grabar audio o video como evidencia de tu reporte.",
+        "NSSpeechRecognitionUsageDescription": "POL-IAQ convierte tu voz en texto para contestar las preguntas de la despachadora 911 virtual."
       }
     },
     "android": {
@@ -45,21 +45,21 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Pol-IAQ usa tu ubicación para enviar a la unidad de emergencia al lugar exacto del reporte."
+          "locationWhenInUsePermission": "POL-IAQ usa tu ubicación para enviar a la unidad de emergencia al lugar exacto del reporte."
         }
       ],
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Pol-IAQ usa la cámara para adjuntar fotos y videos como evidencia de tu reporte.",
-          "microphonePermission": "Pol-IAQ usa el micrófono para grabar audio o video como evidencia de tu reporte."
+          "cameraPermission": "POL-IAQ usa la cámara para adjuntar fotos y videos como evidencia de tu reporte.",
+          "microphonePermission": "POL-IAQ usa el micrófono para grabar audio o video como evidencia de tu reporte."
         }
       ],
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "Pol-IAQ usa el micrófono para hablar con la despachadora 911 virtual.",
-          "speechRecognitionPermission": "Pol-IAQ convierte tu voz en texto para contestar las preguntas de la despachadora 911 virtual."
+          "microphonePermission": "POL-IAQ usa el micrófono para hablar con la despachadora 911 virtual.",
+          "speechRecognitionPermission": "POL-IAQ convierte tu voz en texto para contestar las preguntas de la despachadora 911 virtual."
         }
       ]
     ]

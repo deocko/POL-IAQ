@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   debeOfrecer911, distanciaMetros, encolar, esQueja, estimarRuta, medirTiempos, permiteAnonimo, reportanteVisible, resumirTiempos,
-  rutaConRespaldo, unidadMasCercana, vaciarCola, CrearReporteSchema, OpinionSchema,
+  rutaConRespaldo, unidadMasCercana, puedeDespachar, etaSuperaMeta, CAD_ESTATAL_ID, vaciarCola, CrearReporteSchema, OpinionSchema,
 } from './index';
 
 const centro = { lat: 20.5888, lng: -100.3899 };
@@ -74,6 +74,19 @@ describe('tiempos de respuesta', () => {
     const r = resumirTiempos([a, b]);
     expect(r[0]).toMatchObject({ id: 'recepcion', n: 2, promedioSegundos: 60, medianaSegundos: 60, enMeta: 50 });
   });
+
+  it('un traslado de 0 s (en camino y en sitio a la vez) no cuenta y no baja la mediana a 0', () => {
+    const conTraslado = (s: number) => medirTiempos([
+      { estado: 'recibido', en: en(0) }, { estado: 'validado', en: en(10) }, { estado: 'asignado', en: en(10) },
+      { estado: 'en_camino', en: en(20) }, { estado: 'en_sitio', en: en(20 + s) },
+    ], 'alta', t0 + 1000_000);
+    const cero = conTraslado(0);
+    expect(cero.etapas[3]).toMatchObject({ segundos: null, estado: 'omitida' });
+    const r = resumirTiempos([cero, cero, conTraslado(80), conTraslado(100)]);
+    expect(r[3]).toMatchObject({ id: 'traslado', n: 2, promedioSegundos: 90, medianaSegundos: 90 });
+    // La asignación automática sí puede durar 0 s: esa se mide.
+    expect(r[1]).toMatchObject({ id: 'asignacion', medianaSegundos: 0 });
+  });
 });
 
 describe('identidad, opinión y cola', () => {
@@ -115,3 +128,16 @@ describe('identidad, opinión y cola', () => {
 });
 
 function t(s: number) { return Date.parse('2026-11-14T10:00:00Z') + s * 1000; }
+
+describe('despacho tras escalar al C5', () => {
+  it('el C5 puede mandar unidades de cualquier CAD; un municipio solo las suyas', () => {
+    expect(puedeDespachar(CAD_ESTATAL_ID, 'cad-queretaro')).toBe(true);
+    expect(puedeDespachar('cad-queretaro', 'cad-queretaro')).toBe(true);
+    expect(puedeDespachar('cad-queretaro', 'cad-corregidora')).toBe(false);
+  });
+  it('advierte si la llegada estimada supera la meta', () => {
+    expect(etaSuperaMeta(54, 35 * 60)).toBe(true);
+    expect(etaSuperaMeta(10, 13 * 60)).toBe(false);
+    expect(etaSuperaMeta(undefined, 600)).toBe(false);
+  });
+});

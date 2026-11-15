@@ -21,6 +21,9 @@ export interface IncidenteCatalogo {
   id: string;
   /** Alineada con los tipos 1, 2, 3 y 5 del CNIE. */
   categoria: CategoriaIncidente;
+  /** Nombre corto: el mismo en el botón de la app ciudadana, en la consola y en el CAD. */
+  nombreCorto: string;
+  /** Descripción más larga para listas y la despachadora virtual. */
   nombreCiudadano: string;
   /** Tipo CNIE (1 dígito). `null` solo en "Otra emergencia", que clasifica el operador. */
   codigoCnieTipo: CodigoNombre | null;
@@ -28,7 +31,7 @@ export interface IncidenteCatalogo {
   codigoCnieSubtipo: CodigoNombre | null;
   /** Incidente CNIE (5 dígitos). `null` cuando se afina con una respuesta o lo asigna el operador. */
   codigoCnie: CodigoNombre | null;
-  /** Prioridad que da el CNIE al incidente. Puede diferir de `prioridad`, que es la operativa de Pol-IAQ. */
+  /** Prioridad que da el CNIE al incidente. Puede diferir de `prioridad`, que es la operativa de POL-IAQ. */
   prioridadCnie: PrioridadCnie | null;
   /** Segundo código que se registra junto al principal cuando aplica (por ejemplo, lesionados en una agresión). */
   codigoCnieSecundario?: CodigoNombre;
@@ -58,20 +61,20 @@ function cnie(subtipo: string, incidente: string | null) {
 const SIN_CNIE = { codigoCnieTipo: null, codigoCnieSubtipo: null, codigoCnie: null, prioridadCnie: null };
 
 export const CATALOGO_SEMILLA: readonly IncidenteCatalogo[] = [
-  { id: 'robo-en-curso', categoria: 'seguridad', nombreCiudadano: 'Me están robando / robo en curso', ...cnie('304', null), prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_ARMAS, P_HERIDOS, P_PERSONAS] },
-  { id: 'agresion', categoria: 'seguridad', nombreCiudadano: 'Agresión o pelea', ...cnie('309', '30909'), prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_ARMAS, P_HERIDOS, P_PERSONAS] },
-  { id: 'intrusion-domicilio', categoria: 'seguridad', nombreCiudadano: 'Ruidos extraños o alguien intenta entrar a mi casa', ...cnie('310', '31001'), prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_ARMAS, P_PERSONAS] },
-  { id: 'violencia-familiar', categoria: 'seguridad', nombreCiudadano: 'Violencia familiar o de pareja', ...cnie('305', '30503'), prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_HERIDOS, P_ARMAS] },
-  { id: 'disparos', categoria: 'seguridad', nombreCiudadano: 'Disparos', ...cnie('302', '30202'), prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_HERIDOS] },
-  { id: 'persona-sospechosa', categoria: 'seguridad', nombreCiudadano: 'Persona o vehículo sospechoso', ...cnie('309', '30904'), prioridad: 'media', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_PERSONAS] },
-  { id: 'accidente-vial', categoria: 'medico', nombreCiudadano: 'Accidente de tránsito', ...cnie('101', null), prioridad: 'alta', corporacionSugerida: 'cruz_roja', preguntasGuia: [P_HERIDOS, P_PERSONAS] },
-  { id: 'emergencia-medica', categoria: 'medico', nombreCiudadano: 'Emergencia médica (desmayo, dolor de pecho, caída)', ...cnie('103', null), prioridad: 'alta', corporacionSugerida: 'cruz_roja', preguntasGuia: [] },
-  { id: 'persona-lesionada', categoria: 'medico', nombreCiudadano: 'Persona herida o inconsciente', ...cnie('102', null), prioridad: 'alta', corporacionSugerida: 'cruz_roja', preguntasGuia: [P_PERSONAS] },
-  { id: 'incendio', categoria: 'proteccion_civil', nombreCiudadano: 'Incendio', ...cnie('203', null), prioridad: 'alta', corporacionSugerida: 'bomberos', preguntasGuia: [P_HERIDOS] },
-  { id: 'fuga-gas', categoria: 'proteccion_civil', nombreCiudadano: 'Fuga de gas', ...cnie('201', '20115'), prioridad: 'alta', corporacionSugerida: 'bomberos', preguntasGuia: [] },
-  { id: 'inundacion', categoria: 'proteccion_civil', nombreCiudadano: 'Inundación', ...cnie('202', '20207'), prioridad: 'media', corporacionSugerida: 'proteccion_civil', preguntasGuia: [P_PERSONAS] },
-  { id: 'ruido-rina', categoria: 'asistencia', nombreCiudadano: 'Ruido excesivo o fiesta', ...cnie('501', '50105'), prioridad: 'baja', corporacionSugerida: 'policia_municipal', preguntasGuia: [] },
-  { id: 'otro', categoria: 'seguridad', nombreCiudadano: 'Otra emergencia', ...SIN_CNIE, prioridad: 'media', corporacionSugerida: 'policia_municipal', preguntasGuia: [] },
+  { id: 'robo-en-curso', categoria: 'seguridad', nombreCorto: 'Me están robando', nombreCiudadano: 'Me están robando / robo en curso', ...cnie('304', null), prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_ARMAS, P_HERIDOS, P_PERSONAS] },
+  { id: 'agresion', categoria: 'seguridad', nombreCorto: 'Agresión o pelea', nombreCiudadano: 'Agresión o pelea', ...cnie('309', '30909'), prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_ARMAS, P_HERIDOS, P_PERSONAS] },
+  { id: 'intrusion-domicilio', categoria: 'seguridad', nombreCorto: 'Alguien quiere entrar', nombreCiudadano: 'Ruidos extraños o alguien intenta entrar a mi casa', ...cnie('310', '31001'), prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_ARMAS, P_PERSONAS] },
+  { id: 'violencia-familiar', categoria: 'seguridad', nombreCorto: 'Violencia familiar', nombreCiudadano: 'Violencia familiar o de pareja', ...cnie('305', '30503'), prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_HERIDOS, P_ARMAS] },
+  { id: 'disparos', categoria: 'seguridad', nombreCorto: 'Disparos', nombreCiudadano: 'Disparos', ...cnie('302', '30202'), prioridad: 'alta', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_HERIDOS] },
+  { id: 'persona-sospechosa', categoria: 'seguridad', nombreCorto: 'Algo sospechoso', nombreCiudadano: 'Persona o vehículo sospechoso', ...cnie('309', '30904'), prioridad: 'media', corporacionSugerida: 'policia_municipal', preguntasGuia: [P_PERSONAS] },
+  { id: 'accidente-vial', categoria: 'medico', nombreCorto: 'Accidente de tránsito', nombreCiudadano: 'Accidente de tránsito', ...cnie('101', null), prioridad: 'alta', corporacionSugerida: 'cruz_roja', preguntasGuia: [P_HERIDOS, P_PERSONAS] },
+  { id: 'emergencia-medica', categoria: 'medico', nombreCorto: 'Emergencia médica', nombreCiudadano: 'Emergencia médica (desmayo, dolor de pecho, caída)', ...cnie('103', null), prioridad: 'alta', corporacionSugerida: 'cruz_roja', preguntasGuia: [] },
+  { id: 'persona-lesionada', categoria: 'medico', nombreCorto: 'Persona herida', nombreCiudadano: 'Persona herida o inconsciente', ...cnie('102', null), prioridad: 'alta', corporacionSugerida: 'cruz_roja', preguntasGuia: [P_PERSONAS] },
+  { id: 'incendio', categoria: 'proteccion_civil', nombreCorto: 'Incendio', nombreCiudadano: 'Incendio', ...cnie('203', null), prioridad: 'alta', corporacionSugerida: 'bomberos', preguntasGuia: [P_HERIDOS] },
+  { id: 'fuga-gas', categoria: 'proteccion_civil', nombreCorto: 'Fuga de gas', nombreCiudadano: 'Fuga de gas', ...cnie('201', '20115'), prioridad: 'alta', corporacionSugerida: 'bomberos', preguntasGuia: [] },
+  { id: 'inundacion', categoria: 'proteccion_civil', nombreCorto: 'Inundación', nombreCiudadano: 'Inundación', ...cnie('202', '20207'), prioridad: 'media', corporacionSugerida: 'proteccion_civil', preguntasGuia: [P_PERSONAS] },
+  { id: 'ruido-rina', categoria: 'asistencia', nombreCorto: 'Ruido o fiesta', nombreCiudadano: 'Ruido excesivo o fiesta', ...cnie('501', '50105'), prioridad: 'baja', corporacionSugerida: 'policia_municipal', preguntasGuia: [] },
+  { id: 'otro', categoria: 'seguridad', nombreCorto: 'Otra emergencia', nombreCiudadano: 'Otra emergencia', ...SIN_CNIE, prioridad: 'media', corporacionSugerida: 'policia_municipal', preguntasGuia: [] },
 ];
 
 export function incidentePorId(id: string): IncidenteCatalogo | undefined {
