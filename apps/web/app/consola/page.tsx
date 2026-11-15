@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './consola.css';
-import { duracionTexto, estimarRuta, type TiempoEtapa } from '@pol-iaq/shared/movil';
+import {
+  buscarCnie, duracionTexto, estimarRuta, etiquetaCnie, incidenteCnie, nombreLegible, subtipoPermiteAnonimo, type GrupoCnie, type IncidenteCnie, type TiempoEtapa,
+} from '@pol-iaq/shared/movil';
 import { Mapa } from '../../lib/mapa/Mapa';
 import { SelectorTema } from '../../lib/tema';
 import { Marca } from '../../lib/marca';
@@ -23,7 +25,7 @@ function guardarSesion(t: string | null) {
 }
 /** Evita que una vista vieja (respuesta HTTP lenta) pise una más nueva. */
 const esMasViejo = (v: Reporte, actual?: Reporte) => !!actual && actual.actualizadoEn > v.actualizadoEn;
-const mensajeDe = (e: unknown) => (e instanceof ErrorApi ? ERRORES[e.codigo] ?? `Error (${e.codigo})` : 'Sin conexión con el API.');
+const mensajeDe = (e: unknown) => (e instanceof ErrorApi ? ERRORES[e.codigo] ?? e.mensaje ?? `Error (${e.codigo})` : 'Sin conexión con el API.');
 
 /**
  * Consola del operador/despachador. Para municipios sin CAD integrado (modo
@@ -217,6 +219,7 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
                 {r.asistenciaDirecta && <span className="c-chip c-chip-alerta">Asistencia directa</span>}
                 <span className={`c-chip e-${r.estado}`}>{ESTADO[r.estado]}</span>
                 <span className="c-chip">Prioridad {r.prioridad}</span>
+                <span className={`c-chip ${r.cnie?.incidente ? '' : 'c-chip-aviso'}`}>{r.cnie ? `CNIE ${r.cnie.incidente?.codigo ?? r.cnie.subtipo.codigo}` : 'Sin código CNIE'}</span>
                 {!r.operable && <span className="c-chip">Solo lectura</span>}
                 {r.automatico && <span className="c-chip c-chip-neutro">Demo automática</span>}
                 {r.opinion?.queja && <span className="c-chip c-chip-alerta">Queja</span>}
@@ -299,12 +302,13 @@ function Detalle({
           {r.asistenciaDirecta && <span className="c-chip c-chip-alerta">Botón de asistencia directa</span>}
           {r.escenarioId && <span className="c-chip">Acceso rápido de lugar guardado</span>}
           <span className="c-chip">Prioridad {r.prioridad}</span>
-          {r.codigoCnie && <span className="c-chip">CNIE {r.codigoCnie}</span>}
           {r.automatico && <span className="c-chip c-chip-neutro">Demo automática</span>}
         </div>
         {r.cerradoPorDemo && <p className="c-nota c-pequeno">Lo cerró la demo automática para acelerar el recorrido. En el servicio real, el reporte lo cierra el operador con “Cerrar como atendido”.</p>}
         {r.escalaAlC5En && <Cuenta hasta={r.escalaAlC5En} ahora={ahora} />}
       </div>
+
+      <ClasificacionCnie r={r} ocupado={ocupado} hacer={hacer} />
 
       {r.canalizacion.alertas.length > 0 && (
         <div className="c-alertas">{r.canalizacion.alertas.map((a) => <span key={a} className="c-chip c-chip-alerta">{a}</span>)}</div>
@@ -482,6 +486,116 @@ const ESTADO_ETAPA: Record<TiempoEtapa['estado'], string> = {
 };
 
 /** Tiempo desde el reporte contra la meta de llegada, para la bandeja. */
+const ORIGEN_CNIE: Record<string, string> = {
+  catalogo: 'Código de la opción que eligió el ciudadano',
+  respuestas: 'Afinado con lo que contestó el ciudadano',
+  ciudadano: 'Elegido por el ciudadano en el catálogo completo',
+  operador: 'Corregido por un operador',
+};
+
+/**
+ * Clasificación CNIE V 3.0 del folio: etiqueta completa, las dos prioridades
+ * (CNIE y operativa) y la corrección del código, que queda en la bitácora.
+ */
+function ClasificacionCnie({ r, ocupado, hacer }: { r: Reporte; ocupado: boolean; hacer: (a: Accion, despues?: () => void) => Promise<void> }) {
+  const [busqueda, setBusqueda] = useState('');
+  const [elegido, setElegido] = useState<IncidenteCnie | null>(null);
+  const [motivo, setMotivo] = useState('');
+  const [abierto, setAbierto] = useState(!r.cnie?.incidente);
+  const resultados = useMemo(() => buscarCnie(busqueda, 8), [busqueda]);
+  const c = r.cnie;
+  const difiere = c?.prioridad && c.prioridad.toLowerCase() !== r.prioridad;
+  // Un reporte anónimo que se reclasifica a un subtipo que no admite anónimo: no se puede devolver la llamada.
+  const anonimoFuera = r.reportante?.identidad === 'anonimo' && c && !subtipoPermiteAnonimo(c.subtipo.codigo) && c.origen === 'operador';
+  const vistaPrevia = elegido ? etiquetaCnie({ tipo: elegido.tipo, subtipo: elegido.subtipo, incidente: elegido, prioridad: elegido.prioridad }) : '';
+
+  return (
+    <div className="c-tarjeta c-cnie" data-testid="cnie">
+      <div className="c-fila">
+        <h3>Clasificación CNIE</h3>
+        <span className="suave c-pequeno">V {c?.version ?? '3.0'}</span>
+      </div>
+      {c ? (
+        <>
+          <p className="c-cnie-etiqueta" data-testid="cnie-etiqueta">{r.cnieEtiqueta}</p>
+          <div className="c-etiquetas">
+            {c.prioridad && <span className={`c-chip ${c.prioridad === 'ALTA' ? 'c-chip-alerta' : ''}`}>Prioridad CNIE {c.prioridad}</span>}
+            {difiere && <span className="c-chip">Operativa {r.prioridad}</span>}
+            {c.secundario && <span className="c-chip" title={nombreLegible(c.secundario.nombre)}>Secundario {c.secundario.codigo} · {nombreLegible(c.secundario.nombre)}</span>}
+          </div>
+          <p className="suave c-pequeno">{ORIGEN_CNIE[c.origen]}{!c.incidente ? '. Falta el incidente: elígelo abajo.' : '.'}</p>
+        </>
+      ) : (
+        <p className="c-nota c-pequeno">Sin código CNIE. El ciudadano eligió “Otra emergencia”: asígnale el incidente que corresponda.</p>
+      )}
+      {anonimoFuera && <p className="c-nota c-pequeno">El reporte llegó como anónimo y este subtipo normalmente no lo admite. Contesta por el chat del folio.</p>}
+
+      {r.operable && (
+        <details className="c-reasignar" open={abierto} onToggle={(e) => setAbierto((e.target as HTMLDetailsElement).open)}>
+          <summary>{c?.incidente ? 'Corregir código' : 'Asignar código'}</summary>
+          <label className="c-campo">Busca por nombre o código
+            <input type="search" value={busqueda} onChange={(e) => { setBusqueda(e.target.value); setElegido(null); }} placeholder="Ej. robo negocio, riña, 30202" data-testid="cnie-buscar" autoComplete="off" />
+          </label>
+          {busqueda.trim() && !elegido && (
+            resultados.length ? (
+              <ul className="c-cnie-resultados" role="listbox" aria-label="Incidentes del CNIE">
+                {resultados.map((i) => (
+                  <li key={i.codigo}>
+                    <button type="button" role="option" aria-selected={false} onClick={() => setElegido(i)}>
+                      <strong>{i.codigo}</strong> {nombreLegible(i.nombre)}
+                      <span className="suave c-pequeno"> · {i.tipo.nombre} / {i.subtipo.nombreCorto} · {i.prioridad}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="suave c-pequeno">Sin resultados. Los códigos dados de baja en el CNIE V 3.0 no se pueden usar.</p>
+          )}
+          {elegido && (
+            <div className="c-cnie-elegido">
+              <p><strong>Nuevo:</strong> {vistaPrevia}</p>
+              <input placeholder="Motivo de la corrección (queda en la bitácora)" value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={500} aria-label="Motivo de la corrección" />
+              <div className="c-botones">
+                <button className="c-boton" disabled={ocupado || elegido.codigo === c?.incidente?.codigo} onClick={() => hacer({ accion: 'reclasificar', codigoCnie: elegido.codigo, ...(motivo.trim() && { motivo: motivo.trim() }) }, () => { setElegido(null); setBusqueda(''); setMotivo(''); setAbierto(false); })}>Guardar código</button>
+                <button className="c-boton-sec" onClick={() => setElegido(null)}>Cambiar</button>
+              </div>
+            </div>
+          )}
+        </details>
+      )}
+
+      {r.correccionesCnie.length > 0 && (
+        <>
+          <h4>Correcciones (bitácora)</h4>
+          <ul className="c-lista c-pequeno" data-testid="cnie-correcciones">
+            {r.correccionesCnie.map((x) => (
+              <li key={x.en + x.a}>{hora(x.en)} · {x.de ?? 'sin código'} → <strong>{x.a}</strong> {incidenteCnie(x.a) ? `(${nombreLegible(incidenteCnie(x.a)!.nombre)})` : ''} · {x.actor.replace(/^operador:/, '')}{x.motivo ? ` · “${x.motivo}”` : ''}</li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TablaCnie({ titulo, grupos }: { titulo: string; grupos: GrupoCnie[] }) {
+  return (
+    <table className="c-tiempos" aria-label={titulo}>
+      <thead><tr><th scope="col">{titulo}</th><th scope="col">Reportes</th><th scope="col">Quejas</th><th scope="col">Llegada promedio</th><th scope="col">En meta</th></tr></thead>
+      <tbody>
+        {grupos.map((g) => (
+          <tr key={g.codigo}>
+            <th scope="row">{g.codigo === 'sin' ? g.nombre : <><span className="suave">{g.codigo}</span> {g.nombre}</>}</th>
+            <td>{g.reportes}</td>
+            <td>{g.quejas ? <span className="c-chip c-chip-alerta">{g.quejas}</span> : 0}</td>
+            <td>{g.llegada.promedioSegundos == null ? '—' : duracionTexto(g.llegada.promedioSegundos)}</td>
+            <td>{g.llegada.enMeta == null ? '—' : <span className={`c-chip ${g.llegada.enMeta >= 90 ? 'c-chip-ok' : g.llegada.enMeta >= 70 ? 'c-chip-aviso' : 'c-chip-alerta'}`}>{g.llegada.enMeta}%</span>}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function ChipLlegada({ t }: { t: Reporte['tiempos']['llegada'] }) {
   if (t.segundos == null) return null;
   const cls = t.estado === 'excedida' ? 'c-chip-alerta' : t.estado === 'en_riesgo' ? 'c-chip-aviso' : t.estado === 'cumplida' ? 'c-chip-ok' : '';
@@ -594,6 +708,15 @@ function VistaTiempos({ token, ahora, nombreCad, alAbrir }: { token: string; aho
             })}
           </tbody>
         </table>
+      </div>
+      <div className="c-tarjeta" data-testid="tablero-cnie">
+        <h3>Por tipo y subtipo del CNIE</h3>
+        {t.reportes.length ? (
+          <div className="c-rejilla c-rejilla-cnie">
+            <TablaCnie titulo="Tipo" grupos={t.porCnie.tipos} />
+            <TablaCnie titulo="Subtipo" grupos={t.porCnie.subtipos} />
+          </div>
+        ) : <p className="suave">Aún no hay reportes.</p>}
       </div>
       <div className="c-tarjeta">
         <h3>Quejas y calificaciones</h3>

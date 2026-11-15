@@ -2,7 +2,7 @@
 
 import { io } from 'socket.io-client';
 import * as demo from '../../lib/demo/motor';
-import type { MetasTiempo, OpinionGuardada, ResumenEtapa, TiemposReporte } from '@pol-iaq/shared/movil';
+import type { ClasificacionCnie, GrupoCnie, MetasTiempo, OpinionGuardada, ResumenEtapa, TiemposReporte } from '@pol-iaq/shared/movil';
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 /** Demo pública: sin servidor, el API y el CAD simulado corren en el navegador. */
@@ -25,6 +25,11 @@ export interface Reporte {
   incidente: string;
   categoria: string | null;
   codigoCnie: string | null;
+  /** Clasificación CNIE V 3.0; null en folios anteriores o "Otra emergencia" sin clasificar. */
+  cnie: ClasificacionCnie | null;
+  /** "CNIE 30202 · Seguridad / Armas y explosivos / Detonación por arma de fuego · ALTA". */
+  cnieEtiqueta: string | null;
+  correccionesCnie: { en: string; actor: string; de: string | null; a: string; secundario: string | null; motivo: string | null }[];
   prioridad: Prioridad;
   estado: Estado;
   asistenciaDirecta: boolean;
@@ -66,9 +71,11 @@ export interface UnidadDisponible {
 export interface Tablero {
   metas: MetasTiempo;
   resumen: ResumenEtapa[];
-  reportes: { folio: string; cadId: string; prioridad: Prioridad; estado: Estado; creadoEn: string; tiempos: TiemposReporte; opinion: OpinionGuardada | null }[];
+  reportes: { folio: string; cadId: string; prioridad: Prioridad; estado: Estado; creadoEn: string; cnie: ClasificacionCnie | null; tiempos: TiemposReporte; opinion: OpinionGuardada | null }[];
   quejas: number;
   calificacionPromedio: number | null;
+  /** Reportes, quejas y llegada por tipo y subtipo del CNIE. */
+  porCnie: { tipos: GrupoCnie[]; subtipos: GrupoCnie[] };
 }
 
 export type Accion =
@@ -77,11 +84,12 @@ export type Accion =
   | { accion: 'asignar_cercana' }
   | { accion: 'estado'; estado: 'en_camino' | 'en_sitio' | 'cerrado' | 'improcedente'; nota?: string }
   | { accion: 'mensaje'; texto: string }
-  | { accion: 'transferir'; cadDestinoId: string; motivo?: string };
+  | { accion: 'transferir'; cadDestinoId: string; motivo?: string }
+  | { accion: 'reclasificar'; codigoCnie: string; codigoCnieSecundario?: string | null; motivo?: string };
 
 export class ErrorApi extends Error {
-  constructor(readonly status: number, readonly codigo: string) {
-    super(codigo);
+  constructor(readonly status: number, readonly codigo: string, readonly mensaje?: string) {
+    super(mensaje ?? codigo);
   }
 }
 
@@ -91,7 +99,7 @@ async function llamar<T>(ruta: string, token: string | null, init: RequestInit =
     headers: { 'content-type': 'application/json', ...(token && { authorization: `Bearer ${token}` }), ...init.headers },
   });
   const cuerpo = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new ErrorApi(resp.status, cuerpo.codigo ?? `http_${resp.status}`);
+  if (!resp.ok) throw new ErrorApi(resp.status, cuerpo.codigo ?? `http_${resp.status}`, cuerpo.mensaje);
   return cuerpo as T;
 }
 
@@ -100,7 +108,7 @@ async function enDemo<T>(f: () => unknown): Promise<T> {
   try {
     return f() as T;
   } catch (err) {
-    if (err instanceof demo.ErrorDemo) throw new ErrorApi(err.status, err.codigo);
+    if (err instanceof demo.ErrorDemo) throw new ErrorApi(err.status, err.codigo, err.mensaje);
     throw err;
   }
 }

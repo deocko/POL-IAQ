@@ -172,3 +172,10 @@
 @media (min-width: 900px) {
   .app-contenido { padding-top: var(--e5); }
 }
+
+/* "Otra emergencia": catálogo completo */
+.d-lista-catalogo { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--e2); }
+.d-lista-catalogo button { width: 100%; min-height: var(--toque); display: flex; align-items: center; justify-content: space-between; gap: var(--e2); text-align: left; padding: var(--e3); border: 1px solid var(--borde); border-radius: var(--r-m); background: var(--tarjeta); color: var(--texto); font: inherit; font-weight: 600; cursor: pointer; }
+.d-lista-catalogo button > span:first-child { display: grid; gap: 2px; overflow-wrap: anywhere; }
+.d-lista-catalogo button:hover, .d-lista-catalogo button:focus-visible { border-color: var(--primario); }
+.d-catalogo .d-campo input { width: 100%; }

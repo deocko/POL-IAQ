@@ -116,12 +116,15 @@ describe('llamada corta con la despachadora virtual', () => {
 
   it('en un tema nuevo hace solo las obligatorias, primero las vitales del incidente y con tope', () => {
     const lista = ids('emergencia-medica', {});
-    expect(lista).toEqual(['consciente', 'respira', 'sintoma', 'lugar_seguro']);
+    // La pregunta que afina el código CNIE (síntoma) va al final y no cuenta para el tope.
+    expect(lista).toEqual(['consciente', 'respira', 'lugar_seguro', 'sintoma']);
     expect(lista).not.toContain('quien_afectado');
     expect(lista).not.toContain('edad');
-    expect(ids('robo-en-curso', {}).length).toBe(MAX_PREGUNTAS_DESPACHADORA.temaNuevo);
-    expect(ids('robo-en-curso', {}, { yaHechas: 3 })).toHaveLength(1);
-    expect(ids('robo-en-curso', {}, { yaHechas: 4 })).toEqual([]);
+    expect(ids('robo-en-curso', {}).length).toBe(MAX_PREGUNTAS_DESPACHADORA.temaNuevo + 1);
+    expect(ids('robo-en-curso', {}).at(-1)).toBe('que_roban');
+    expect(ids('robo-en-curso', {}, { yaHechas: 3 })).toHaveLength(2);
+    expect(ids('robo-en-curso', {}, { yaHechas: 4 })).toEqual(['que_roban']);
+    expect(ids('robo-en-curso', { que_roban: 'casa' }, { yaHechas: 4 })).toEqual([]);
   });
 
   it('desde un acceso rápido no repite lo prellenado y solo pregunta lo vital', () => {
@@ -131,10 +134,12 @@ describe('llamada corta con la despachadora virtual', () => {
     ]) {
       for (const e of sugerirEscenarios(lugar)) {
         const lista = preguntasDespachadora(P, e.incidenteId, e.respuestasPrevias, { accesoRapido: true });
-        expect(lista.length, e.id).toBeLessThanOrEqual(MAX_PREGUNTAS_DESPACHADORA.accesoRapido);
+        // Tope del acceso rápido más, a lo sumo, la pregunta que afina el código CNIE.
+        expect(lista.filter((q) => !q.afinaCnie).length, e.id).toBeLessThanOrEqual(MAX_PREGUNTAS_DESPACHADORA.accesoRapido);
+        expect(lista.filter((q) => q.afinaCnie).length, e.id).toBeLessThanOrEqual(1);
         for (const q of lista) {
           expect(Object.keys(e.respuestasPrevias), e.id).not.toContain(q.id);
-          expect(esVital(q), `${e.id}:${q.id}`).toBe(true);
+          expect(esVital(q) || q.afinaCnie, `${e.id}:${q.id}`).toBe(true);
         }
       }
     }

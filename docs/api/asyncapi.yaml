@@ -19,6 +19,10 @@ info:
     - Entrega: el emisor reintenta con espera exponencial (0, 1, 2, 4, 8, 16 s) hasta recibir 2xx.
     - Acuse: el CAD debe enviar `incidente.recibido` en menos de 30 s; si no, Pol-IAQ escala al C5.
     - Evidencia: nunca va embebida; se envían enlaces firmados con vigencia de 15 minutos y su SHA-256.
+    - Clasificación: cada folio lleva el Catálogo Nacional de Incidentes de Emergencia (CNIE) V 3.0,
+      junio 2024 (`cnie`: tipo, subtipo, incidente con nombres y prioridad del catálogo). Solo se aceptan
+      incidentes vigentes; un código inexistente o retirado en un evento del CAD da 400 y no se aplica.
+      La misma clasificación viaja al C5 cuando el reporte se escala o se transfiere.
 channels:
   haciaCad:
     address: '{webhookUrl}'
@@ -39,6 +43,7 @@ channels:
       incidenteEstado: { $ref: '#/components/messages/incidenteEstado' }
       incidenteTransferido: { $ref: '#/components/messages/incidenteTransferido' }
       mensajeOperador: { $ref: '#/components/messages/mensajeOperador' }
+      incidenteReclasificado: { $ref: '#/components/messages/incidenteReclasificado' }
 operations:
   enviarAlCad:
     action: send
@@ -72,7 +77,29 @@ components:
     mensajeOperador:
       summary: Mensaje del operador al ciudadano
       payload: { $ref: '#/components/schemas/MensajeOperador' }
+    incidenteReclasificado:
+      summary: El CAD corrige el código CNIE del folio (queda en la bitácora de Pol-IAQ con el código anterior y el motivo)
+      payload: { $ref: '#/components/schemas/IncidenteReclasificado' }
   schemas:
+    CodigoNombre:
+      type: object
+      required: [codigo, nombre]
+      properties: { codigo: { type: string }, nombre: { type: string } }
+    ClasificacionCnie:
+      type: object
+      description: Clasificación del folio en el CNIE V 3.0 (tipo 1 dígito, subtipo 3, incidente 5).
+      required: [version, tipo, subtipo, incidente, prioridad, secundario, origen]
+      properties:
+        version: { type: string, example: '3.0' }
+        tipo: { $ref: '#/components/schemas/CodigoNombre', example: { codigo: '3', nombre: Seguridad } }
+        subtipo: { $ref: '#/components/schemas/CodigoNombre', example: { codigo: '302', nombre: Actos relacionados con armas/explosivos } }
+        incidente:
+          description: null mientras falte afinar el incidente (por ejemplo, un robo sin saber de qué); lo asigna el operador.
+          oneOf: [{ $ref: '#/components/schemas/CodigoNombre' }, { type: 'null' }]
+          example: { codigo: '30202', nombre: DETONACIÓN POR ARMA DE FUEGO }
+        prioridad: { type: [string, 'null'], enum: [ALTA, MEDIA, BAJA, null], description: Prioridad del CNIE (distinta de la prioridad operativa de la canalización). }
+        secundario: { oneOf: [{ $ref: '#/components/schemas/CodigoNombre' }, { type: 'null' }], description: 'Segundo código cuando aplica, p. ej. 10225 (lesionados en riña) junto a 30909.' }
+        origen: { type: string, enum: [catalogo, respuestas, ciudadano, operador], description: 'catalogo = código fijo de la opción; respuestas = afinado con lo que contestó el ciudadano; ciudadano = elegido en "Otra emergencia"; operador = corregido por un operador o el CAD.' }
     Base:
       type: object
       required: [eventoId, folio, secuencia, ocurridoEn, tipo, datos]
@@ -133,7 +160,8 @@ components:
               type: object
               properties:
                 incidenteId: { type: string }
-                codigoCnie: { type: [string, 'null'], description: Código del Catálogo Nacional de Incidentes de Emergencia }
+                codigoCnie: { type: [string, 'null'], description: 'Incidente CNIE de 5 dígitos (igual a cnie.incidente.codigo); null si falta afinarlo.' }
+                cnie: { oneOf: [{ $ref: '#/components/schemas/ClasificacionCnie' }, { type: 'null' }], description: 'null solo en "Otra emergencia" sin clasificar.' }
                 prioridad: { type: string, enum: [alta, media, baja] }
                 corporacionSugerida: { type: string }
                 ubicacion: { $ref: '#/components/schemas/Ubicacion' }
@@ -167,13 +195,34 @@ components:
                 cancelado: { type: boolean }
                 cuestionario: { $ref: '#/components/schemas/Cuestionario' }
                 canalizacion: { $ref: '#/components/schemas/Canalizacion' }
+                cnie: { oneOf: [{ $ref: '#/components/schemas/ClasificacionCnie' }, { type: 'null' }], description: Clasificación nueva tras respuestas que afinan el código. }
     IncidenteRecibido:
       allOf:
         - $ref: '#/components/schemas/Base'
         - type: object
           properties:
             tipo: { const: incidente.recibido }
-            datos: { type: object, required: [folioCad], properties: { folioCad: { type: string }, operador: { type: string } } }
+            datos:
+              type: object
+              required: [folioCad]
+              properties:
+                folioCad: { type: string }
+                operador: { type: string }
+                codigoCnie: { type: string, pattern: '^\d{5}$', description: 'Incidente CNIE con el que el CAD registró el folio. Si difiere del de Pol-IAQ, cuenta como corrección.' }
+    IncidenteReclasificado:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        - type: object
+          properties:
+            tipo: { const: incidente.reclasificado }
+            datos:
+              type: object
+              required: [codigoCnie]
+              properties:
+                codigoCnie: { type: string, pattern: '^\d{5}$', example: '31112' }
+                codigoCnieSecundario: { type: [string, 'null'], description: null lo quita; omitido conserva el anterior. }
+                motivo: { type: string, maxLength: 500 }
+                operador: { type: string }
     UnidadAsignada:
       allOf:
         - $ref: '#/components/schemas/Base'
@@ -231,3 +280,4 @@ components:
         - $ref: '#/components/schemas/IncidenteEstado'
         - $ref: '#/components/schemas/IncidenteTransferido'
         - $ref: '#/components/schemas/MensajeOperador'
+        - $ref: '#/components/schemas/IncidenteReclasificado'

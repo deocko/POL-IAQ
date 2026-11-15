@@ -1,5 +1,5 @@
 import {
-  CAD_ESTATAL_ID, ESTADOS, ETIQUETAS_CIUDADANO, MUNICIPIOS_PILOTO, incidentePorId, medirTiempos, preguntasPendientes, reportanteVisible, protocoloDe, puedeTransicionar, respuestasDe, type Protocolo,
+  CAD_ESTATAL_ID, ESTADOS, ETIQUETAS_CIUDADANO, MUNICIPIOS_PILOTO, etiquetaCnie, incidentePorId, medirTiempos, preguntasPendientes, reportanteVisible, protocoloDe, puedeTransicionar, respuestasDe, type Protocolo,
 } from '@pol-iaq/shared';
 import type { Ciudadano, Reporte } from '../almacen/modelos';
 import { cuestionarioParaCad, type DespachadorCadService } from '../cad/despachador.service';
@@ -34,6 +34,12 @@ export function vistaOperador(r: Reporte, ciudadano: Ciudadano | undefined, prot
     incidente: incidente?.nombreCiudadano ?? r.incidenteId,
     categoria: incidente?.categoria ?? null,
     codigoCnie: r.codigoCnie,
+    /** Clasificación CNIE V 3.0 (null en folios anteriores o en "Otra emergencia" sin clasificar). */
+    cnie: r.cnie ?? null,
+    /** "CNIE 30202 · Seguridad / Armas y explosivos / Detonación por arma de fuego · ALTA". */
+    cnieEtiqueta: r.cnie ? etiquetaCnie(r.cnie) : null,
+    /** Correcciones del código (copia de la bitácora `cnie_correcciones`). */
+    correccionesCnie: r.correccionesCnie ?? [],
     prioridad: r.prioridad,
     estado: r.estado,
     estadoTexto: ETIQUETAS_CIUDADANO[r.estado],

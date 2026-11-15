@@ -1,4 +1,4 @@
-import type { Identidad, OpinionGuardada } from '@pol-iaq/shared';
+import type { ClasificacionCnie, Identidad, OpinionGuardada } from '@pol-iaq/shared';
 import type { Canalizacion, Corporacion, Cuestionario, EstadoIncidente, EventoHaciaCad, Prioridad, Ubicacion } from '@pol-iaq/shared';
 
 export interface Ciudadano {
@@ -49,7 +49,12 @@ export interface Reporte {
   folio: string;
   ciudadanoId: string;
   incidenteId: string;
+  /** Incidente CNIE de 5 dígitos (igual a `cnie.incidente.codigo`); `null` mientras falte afinarlo. */
   codigoCnie: string | null;
+  /** Clasificación CNIE V 3.0 completa. Los folios anteriores al CNIE no la tienen. */
+  cnie?: ClasificacionCnie | null;
+  /** Correcciones del código (también quedan en la bitácora de auditoría como `cnie_corregido`). */
+  correccionesCnie?: CorreccionCnie[];
   prioridad: Prioridad;
   corporacionSugerida: Corporacion;
   ubicacion: Ubicacion;
@@ -81,6 +86,15 @@ export interface Reporte {
   secuenciaSalida: number;
   /** Secuencia del último evento aceptado desde el CAD. */
   secuenciaEntrada: number;
+}
+
+export interface CorreccionCnie {
+  en: string;
+  actor: string;
+  de: string | null;
+  a: string;
+  secundario: string | null;
+  motivo: string | null;
 }
 
 /** Entrada de bitácora de auditoría: quién hizo qué sobre qué folio. */

@@ -5,11 +5,13 @@
 export * from './estados';
 export * from './legal';
 export * from './folio';
-export type { IncidenteCatalogo, Prioridad, Corporacion } from './catalogo';
+export type { IncidenteCatalogo, Prioridad, Corporacion, CategoriaIncidente } from './catalogo';
 export * from './protocolos';
 export * from './protocolo-provisional';
 export * from './escenarios';
 export { CATALOGO_SEMILLA, incidentePorId } from './catalogo';
+export * from './cnie';
+export * from './cnie-mapeo';
 export * from './municipios';
 export * from './geo';
 export * from './despacho';

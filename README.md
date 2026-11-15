@@ -80,9 +80,13 @@ TEST_DATABASE_URL=postgres://poliaq:poliaq-dev@localhost:5432/poliaq_test pnpm t
 - **Protocolo versionado**: las preguntas son datos (JSON) y se actualizan sin tocar código. Cada respuesta queda en texto en el folio (`POST /v1/reportes/{folio}/cuestionario`) y recalcula la **canalización** (prioridad, corporaciones de apoyo y alertas) que se envía al CAD. Ver [`docs/protocolos`](docs/protocolos/README.md). **El protocolo actual es provisional, no oficial.**
 - El antiguo "botón de pánico" se llama ahora **botón de asistencia directa** (`asistenciaDirecta` en el API).
 
+## Catálogo Nacional de Incidentes de Emergencia (CNIE V 3.0)
+
+Cada reporte lleva su código oficial del CNIE V 3.0 (junio 2024): tipo, subtipo e incidente con su prioridad. Los datos se generan del PDF oficial (`docs/cnie/CNIE_V_3.0_Oficial_junio_24.pdf`) y están versionados en `packages/shared/src/cnie-v3.ts`: 7 tipos, 26 subtipos, 361 incidentes vigentes y 12 códigos retirados aparte. La despachadora hace a lo más una pregunta para afinar el código, el API rechaza códigos inexistentes o retirados, el CAD y el C5 reciben la clasificación, y el operador puede corregirla con auditoría. Mapeo, reglas de anonimato y cómo regenerar en [`docs/cnie`](docs/cnie/README.md).
+
 ## Confianza y tiempo de respuesta
 
-- **Identidad del reportante** (`identidad`: `completa`, `seudonimo` con `alias`, o `anonimo`). El anónimo no se permite en incidentes violentos o en curso (`INCIDENTES_SIN_ANONIMATO` en `packages/shared/src/identidad.ts`), porque la policía podría necesitar volver a llamar. Con seudónimo o anónimo el operador y el CAD no ven el nombre ni el teléfono completo; el registro interno sí existe para el folio y la auditoría.
+- **Identidad del reportante** (`identidad`: `completa`, `seudonimo` con `alias`, o `anonimo`). El anónimo se decide por subtipo del CNIE (`SUBTIPOS_SIN_ANONIMATO` en `packages/shared/src/identidad.ts`): no se permite en los subtipos 302 Armas y explosivos, 304 Patrimonio, 305 Familia, 309 Vida e integridad personal y 310 Otros bienes jurídicos, porque la policía podría necesitar volver a llamar. Con seudónimo o anónimo el operador y el CAD no ven el nombre ni el teléfono completo; el registro interno sí existe para el folio y la auditoría.
 - **Calificación y quejas** (`POST /v1/reportes/{folio}/opinion`): al cerrar, el ciudadano dice si llegó la unidad (sí, tarde, no), califica de 1 a 5 y comenta. "No llegó" o 1–2 estrellas cuentan como queja y aparecen en la consola.
 - **Asignación automática por cercanía**: al recibir un reporte se asigna la unidad libre más cercana por ruta (`AUTO_ASSIGN=off` lo apaga). La consola ofrece "Asignar la más cercana" y la lista de unidades ordenada por distancia y minutos. El operador ya no escribe la ETA.
 - **Ruta y ETA**: con `ROUTING_OSRM_URL` (un servidor OSRM propio) la ETA sale de la ruta real; sin él, de una estimación (línea recta × 1.4 a 35 km/h), marcada como estimada.
@@ -115,7 +119,7 @@ TEST_DATABASE_URL=postgres://poliaq:poliaq-dev@localhost:5432/poliaq_test pnpm t
 
 - Sustituir el protocolo provisional de la despachadora virtual por el Protocolo Nacional de Atención de Llamadas de Emergencia 9-1-1 vigente, validado con el C5 (`docs/protocolos`).
 - Consola: cambiar los usuarios en configuración por SSO (OIDC) con segundo factor, y cargar el padrón real de unidades de cada municipio.
-- Cargar los códigos oficiales del Catálogo Nacional de Incidentes de Emergencia (`codigoCnie` está en `null` a propósito).
+- Decidir si "Persona sospechosa" (CNIE 30904, subtipo 309) puede seguir siendo anónima ([`docs/cnie`](docs/cnie/README.md)).
 - Sustituir las geocercas aproximadas por los polígonos oficiales de INEGI.
 - Trabajador de colas para la bandeja de salida y los temporizadores de acuse; Redis para WebSocket con varias instancias.
 - Contratar el proveedor de SMS (cuenta, remitente y registro de plantillas), Keycloak/OIDC, almacén de objetos con WORM y URLs prefirmadas (hoy la evidencia va en PostgreSQL).

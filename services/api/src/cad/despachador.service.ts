@@ -61,6 +61,7 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
       datos: {
         incidenteId: r.incidenteId,
         codigoCnie: r.codigoCnie,
+        cnie: r.cnie ?? null,
         prioridad: r.prioridad,
         corporacionSugerida: r.corporacionSugerida,
         ubicacion: r.ubicacion,
@@ -81,7 +82,7 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
 
   /** Envía el cuestionario completo y la canalización recalculada tras nuevas respuestas. */
   enviarCuestionario(r: Reporte) {
-    return this.enviarActualizado(r, { cuestionario: cuestionarioParaCad(r), canalizacion: r.canalizacion });
+    return this.enviarActualizado(r, { cuestionario: cuestionarioParaCad(r), canalizacion: r.canalizacion, cnie: r.cnie ?? null });
   }
 
   /** Encola `incidente.actualizado`. Incrementa `r.secuenciaSalida`: quien llama guarda el reporte. */
