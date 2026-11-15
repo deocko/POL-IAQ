@@ -1,14 +1,14 @@
 asyncapi: 3.0.0
 info:
-  title: API Pol-IAQ CAD v1
+  title: API POL-IAQ CAD v1
   version: 1.0.0
   description: |
-    Contrato de eventos entre Pol-IAQ y los CAD municipales (Querétaro, Corregidora,
+    Contrato de eventos entre POL-IAQ y los CAD municipales (Querétaro, Corregidora,
     El Marqués) y el C5 del Estado de Querétaro.
 
     Transporte en el piloto: webhooks HTTPS en ambos sentidos.
-    - Pol-IAQ -> CAD: POST al `webhookUrl` del adaptador del CAD.
-    - CAD -> Pol-IAQ: POST /v1/cad/{cadId}/eventos.
+    - POL-IAQ -> CAD: POST al `webhookUrl` del adaptador del CAD.
+    - CAD -> POL-IAQ: POST /v1/cad/{cadId}/eventos.
 
     Reglas comunes:
     - Firma: encabezados `x-poliaq-timestamp` (epoch s) y `x-poliaq-firma: v1=<hex>`,
@@ -17,7 +17,7 @@ info:
     - Idempotencia: `eventoId` (UUID) único; el receptor ignora repetidos. También va en `idempotency-key`.
     - Orden: `secuencia` crece por folio y por emisor; se descartan eventos con secuencia vieja.
     - Entrega: el emisor reintenta con espera exponencial (0, 1, 2, 4, 8, 16 s) hasta recibir 2xx.
-    - Acuse: el CAD debe enviar `incidente.recibido` en menos de 30 s; si no, Pol-IAQ escala al C5.
+    - Acuse: el CAD debe enviar `incidente.recibido` en menos de 30 s; si no, POL-IAQ escala al C5.
     - Evidencia: nunca va embebida; se envían enlaces firmados con vigencia de 15 minutos y su SHA-256.
     - Clasificación: cada folio lleva el Catálogo Nacional de Incidentes de Emergencia (CNIE) V 3.0,
       junio 2024 (`cnie`: tipo, subtipo, incidente con nombres y prioridad del catálogo). Solo se aceptan
@@ -78,7 +78,7 @@ components:
       summary: Mensaje del operador al ciudadano
       payload: { $ref: '#/components/schemas/MensajeOperador' }
     incidenteReclasificado:
-      summary: El CAD corrige el código CNIE del folio (queda en la bitácora de Pol-IAQ con el código anterior y el motivo)
+      summary: El CAD corrige el código CNIE del folio (queda en la bitácora de POL-IAQ con el código anterior y el motivo)
       payload: { $ref: '#/components/schemas/IncidenteReclasificado' }
   schemas:
     CodigoNombre:
@@ -208,7 +208,7 @@ components:
               properties:
                 folioCad: { type: string }
                 operador: { type: string }
-                codigoCnie: { type: string, pattern: '^\d{5}$', description: 'Incidente CNIE con el que el CAD registró el folio. Si difiere del de Pol-IAQ, cuenta como corrección.' }
+                codigoCnie: { type: string, pattern: '^\d{5}$', description: 'Incidente CNIE con el que el CAD registró el folio. Si difiere del de POL-IAQ, cuenta como corrección.' }
     IncidenteReclasificado:
       allOf:
         - $ref: '#/components/schemas/Base'

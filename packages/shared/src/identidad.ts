@@ -6,7 +6,7 @@
  * - `anonimo`: no ven nombre ni teléfono. Solo para incidentes no violentos.
  *
  * En los tres casos la cuenta tiene un teléfono verificado (evita abusos) que
- * Pol-IAQ resguarda; solo se entrega a una autoridad cuando la ley lo exige.
+ * POL-IAQ resguarda; solo se entrega a una autoridad cuando la ley lo exige.
  */
 import { z } from 'zod';
 import { incidentePorId } from './catalogo';

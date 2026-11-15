@@ -1,11 +1,11 @@
-# Aviso de Privacidad Integral de Pol-IAQ
+# Aviso de Privacidad Integral de POL-IAQ
 
 **Versión:** 2026-11-14 · **Estado:** borrador para revisión jurídica
 
 
 ## 1. Quién es responsable de tus datos
 
-[NOMBRE DEL RESPONSABLE, por ejemplo: Municipio de Querétaro, a través de la Secretaría de Seguridad Pública Municipal], con domicilio en [DOMICILIO], es responsable del tratamiento de los datos personales que proporcionas al usar la aplicación y el sitio web Pol-IAQ (en adelante, "Pol-IAQ").
+[NOMBRE DEL RESPONSABLE, por ejemplo: Municipio de Querétaro, a través de la Secretaría de Seguridad Pública Municipal], con domicilio en [DOMICILIO], es responsable del tratamiento de los datos personales que proporcionas al usar la aplicación y el sitio web POL-IAQ (en adelante, "POL-IAQ").
 
 Cuando tu reporte se atiende en otro municipio participante o por el Centro de Comando, Control, Cómputo, Comunicaciones, Contacto Ciudadano e Inteligencia del Estado (C5), esa autoridad también trata tus datos como responsable, para los mismos fines y conforme a su propio aviso de privacidad. Los municipios participantes en la etapa piloto son **Querétaro, Corregidora y El Marqués**.
 
@@ -16,17 +16,17 @@ Cuando tu reporte se atiende en otro municipio participante o por el Centro de C
 | Identificación y contacto | Nombre, número de celular verificado, [CURP, si se solicita] | Al registrarte |
 | Ubicación | Coordenadas GPS y precisión del dispositivo, referencias que escribas | Al enviar un reporte y mientras esté activo |
 | Contenido del reporte | Tipo de incidente, descripción, respuestas a preguntas guía, mensajes con el operador | Al reportar y durante el seguimiento |
-| Evidencia multimedia | Fotografías, videos y audios, con su fecha, hora, ubicación y huella digital (hash) | Solo si decides adjuntarlos o usas el botón de asistencia directa (pánico) |
+| Evidencia multimedia | Fotografías, videos y audios, con su fecha, hora, ubicación y huella digital (hash) | Solo si decides adjuntarlos o usas el botón de asistencia directa |
 | Datos técnicos | Identificador y modelo del dispositivo, sistema operativo, dirección IP, registros de acceso | Durante el uso |
 | Historial | Folios, estados de atención y tiempos de cada etapa, calificaciones y quejas sobre la atención, y, en su caso, reportes declarados improcedentes | Durante el uso |
 
 **Datos personales sensibles.** Tus reportes, fotos, videos y audios pueden revelar información sobre tu salud o la de otras personas, sobre hechos posiblemente delictivos o sobre la imagen y la voz de terceros. Estos datos se tratan como sensibles, con medidas de seguridad reforzadas, y solo para atender la emergencia y darle seguimiento.
 
-No es obligatorio adjuntar evidencia para que tu reporte se atienda. Pol-IAQ **no** accede a tu ubicación cuando no tienes un reporte activo, ni a tus contactos, fotos o archivos que no elijas compartir.
+No es obligatorio adjuntar evidencia para que tu reporte se atienda. POL-IAQ **no** accede a tu ubicación cuando no tienes un reporte activo, ni a tus contactos, fotos o archivos que no elijas compartir.
 
 ## 3. Para qué usamos tus datos
 
-**Finalidades necesarias para el servicio** (no puedes oponerte a ellas sin dejar de usar Pol-IAQ):
+**Finalidades necesarias para el servicio** (no puedes oponerte a ellas sin dejar de usar POL-IAQ):
 
 1. Recibir tu reporte, asignarle un folio unificado y canalizarlo al Centro de Atención y Despacho (CAD) del municipio donde ocurre o al C5.
 2. Despachar a la unidad o corporación de emergencia que corresponda y mostrarte su avance en tiempo real.
@@ -102,7 +102,7 @@ Si consideras que tu derecho no fue atendido, puedes acudir a [AUTORIDAD GARANTE
 
 ## 9. Personas menores de edad
 
-Pol-IAQ está dirigido a personas mayores de 18 años. [CONFIRMAR CON JURÍDICO: si se permitirá el registro de adolescentes con consentimiento de madre, padre o tutor.] En cualquier caso, ante una emergencia cualquier persona puede llamar al 911.
+POL-IAQ está dirigido a personas mayores de 18 años. [CONFIRMAR CON JURÍDICO: si se permitirá el registro de adolescentes con consentimiento de madre, padre o tutor.] En cualquier caso, ante una emergencia cualquier persona puede llamar al 911.
 
 ## 10. Cambios a este aviso
 

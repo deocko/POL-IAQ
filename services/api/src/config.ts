@@ -7,10 +7,10 @@ import { UNIDADES_EJEMPLO } from '@pol-iaq/shared';
 export interface CadConfig {
   /**
    * `webhook` (por defecto): el CAD municipal recibe los eventos en su propio sistema.
-   * `consola`: el municipio no tiene CAD integrado y despacha desde la consola web de Pol-IAQ.
+   * `consola`: el municipio no tiene CAD integrado y despacha desde la consola web de POL-IAQ.
    */
   modo?: 'webhook' | 'consola';
-  /** URL a la que Pol-IAQ envía eventos (webhook del adaptador del CAD). No aplica en modo consola. */
+  /** URL a la que POL-IAQ envía eventos (webhook del adaptador del CAD). No aplica en modo consola. */
   webhookUrl?: string;
   /** Secreto compartido para firmar en ambos sentidos (HMAC-SHA256). */
   secreto?: string;

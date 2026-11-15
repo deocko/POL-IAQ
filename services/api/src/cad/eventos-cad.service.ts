@@ -11,7 +11,7 @@ export type ResultadoEvento = { aceptado: true; duplicado?: true; descartado?: '
 
 /**
  * Aplica los eventos que llegan de un CAD, sea por webhook firmado o desde la
- * consola web de Pol-IAQ: idempotencia, orden por secuencia, auditoría,
+ * consola web de POL-IAQ: idempotencia, orden por secuencia, auditoría,
  * aviso en tiempo real y SMS al ciudadano.
  */
 @Injectable()

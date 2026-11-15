@@ -17,7 +17,7 @@ export function cuestionarioParaCad(r: Reporte) {
 }
 
 /**
- * Envía eventos de Pol-IAQ a los CAD (bandeja de salida persistida, con
+ * Envía eventos de POL-IAQ a los CAD (bandeja de salida persistida, con
  * reintentos) y escala al C5 si el CAD municipal no acusa recibo a tiempo.
  * Al arrancar reintenta lo que quedó pendiente en la bandeja.
  *
@@ -138,7 +138,7 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
     this.bandeja.push(envio);
     const cad = this.config.cads[cadId];
     if (cad?.modo === 'consola') {
-      // El operador lo ve en la consola web de Pol-IAQ; no hay webhook que llamar.
+      // El operador lo ve en la consola web de POL-IAQ; no hay webhook que llamar.
       envio.estado = 'consola';
     } else if (this.config.despachoActivo && !cad?.webhookUrl) {
       envio.estado = 'sin_configuracion';

@@ -4,7 +4,7 @@ import { EstadoSchema, UbicacionSchema } from './schemas';
 import { ClasificacionCnieSchema } from './cnie';
 
 /**
- * Contrato "API Pol-IAQ CAD v1": eventos que viajan entre Pol-IAQ y cada CAD.
+ * Contrato "API POL-IAQ CAD v1": eventos que viajan entre POL-IAQ y cada CAD.
  * Ver docs/api/asyncapi.yaml para la especificación formal.
  */
 const EntradaSchema = z.object({
@@ -40,7 +40,7 @@ const Base = z.object({
   ocurridoEn: z.iso.datetime(),
 });
 
-// ---- Pol-IAQ -> CAD ----
+// ---- POL-IAQ -> CAD ----
 export const IncidenteCreadoSchema = Base.extend({
   tipo: z.literal('incidente.creado'),
   datos: z.object({
@@ -80,13 +80,13 @@ export const IncidenteActualizadoSchema = Base.extend({
   }),
 });
 
-// ---- CAD -> Pol-IAQ ----
+// ---- CAD -> POL-IAQ ----
 export const IncidenteRecibidoSchema = Base.extend({
   tipo: z.literal('incidente.recibido'),
   datos: z.object({
     folioCad: z.string(),
     operador: z.string().optional(),
-    /** Incidente CNIE con el que el CAD registró el folio. Si difiere del de Pol-IAQ, cuenta como corrección. */
+    /** Incidente CNIE con el que el CAD registró el folio. Si difiere del de POL-IAQ, cuenta como corrección. */
     codigoCnie: z.string().optional(),
   }),
 });

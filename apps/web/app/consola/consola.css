@@ -125,3 +125,7 @@
 .c-rejilla-cnie { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 .c-campo { display: grid; gap: 4px; font-size: .875rem; font-weight: 600; margin-top: var(--e2); }
 .c-campo input { width: 100%; font-weight: 400; }
+.c-aviso-meta { background: var(--asistencia-suave); color: var(--asistencia); border-radius: var(--r-s); padding: var(--e2) var(--e3); margin: 0 0 var(--e2); font-weight: 600; }
+/* Piezas de una misma línea como bloques con separación: así ningún lector las une sin espacio. */
+.c-linea { display: flex; flex-wrap: wrap; align-items: center; column-gap: .4em; row-gap: .2em; }
+.c-leyenda.c-linea > span { display: inline-flex; align-items: center; gap: .3em; }

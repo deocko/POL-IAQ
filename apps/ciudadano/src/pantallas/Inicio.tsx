@@ -140,7 +140,7 @@ export function Inicio({
       {catalogo.map((i) => (
         <Pressable key={i.id} style={e.tarjeta} disabled={enviando} onPress={() => reportar(i.id)}>
           <View style={e.fila}>
-            <Text style={[e.texto, { flex: 1, fontWeight: '600' }]}>{i.nombreCiudadano}</Text>
+            <Text style={[e.texto, { flex: 1, fontWeight: '600' }]}>{i.nombreCorto}</Text>
             {i.prioridad === 'alta' && <Text style={[e.suave, { color: colores.asistencia }]}>Urgente</Text>}
           </View>
         </Pressable>

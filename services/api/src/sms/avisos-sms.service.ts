@@ -22,11 +22,11 @@ export class AvisosSmsService {
   unidadAsignada(r: Reporte) {
     if (!r.unidad) return;
     const eta = r.unidad.etaMinutos !== undefined ? ` Llega en unos ${Math.round(r.unidad.etaMinutos)} min.` : '';
-    this.avisar(r, `Pol-IAQ: tu reporte ${r.folio} ya tiene unidad asignada (${r.unidad.etiqueta}).${eta} Síguela en la app.`);
+    this.avisar(r, `POL-IAQ: tu reporte ${r.folio} ya tiene unidad asignada (${r.unidad.etiqueta}).${eta} Síguela en la app.`);
   }
 
   transferido(r: Reporte) {
-    this.avisar(r, `Pol-IAQ: tu reporte ${r.folio} pasó a otra corporación. Conserva el mismo folio para darle seguimiento.`);
+    this.avisar(r, `POL-IAQ: tu reporte ${r.folio} pasó a otra corporación. Conserva el mismo folio para darle seguimiento.`);
   }
 
   private avisar(r: Reporte, texto: string) {

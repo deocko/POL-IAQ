@@ -1,4 +1,4 @@
--- 001: esquema inicial de Pol-IAQ para PostgreSQL 16 + PostGIS.
+-- 001: esquema inicial de POL-IAQ para PostgreSQL 16 + PostGIS.
 -- Las migraciones se aplican solas al arrancar el API (o con `pnpm db:migrar`).
 -- No edites una migración ya aplicada: agrega una nueva.
 

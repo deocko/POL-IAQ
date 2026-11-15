@@ -2,6 +2,7 @@
 
 import { io } from 'socket.io-client';
 import * as demo from '../../lib/demo/motor';
+import { horaLocal } from '../../lib/hora';
 import type { ClasificacionCnie, GrupoCnie, MetasTiempo, OpinionGuardada, ResumenEtapa, TiemposReporte } from '@pol-iaq/shared/movil';
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -214,7 +215,7 @@ export function hace(iso: string, ahora: number) {
   return `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`;
 }
 
-export const hora = (iso: string) => new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+export const hora = (iso: string) => horaLocal(iso);
 
 export const distanciaTexto = (m: number) => (m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`);
 

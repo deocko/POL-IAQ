@@ -4,7 +4,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
-  ESTADOS_FINALES, METAS_PROVISIONALES, agruparPorCnie, candidatasPorCercania, medirTiempos, minutosDe, resumirTiempos, subtipoCnie, type EventoDesdeCad, type UnidadAvl,
+  ESTADOS_FINALES, METAS_PROVISIONALES, agruparPorCnie, candidatasPorCercania, medirTiempos, puedeDespachar, minutosDe, resumirTiempos, subtipoCnie, type EventoDesdeCad, type UnidadAvl,
 } from '@pol-iaq/shared';
 import { AvlService, RutasService } from '../despacho/avl.service';
 import { Almacen } from '../almacen/almacen';
@@ -136,12 +136,12 @@ export class OperadorController {
     };
   }
 
-  /** Unidades disponibles con GPS del CAD, para la asignación por cercanía. */
+  /** Unidades disponibles con GPS que puede despachar el CAD (el C5, las de todo el estado). */
   private async disponiblesConGps(cadId: string): Promise<UnidadAvl[]> {
-    const activos = await this.almacen.reportesPorCad([cadId], true);
+    const propias = this.config.unidades.filter((u) => puedeDespachar(cadId, u.cadId));
+    const activos = await this.almacen.reportesPorCad([...new Set(propias.map((u) => u.cadId).concat(cadId))], true);
     const ocupadas = new Set(activos.filter((r) => r.unidad).map((r) => r.unidad!.unidadId));
-    return this.config.unidades
-      .filter((u) => u.cadId === cadId)
+    return propias
       .map((u) => ({ unidadId: u.unidadId, corporacion: u.corporacion, etiqueta: u.etiqueta, disponible: !ocupadas.has(u.unidadId), posicion: this.avl.posicion(u.unidadId) }));
   }
 
@@ -218,7 +218,7 @@ export class OperadorController {
       case 'asignar_cercana':
         throw new BadRequestException({ codigo: 'accion_invalida' });
       case 'asignar': {
-        const u = this.config.unidades.find((x) => x.unidadId === a.unidadId && x.cadId === cadId);
+        const u = this.config.unidades.find((x) => x.unidadId === a.unidadId && puedeDespachar(cadId, x.cadId));
         if (!u) throw new BadRequestException({ codigo: 'unidad_desconocida' });
         return { ...base, tipo: 'unidad.asignada', datos: { unidadId: u.unidadId, corporacion: u.corporacion, etiqueta: u.etiqueta, etaMinutos: a.etaMinutos } };
       }

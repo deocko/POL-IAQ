@@ -31,7 +31,7 @@ export function vistaOperador(r: Reporte, ciudadano: Ciudadano | undefined, prot
     cadId: r.cadId,
     municipioClave: r.municipioClave,
     incidenteId: r.incidenteId,
-    incidente: incidente?.nombreCiudadano ?? r.incidenteId,
+    incidente: incidente?.nombreCorto ?? r.incidenteId,
     categoria: incidente?.categoria ?? null,
     codigoCnie: r.codigoCnie,
     /** Clasificación CNIE V 3.0 (null en folios anteriores o en "Otra emergencia" sin clasificar). */

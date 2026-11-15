@@ -42,10 +42,10 @@ export function Registro({ alEntrar }: { alEntrar: (token: string, nombre: strin
 
   return (
     <ScrollView style={e.pantalla} contentContainerStyle={{ paddingBottom: 48 }}>
-      <Text style={e.titulo}>Pol-IAQ</Text>
+      <Text style={e.titulo}>POL-IAQ</Text>
       <Text style={e.texto}>Reporta emergencias a la policía de tu municipio y sigue la atención en tiempo real.</Text>
       <View style={[e.tarjeta, { marginTop: 16 }]}>
-        <Text style={e.texto}>Pol-IAQ no sustituye al 911. Si no puedes usar la app, llama al 911.</Text>
+        <Text style={e.texto}>POL-IAQ no sustituye al 911. Si no puedes usar la app, llama al 911.</Text>
       </View>
 
       <Text style={e.subtitulo}>Tus datos</Text>

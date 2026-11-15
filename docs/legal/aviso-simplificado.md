@@ -6,7 +6,7 @@ Este archivo reúne los textos cortos que aparecen en la app. El texto completo 
 
 ## Aviso simplificado (pantalla de registro)
 
-[RESPONSABLE] trata tu nombre, celular, ubicación y la información, fotos, videos y audios que compartas en Pol-IAQ para recibir tus reportes de emergencia, canalizarlos al CAD de tu municipio (Querétaro, Corregidora o El Marqués) o al C5 del Estado, despachar a la unidad que corresponda y mostrarte el seguimiento con un folio único. Algunos de estos datos pueden ser sensibles. Los compartimos solo con las autoridades y corporaciones que atienden tu reporte y, cuando la ley lo exige, con la Fiscalía o autoridades judiciales. No los vendemos ni los usamos con fines comerciales. Puedes negarte a las encuestas y estadísticas, y ejercer tus derechos ARCO en Perfil > Privacidad. Consulta el aviso integral en [URL].
+[RESPONSABLE] trata tu nombre, celular, ubicación y la información, fotos, videos y audios que compartas en POL-IAQ para recibir tus reportes de emergencia, canalizarlos al CAD de tu municipio (Querétaro, Corregidora o El Marqués) o al C5 del Estado, despachar a la unidad que corresponda y mostrarte el seguimiento con un folio único. Algunos de estos datos pueden ser sensibles. Los compartimos solo con las autoridades y corporaciones que atienden tu reporte y, cuando la ley lo exige, con la Fiscalía o autoridades judiciales. No los vendemos ni los usamos con fines comerciales. Puedes negarte a las encuestas y estadísticas, y ejercer tus derechos ARCO en Perfil > Privacidad. Consulta el aviso integral en [URL].
 
 ## Casillas de aceptación (ninguna viene marcada)
 
@@ -19,15 +19,15 @@ El API guarda qué versión de cada documento aceptaste y cuándo. Si cambia la 
 
 ## Aviso antes de usar la app
 
-> Pol-IAQ no sustituye al 911. Si no tienes datos móviles, la app falla o la situación lo requiere, llama al 911.
+> POL-IAQ no sustituye al 911. Si no tienes datos móviles, la app falla o la situación lo requiere, llama al 911.
 
 ## Textos de permisos del sistema operativo
 
 | Permiso | Texto |
 | --- | --- |
-| Ubicación | Pol-IAQ usa tu ubicación para enviar a la unidad de emergencia al lugar exacto del reporte. Solo la usamos mientras tienes un reporte activo. |
-| Cámara | Pol-IAQ usa la cámara para adjuntar fotos y videos como evidencia de tu reporte. |
-| Micrófono | Pol-IAQ usa el micrófono para grabar audio o video como evidencia de tu reporte. |
+| Ubicación | POL-IAQ usa tu ubicación para enviar a la unidad de emergencia al lugar exacto del reporte. Solo la usamos mientras tienes un reporte activo. |
+| Cámara | POL-IAQ usa la cámara para adjuntar fotos y videos como evidencia de tu reporte. |
+| Micrófono | POL-IAQ usa el micrófono para grabar audio o video como evidencia de tu reporte. |
 | Notificaciones | Te avisamos cuando tu reporte cambia de estado o el operador te escribe. |
 
 ## Aviso al adjuntar evidencia
@@ -36,4 +36,4 @@ El API guarda qué versión de cada documento aceptaste y cuándo. Si cambia la 
 
 ## Aviso de falsas alarmas (pantalla de reporte)
 
-> Usa Pol-IAQ solo para emergencias reales. Los reportes falsos distraen a las unidades de quien sí las necesita y pueden ser sancionados conforme a la ley.
+> Usa POL-IAQ solo para emergencias reales. Los reportes falsos distraen a las unidades de quien sí las necesita y pueden ser sancionados conforme a la ley.

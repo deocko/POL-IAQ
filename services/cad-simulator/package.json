@@ -2,7 +2,7 @@
   "name": "@pol-iaq/cad-simulator",
   "version": "0.1.0",
   "private": true,
-  "description": "CAD simulado para probar Pol-IAQ de punta a punta sin un CAD real.",
+  "description": "CAD simulado para probar POL-IAQ de punta a punta sin un CAD real.",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",

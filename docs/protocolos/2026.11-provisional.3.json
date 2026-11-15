@@ -1,7 +1,7 @@
 {
   "version": "2026.11-provisional.3",
   "estado": "provisional",
-  "nombre": "Protocolo de atención Pol-IAQ (provisional, no oficial)",
+  "nombre": "Protocolo de atención POL-IAQ (provisional, no oficial)",
   "fuentes": [
     {
       "titulo": "Protocolo Nacional de Atención de Llamadas de Emergencia 9-1-1 (SESNSP / CNI)",
@@ -17,9 +17,9 @@
     }
   ],
   "publicadoEn": "2026-11-15",
-  "aviso": "Contenido provisional redactado por Pol-IAQ. No sustituye al protocolo oficial ni a una llamada al 9-1-1.",
+  "aviso": "Contenido provisional redactado por POL-IAQ. No sustituye al protocolo oficial ni a una llamada al 9-1-1.",
   "apertura": {
-    "saludo": "9-1-1 virtual de Pol-IAQ. Le atiende la despachadora virtual. Su ubicación ya se está compartiendo.",
+    "saludo": "9-1-1 virtual de POL-IAQ. Le atiende la despachadora virtual. Su ubicación ya se está compartiendo.",
     "preguntaMotivo": "¿Cuál es su emergencia?",
     "confirmacion": "¿Se trata de: {incidente}?",
     "cierre": "Su folio es {folio}. La unidad ya fue canalizada; puede seguirla en el mapa. No cuelgue la app y manténgase en un lugar seguro."

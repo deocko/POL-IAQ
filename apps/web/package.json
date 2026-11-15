@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -p 3001",
     "typecheck": "tsc --noEmit",
-    "build:demo": "NEXT_PUBLIC_DEMO=1 next build"
+    "build:demo": "NEXT_PUBLIC_DEMO=1 next build",
+    "test": "vitest run"
   },
   "dependencies": {
     "@pol-iaq/shared": "workspace:*",

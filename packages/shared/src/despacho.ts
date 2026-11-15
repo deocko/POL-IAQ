@@ -8,6 +8,7 @@
  * Querétaro) se usa la ruta real; si falla, se vuelve a la estimación.
  */
 import type { Corporacion } from './catalogo';
+import { CAD_ESTATAL_ID } from './municipios';
 
 export interface Punto { lat: number; lng: number }
 
@@ -92,3 +93,14 @@ export function candidatasPorCercania(unidades: UnidadAvl[], destino: Punto, cor
 export function unidadMasCercana(unidades: UnidadAvl[], destino: Punto, corporacion?: string): Candidata | null {
   return candidatasPorCercania(unidades, destino, corporacion)[0] ?? null;
 }
+
+/**
+ * Unidades que puede despachar un CAD: las propias. El C5 coordina a todo el
+ * estado, así que cuando un reporte se escala al C5 puede mandar la unidad libre
+ * más cercana de cualquier CAD (si no, mandaría la suya aunque esté a 30 km).
+ */
+export const puedeDespachar = (cadId: string, cadDeLaUnidad: string) => cadId === CAD_ESTATAL_ID || cadId === cadDeLaUnidad;
+
+/** La llegada estimada supera la meta: la consola lo advierte. */
+export const etaSuperaMeta = (etaMinutos: number | undefined | null, metaSegundos: number | null | undefined) =>
+  etaMinutos != null && metaSegundos != null && etaMinutos * 60 > metaSegundos;

@@ -15,7 +15,7 @@ type Pantalla =
   | { tipo: 'lugares' };
 
 /**
- * App Ciudadano de Pol-IAQ (scaffold).
+ * App Ciudadano de POL-IAQ (scaffold).
  * TODO(fase 1): guardar el token en expo-secure-store y migrar a Expo Router.
  */
 export default function App() {

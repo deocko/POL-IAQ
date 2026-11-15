@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
-  title: API Pol-IAQ
+  title: API POL-IAQ
   version: 0.1.0
   description: |
-    API pública de Pol-IAQ para la App Ciudadano (Android, iOS y Web) y API de
+    API pública de POL-IAQ para la App Ciudadano (Android, iOS y Web) y API de
     integración con los CAD municipales (Querétaro, Corregidora, El Marqués) y el C5.
 
     Convenciones:
@@ -543,13 +543,14 @@ components:
       properties:
         id: { type: string, example: robo-en-curso }
         categoria: { type: string, enum: [seguridad, medico, proteccion_civil, asistencia], description: 'Alineada con los tipos 3, 1, 2 y 5 del CNIE. `asistencia` sustituye a `servicios_publicos`.' }
-        nombreCiudadano: { type: string }
+        nombreCorto: { type: string, example: Me están robando, description: 'Nombre corto: el mismo en la app ciudadana, la consola y el CAD.' }
+        nombreCiudadano: { type: string, description: 'Descripción más larga para listas y la despachadora virtual.' }
         codigoCnieTipo: { oneOf: [{ $ref: '#/components/schemas/CodigoNombre' }, { type: 'null' }], description: 'null solo en "Otra emergencia".' }
         codigoCnieSubtipo: { oneOf: [{ $ref: '#/components/schemas/CodigoNombre' }, { type: 'null' }] }
         codigoCnie: { oneOf: [{ $ref: '#/components/schemas/CodigoNombre' }, { type: 'null' }], description: 'Incidente de 5 dígitos; null cuando se afina con una respuesta o lo asigna el operador.' }
         prioridadCnie: { oneOf: [{ $ref: '#/components/schemas/PrioridadCnie' }, { type: 'null' }], description: 'Prioridad del CNIE; puede diferir de `prioridad` (operativa).' }
         codigoCnieSecundario: { $ref: '#/components/schemas/CodigoNombre' }
-        prioridad: { type: string, enum: [alta, media, baja], description: Prioridad operativa de Pol-IAQ. }
+        prioridad: { type: string, enum: [alta, media, baja], description: Prioridad operativa de POL-IAQ. }
         corporacionSugerida: { type: string }
         preguntasGuia:
           type: array

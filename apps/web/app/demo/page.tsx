@@ -8,6 +8,7 @@ import {
   subtiposDeTipo, vaciarCola, type IncidenteCnie, type Identidad, type Opinion, type PendienteEnvio,
 } from '@pol-iaq/shared/movil';
 import { CODIGO_SMS_DEMO } from '../../lib/demo/textos';
+import { horaLocal } from '../../lib/hora';
 import * as demo from '../../lib/demo/motor';
 import type { EvidenciaDemo, NuevoReporte as DatosReporte, ReporteDemo } from '../../lib/demo/motor';
 import { Mapa } from '../../lib/mapa/Mapa';
@@ -70,22 +71,12 @@ const ICONO = {
 };
 
 /** Nombre corto y emoji de cada incidente del catálogo para la cuadrícula de inicio. */
-const MOSAICO: Record<string, [string, string]> = {
-  'robo-en-curso': ['🚨', 'Me están robando'],
-  agresion: ['👊', 'Agresión o pelea'],
-  'intrusion-domicilio': ['🚪', 'Alguien quiere entrar'],
-  'violencia-familiar': ['🏠', 'Violencia familiar'],
-  disparos: ['💥', 'Disparos'],
-  'persona-sospechosa': ['👀', 'Algo sospechoso'],
-  'accidente-vial': ['🚗', 'Accidente de tránsito'],
-  'emergencia-medica': ['❤️', 'Emergencia médica'],
-  'persona-lesionada': ['🩹', 'Persona herida'],
-  incendio: ['🔥', 'Incendio'],
-  'fuga-gas': ['⚠️', 'Fuga de gas'],
-  inundacion: ['🌊', 'Inundación'],
-  'ruido-rina': ['🔊', 'Ruido o fiesta'],
-  otro: ['➕', 'Otra emergencia'],
+/** Icono de cada botón. El nombre viene del catálogo compartido (`nombreCorto`), el mismo que ve la consola. */
+const ICONO_INCIDENTE: Record<string, string> = {
+  'robo-en-curso': '🚨', agresion: '👊', 'intrusion-domicilio': '🚪', 'violencia-familiar': '🏠', disparos: '💥', 'persona-sospechosa': '👀',
+  'accidente-vial': '🚗', 'emergencia-medica': '❤️', 'persona-lesionada': '🩹', incendio: '🔥', 'fuga-gas': '⚠️', inundacion: '🌊', 'ruido-rina': '🔊', otro: '➕',
 };
+const MOSAICO: Record<string, [string, string]> = Object.fromEntries(demo.CATALOGO.map((i) => [i.id, [ICONO_INCIDENTE[i.id] ?? '❗', i.nombreCorto]]));
 /** Nombre corto en el seguimiento, junto al subtipo CNIE: "Robo (CNIE 304)". */
 const SEGUIMIENTO: Record<string, string> = { 'robo-en-curso': 'Robo' };
 
@@ -280,7 +271,7 @@ function Registro({ alRegistrar }: { alRegistrar: (c: Ciudadano) => void }) {
       <form className="c-tarjeta d-form" onSubmit={enviar} noValidate>
         {!enviado ? (
           <>
-            <label><span>Tu nombre <span className="suave">(opcional)</span></span>
+            <label><span>{'Tu nombre (opcional)'}</span>
               <input value={nombre} onChange={(e) => setNombre(e.target.value)} autoComplete="name" placeholder="Como quieras que te llamen" />
             </label>
             <label>Tu teléfono
@@ -290,7 +281,7 @@ function Registro({ alRegistrar }: { alRegistrar: (c: Ciudadano) => void }) {
           </>
         ) : (
           <>
-            <p className="d-nota">Enviamos un código al <strong>{telefonoLegible(telefono)}</strong>. <button type="button" className="c-enlace" onClick={() => { setEnviado(false); setCodigo(''); }}>Cambiar</button></p>
+            <p className="d-nota d-linea"><span>Enviamos un código al <strong>{telefonoLegible(telefono)}</strong>.</span><button type="button" className="c-enlace" onClick={() => { setEnviado(false); setCodigo(''); }}>Cambiar</button></p>
             <label>Código de 6 dígitos
               <input className="d-codigo" value={codigo} onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" autoFocus aria-describedby="codigo-ayuda" />
             </label>
@@ -342,15 +333,18 @@ function BotonFoto({ fotos, alAgregar, disabled }: { fotos: number; alAgregar: (
   const entrada = useRef<HTMLInputElement>(null);
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
+  const [ultimo, setUltimo] = useState('');
   return (
     <div className="d-foto">
+      {/* El selector nativo queda oculto (y fuera del lector de pantalla): su "Ningún archivo seleccionado" no se actualiza. El estado lo dice el texto de abajo. */}
       <input
         ref={entrada}
         type="file"
         accept="image/*"
         capture="environment"
         className="solo-lector"
-        aria-label="Elegir foto"
+        aria-hidden="true"
+        data-testid="elegir-foto"
         tabIndex={-1}
         onChange={async (e) => {
           const archivo = e.target.files?.[0];
@@ -358,13 +352,16 @@ function BotonFoto({ fotos, alAgregar, disabled }: { fotos: number; alAgregar: (
           if (!archivo) return;
           setError('');
           setCargando(true);
-          try { alAgregar(await prepararFoto(archivo)); } catch { setError('No se pudo leer la foto. Prueba con otra.'); }
+          try { alAgregar(await prepararFoto(archivo)); setUltimo(archivo.name); } catch { setError('No se pudo leer la foto. Prueba con otra.'); }
           setCargando(false);
         }}
       />
       <button type="button" className="c-boton-sec c-ancho" disabled={disabled || cargando || fotos >= MAX_FOTOS} onClick={() => entrada.current?.click()}>
-        <Icono d={ICONO.foto} tam={20} /> {cargando ? 'Preparando foto…' : fotos >= MAX_FOTOS ? `Máximo ${MAX_FOTOS} fotos` : fotos ? 'Agregar otra foto' : 'Agregar foto'}
+        <Icono d={ICONO.foto} tam={20} />{cargando ? 'Preparando foto…' : fotos >= MAX_FOTOS ? `Máximo ${MAX_FOTOS} fotos` : fotos ? 'Agregar otra foto' : 'Agregar foto'}
       </button>
+      <p className="suave c-pequeno d-foto-estado" role="status" data-testid="foto-estado">
+        {fotos ? `${fotos === 1 ? '1 foto adjunta' : `${fotos} fotos adjuntas`}${ultimo ? `. Última: ${ultimo}` : ''}` : 'Sin fotos adjuntas'}
+      </p>
       {error && <p className="c-error" role="alert">{error}</p>}
     </div>
   );
@@ -499,7 +496,7 @@ function BotonAsistencia({ alEnviar }: { alEnviar: () => void }) {
       </button>
       <p id="panico-ayuda" className="suave d-nota" aria-live="polite">
         {armado
-          ? <>Tienes {VENTANA_ASISTENCIA_SEG} segundos para confirmar. <button type="button" className="c-enlace" onClick={() => setArmadoHasta(null)}>No enviar</button></>
+          ? <span className="d-linea"><span>{`Tienes ${VENTANA_ASISTENCIA_SEG} segundos para confirmar.`}</span><button type="button" className="c-enlace" onClick={() => setArmadoHasta(null)}>No enviar</button></span>
           : 'Envía tu ubicación con prioridad alta sin escribir nada. Pide un segundo toque para evitar envíos por accidente.'}
       </p>
     </section>
@@ -574,6 +571,9 @@ function ExplorarCatalogo({ alElegir, alVolver }: { alElegir: (codigo: string | 
   );
 }
 
+/** Seudónimo que se propone si la persona no escribe uno: "Vecino 482". */
+const seudonimoSugerido = () => `Vecino ${100 + Math.floor(Math.random() * 900)}`;
+
 const IDENTIDADES: [Identidad, string][] = [['completa', 'Con mi nombre'], ['seudonimo', 'Seudónimo'], ['anonimo', 'Anónimo']];
 
 function Confirmar({
@@ -588,6 +588,7 @@ function Confirmar({
   const [alias, setAlias] = useState('');
   const [fotos, setFotos] = useState<Foto[]>([]);
   const [gpsEstado, setGpsEstado] = useState('');
+  const [gpsError, setGpsError] = useState('');
   const [error, setError] = useState('');
   const [ciudadanoTel, setCiudadanoTel] = useState('');
 
@@ -601,6 +602,8 @@ function Confirmar({
 
   useEffect(() => { setCiudadanoTel(leerLocal<Ciudadano>(CLAVE_CIUDADANO)?.telefono ?? ''); }, []);
   useEffect(() => { if (!anonimoPermitido && identidad === 'anonimo') setIdentidad('seudonimo'); }, [anonimoPermitido, identidad]);
+  // Con seudónimo nunca queda vacío: si no lo escribe, se le propone uno que puede cambiar.
+  useEffect(() => { if (identidad === 'seudonimo') setAlias((a) => a || seudonimoSugerido()); }, [identidad]);
 
   const responder = (id: string, v: Respuesta | undefined) => setRespuestas((r) => {
     const n = { ...r };
@@ -610,14 +613,21 @@ function Confirmar({
 
   function usarGps() {
     alLugar('gps');
-    if (!('geolocation' in navigator)) { setGpsEstado('Este navegador no da la ubicación. Elige un lugar de prueba.'); return; }
+    setGpsError('');
+    const sinGps = (motivo: string) => {
+      // Sin ubicación no se bloquea el reporte: se usa un lugar de prueba y se ofrece reintentar.
+      setGpsEstado('');
+      setGpsError(`${motivo} Mientras tanto usamos «${demo.LUGARES_DEMO[0].nombre}». Puedes reintentar o elegir otro lugar.`);
+      alLugar(demo.LUGARES_DEMO[0].id);
+    };
+    if (!('geolocation' in navigator)) { sinGps('Este navegador no da la ubicación.'); return; }
     setGpsEstado('Buscando tu ubicación…');
     navigator.geolocation.getCurrentPosition(
       (p) => {
         alGps({ lat: p.coords.latitude, lng: p.coords.longitude, precisionMetros: p.coords.accuracy, referencia: 'Ubicación del navegador' });
         setGpsEstado(`Listo (±${Math.round(p.coords.accuracy)} m). Fuera de los municipios piloto el reporte va al C5.`);
       },
-      () => { setGpsEstado('No diste permiso o no hay señal. Usamos un lugar de prueba.'); alLugar(demo.LUGARES_DEMO[0].id); },
+      () => sinGps('No pudimos obtener tu ubicación: no diste permiso o no hay señal de GPS.'),
       { enableHighAccuracy: true, timeout: 10000 },
     );
   }
@@ -650,7 +660,7 @@ function Confirmar({
   const veraLaPolicia = identidad === 'completa'
     ? `Tu nombre y tu teléfono ${telefonoLegible(ciudadanoTel)}. Te pueden llamar.`
     : identidad === 'seudonimo'
-      ? `“${alias.trim() || 'tu seudónimo'}” y que tu teléfono termina en ${ciudadanoTel.slice(-4)}. Te escriben por el chat.`
+      ? (alias.trim() ? `“${alias.trim()}” y que tu teléfono termina en ${ciudadanoTel.slice(-4)}. Te escriben por el chat.` : `Que tu teléfono termina en ${ciudadanoTel.slice(-4)}. Escribe un seudónimo para enviar.`)
       : 'Solo “Anónimo”. Ni tu nombre ni tu teléfono.';
 
   return (
@@ -669,11 +679,17 @@ function Confirmar({
           <button type="button" role="radio" aria-checked={lugarId === 'gps'} className={`d-chip ${lugarId === 'gps' ? 'sel' : ''}`} onClick={usarGps}><Icono d={ICONO.ubicacion} tam={18} /> Mi ubicación</button>
         </div>
         <p className="suave d-nota" role="status">{lugarId === 'gps' ? gpsEstado || (gps ? 'Usando tu ubicación.' : '') : 'Lugar de prueba de la demo.'}</p>
+        {gpsError && (
+          <div className="d-error-gps" role="alert" data-testid="error-gps">
+            <p>{gpsError}</p>
+            <button type="button" className="c-boton-sec" onClick={usarGps}>Reintentar ubicación</button>
+          </div>
+        )}
       </fieldset>
 
       {preguntas.length > 0 && (
         <fieldset className="d-bloque">
-          <legend>Si puedes, contesta <span className="suave">(opcional)</span></legend>
+          <legend>{'Si puedes, contesta (opcional)'}</legend>
           {preguntas.map((q) => (
             <div key={q.id} className="d-pregunta">
               <span id={`p-${q.id}`}>{q.texto}</span>
@@ -710,7 +726,7 @@ function Confirmar({
             const bloqueado = v === 'anonimo' && !anonimoPermitido;
             return (
               <button key={v} type="button" role="radio" aria-checked={identidad === v} aria-disabled={bloqueado} className={identidad === v ? 'sel' : ''}
-                onClick={() => { if (!bloqueado) setIdentidad(v); }}>{t}</button>
+                onClick={() => { if (bloqueado) return; setIdentidad(v); if (v === 'seudonimo') setAlias((x) => x || seudonimoSugerido()); }}>{t}</button>
             );
           })}
         </div>
@@ -719,18 +735,18 @@ function Confirmar({
             <input ref={aliasRef} value={alias} onChange={(e) => setAlias(e.target.value)} maxLength={40} placeholder="Por ejemplo: Vecina del 4" />
           </label>
         )}
-        <p className="d-vera" data-testid="vera-policia"><strong>La policía verá:</strong> {veraLaPolicia}</p>
+        <p className="d-vera" data-testid="vera-policia"><strong>La policía verá:</strong><span>{veraLaPolicia}</span></p>
         {!anonimoPermitido && <p className="suave d-nota">Anónimo no está disponible en esta emergencia (robos, agresiones, disparos, violencia o algo que pasa contra una persona): el operador necesita poder contactarte.</p>}
       </fieldset>
 
       <div className="d-bloque">
-        <span className="d-legend">Foto <span className="suave">(opcional)</span></span>
+        <span className="d-legend">{'Foto (opcional)'}</span>
         <Miniaturas fotos={fotos} alQuitar={(i) => setFotos((f) => f.filter((_, j) => j !== i))} />
         <BotonFoto fotos={fotos.length} alAgregar={(f) => setFotos((x) => [...x, f])} />
       </div>
 
       <details className="d-bloque d-detalles">
-        <summary>Agregar detalles <span className="suave">(opcional)</span></summary>
+        <summary>{'Agregar detalles (opcional)'}</summary>
         <label className="d-campo">Cuéntanos más
           <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={3} maxLength={300} placeholder="Por ejemplo: dos personas, una con gorra roja" />
         </label>
@@ -757,7 +773,9 @@ function PantallaMiReporte({
   const [, setPulso] = useState(0);
   useEffect(() => demo.escuchar(() => setPulso((x) => x + 1)), []);
   const r = folio ? demo.reporte(folio) : undefined;
-  const otros = folios.filter((f) => f !== folio).map((f) => demo.reporte(f)).filter((x): x is ReporteDemo => !!x);
+  // Todos los reportes, el que está en curso primero; luego los más recientes.
+  const mios = folios.map((f) => demo.reporte(f)).filter((x): x is ReporteDemo => !!x)
+    .sort((a, b) => Number(FINALES.includes(a.estado)) - Number(FINALES.includes(b.estado)) || b.creadoEn.localeCompare(a.creadoEn));
 
   return (
     <div className="d-pantalla">
@@ -775,13 +793,13 @@ function PantallaMiReporte({
           <button type="button" className="c-boton c-grande" onClick={alNuevo}>Hacer un reporte</button>
         </div>
       )}
-      {otros.length > 0 && (
+      {mios.length > 0 && (
         <section className="c-tarjeta" aria-labelledby="anteriores">
           <h3 id="anteriores">Mis reportes</h3>
           <ul className="d-lista-reportes">
-            {otros.map((o) => (
+            {mios.map((o) => (
               <li key={o.folio}>
-                <button type="button" onClick={() => alAbrir(o.folio)}>
+                <button type="button" onClick={() => alAbrir(o.folio)} aria-current={o.folio === folio ? 'true' : undefined} className={o.folio === folio ? 'actual' : ''}>
                   <span><strong>{tituloReporte(o)}</strong><span className="suave c-pequeno">{o.folio}</span></span>
                   <span className={`c-chip ${FINALES.includes(o.estado) ? 'c-chip-neutro' : ''}`}>{demo.etiquetaCiudadano(o.estado)}</span>
                 </button>
@@ -796,18 +814,21 @@ function PantallaMiReporte({
 
 function EnCola({ cola, enLinea, alCancelar }: { cola: PendienteEnvio<DatosReporte>[]; enLinea: boolean; alCancelar: () => void }) {
   const [ahora, setAhora] = useState(() => Date.now());
+  const [intento, setIntento] = useState('');
   useEffect(() => { const t = setInterval(() => setAhora(Date.now()), 1000); return () => clearInterval(t); }, []);
   const urgente = debeOfrecer911(cola[0], ahora);
   const espera = Math.round((ahora - new Date(cola[0].creadoEn).getTime()) / 1000);
   return (
     <section className="c-tarjeta d-cola" aria-live="polite">
       <h2>{enLinea ? 'Enviando tu reporte…' : 'Sin señal: tu reporte está guardado'}</h2>
-      <p>Lo guardamos en este teléfono y <strong>se enviará solo</strong> en cuanto vuelva la señal.</p>
-      <p className="suave d-nota">Esperando {duracionTexto(espera)} · {cola.length === 1 ? '1 reporte' : `${cola.length} reportes`} en espera</p>
+      <p>{'Lo guardamos en este teléfono y se enviará solo en cuanto vuelva la señal.'}</p>
+      <p className="suave d-nota">{`Esperando ${duracionTexto(espera)} · ${cola.length === 1 ? '1 reporte' : `${cola.length} reportes`} en espera`}</p>
       {urgente && (
-        <p className="d-urgente" role="alert">No hemos podido enviarlo en {ESPERA_ANTES_DE_911_SEG} s. Si es una emergencia, <strong>llama al 911 ahora</strong>.</p>
+        <p className="d-urgente" role="alert">{`No hemos podido enviarlo en ${ESPERA_ANTES_DE_911_SEG} s. Si es una emergencia, `}<strong>llama al 911 ahora</strong>.</p>
       )}
       <a className={`d-boton-911 ${urgente ? 'urgente' : ''}`} href="tel:911"><Icono d={ICONO.telefono} tam={20} /> Llamar al 911</a>
+      <button type="button" className="c-boton-sec c-ancho" onClick={() => setIntento(enLinea ? 'Enviando…' : `Seguimos sin señal (${horaLocal(Date.now(), true)}). Se enviará solo en cuanto vuelva.`)}>Reintentar ahora</button>
+      {intento && <p className="suave d-nota" role="status" data-testid="reintento">{intento}</p>}
       <button className="c-enlace" onClick={alCancelar}>Cancelar el envío</button>
     </section>
   );
@@ -841,19 +862,19 @@ function Seguimiento({ r, alNuevo }: { r: ReporteDemo; alNuevo: () => void }) {
     <section className="d-seguimiento" aria-label={`Seguimiento del folio ${r.folio}`}>
       <div className="c-tarjeta d-hero">
         <div className="d-hero-fila">
-          <span className="suave c-pequeno"><span data-testid="cnie-seguimiento">{titulo}{r.cnie ? ` (CNIE ${r.cnie.subtipo.codigo})` : ''}</span> · {r.ubicacion.referencia}</span>
+          <span className="suave c-pequeno d-subtitulo"><span data-testid="cnie-seguimiento">{`${titulo}${r.cnie ? ` (CNIE ${r.cnie.subtipo.codigo})` : ''}`}</span>{r.ubicacion.referencia && <span>{`· ${r.ubicacion.referencia}`}</span>}</span>
         </div>
         <p className={`d-estado d-${r.estado}`} data-testid="estado" role="status" aria-live="polite">{demo.etiquetaCiudadano(r.estado)}</p>
 
         {u && !final && (
           <div className="d-llegada" data-testid="llegada">
             {enSitio
-              ? <><span className="d-eta">Ya llegó</span><span>{u.etiqueta} está en el lugar</span></>
-              : <><span className="d-eta">Llega en ~{u.etaMinutos ?? '?'} min</span><span>{u.etiqueta}{u.distanciaMetros ? ` · a ${u.distanciaMetros < 1000 ? `${Math.round(u.distanciaMetros / 10) * 10} m` : `${(u.distanciaMetros / 1000).toFixed(1)} km`}` : ''}</span></>}
+              ? <><span className="d-eta">Ya llegó</span><span>{`${u.etiqueta} está en el lugar`}</span></>
+              : <><span className="d-eta">{`Llega en ~${u.etaMinutos ?? '?'} min`}</span><span>{u.etiqueta}{u.distanciaMetros ? ` · a ${u.distanciaMetros < 1000 ? `${Math.round(u.distanciaMetros / 10) * 10} m` : `${(u.distanciaMetros / 1000).toFixed(1)} km`}` : ''}</span></>}
           </div>
         )}
         {escalaEn !== null && (
-          <p className="suave d-nota">Esperando que un operador lo reciba en la <Link href="/consola/" target="_blank">consola</Link>. Si nadie lo recibe en {escalaEn} s, pasa al C5 con el mismo folio.</p>
+          <p className="suave d-nota">{`Esperando que un operador lo reciba en la consola. Si nadie lo recibe en ${escalaEn} s, pasa al C5 con el mismo folio. `}<Link href="/consola/" target="_blank" className="d-enlace-bloque">Abrir la consola</Link></p>
         )}
 
         <Mapa
@@ -867,7 +888,7 @@ function Seguimiento({ r, alNuevo }: { r: ReporteDemo; alNuevo: () => void }) {
         <div className="d-folio-caja">
           <span className="suave c-pequeno">Tu folio</span>
           <span className="d-folio" data-testid="folio">{r.folio}</span>
-          <span className="suave c-pequeno">Atiende {demo.nombreCad(r.cadId)} · {r.identidad === 'completa' ? 'con tu nombre' : r.identidad === 'seudonimo' ? `como “${r.alias}”` : 'anónimo'}</span>
+          <span className="suave c-pequeno">{`Atiende ${demo.nombreCad(r.cadId)} · ${r.identidad === 'completa' ? 'con tu nombre' : r.identidad === 'seudonimo' ? `como “${r.alias}”` : 'anónimo'}`}</span>
         </div>
 
         {r.cadSimulado && <p className="d-nota-demo">Demo automática: la recepción, la unidad y el cierre se simulan para acelerar el recorrido. En el servicio real, el operador cierra el reporte.</p>}
@@ -897,9 +918,9 @@ function Seguimiento({ r, alNuevo }: { r: ReporteDemo; alNuevo: () => void }) {
           ))}
         </ol>
         {t.llegada.segundos != null && (
-          <p className="d-nota">
-            {enSitio ? 'La unidad llegó en ' : 'Desde tu reporte: '}<strong>{duracionTexto(t.llegada.segundos)}</strong> · meta de llegada {Math.round(t.llegada.metaSegundos / 60)} min
-            {t.llegada.estado === 'excedida' && <> <span className="c-chip c-chip-alerta">Fuera de meta</span></>}
+          <p className="d-nota d-linea">
+            {`${enSitio ? 'La unidad llegó en' : 'Desde tu reporte:'} ${duracionTexto(t.llegada.segundos)} · meta de llegada ${Math.round(t.llegada.metaSegundos / 60)} min`}
+            {t.llegada.estado === 'excedida' && <span className="c-chip c-chip-alerta">Fuera de meta</span>}
           </p>
         )}
       </div>
@@ -941,7 +962,7 @@ function Seguimiento({ r, alNuevo }: { r: ReporteDemo; alNuevo: () => void }) {
         <summary className="d-resumen">Historial</summary>
         <ul className="d-historial">
           {[...r.historial].reverse().map((h, i) => (
-            <li key={i}><span className="suave">{new Date(h.en).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> {demo.etiquetaCiudadano(h.estado)}{h.nota ? ` · ${h.nota}` : ''}</li>
+            <li key={i} className="d-hito"><span className="suave">{horaLocal(h.en, true)}</span><span>{`${demo.etiquetaCiudadano(h.estado)}${h.nota ? ` · ${h.nota}` : ''}`}</span></li>
           ))}
         </ul>
       </details>
@@ -996,7 +1017,7 @@ function Opinar({ r }: { r: ReporteDemo }) {
           ))}
         </div>
       </fieldset>
-      <label className="d-campo"><span>Comentario o queja <span className="suave">(opcional)</span></span><textarea value={comentario} onChange={(e) => setComentario(e.target.value)} rows={2} maxLength={500} /></label>
+      <label className="d-campo"><span>{'Comentario o queja (opcional)'}</span><textarea value={comentario} onChange={(e) => setComentario(e.target.value)} rows={2} maxLength={500} /></label>
       {error && <p className="c-error" role="alert">{error}</p>}
       <button className="c-boton c-grande c-ancho">Enviar</button>
       <p className="suave d-nota">Si no llegó nadie o calificas con 1 o 2 estrellas, se registra como queja para supervisión.</p>
@@ -1024,7 +1045,7 @@ function PantallaPerfil({
         <div>
           <h2 id="cuenta">{ciudadano.nombre}</h2>
           <p className="d-nota" data-testid="mi-telefono">{telefonoLegible(ciudadano.telefono)}</p>
-          <p className="suave d-nota">Con seudónimo, la policía solo ve que tu teléfono termina en <strong>{ciudadano.telefono.slice(-4)}</strong> ({enmascararTelefono(ciudadano.telefono)}).</p>
+          <p className="suave d-nota">{`Con seudónimo, la policía solo ve que tu teléfono termina en ${ciudadano.telefono.slice(-4)} (${enmascararTelefono(ciudadano.telefono)}).`}</p>
         </div>
       </section>
 
@@ -1040,12 +1061,13 @@ function PantallaPerfil({
           <label className="d-radio"><input type="radio" name="despacho" checked={!ajustes.automatico} onChange={() => alAjustes({ automatico: false })} /> <span><strong>Un operador en la consola</strong><small>Como en el servicio real. Abre la <Link href="/consola/" target="_blank">consola</Link> con operador / operador.</small></span></label>
           <label className="d-radio"><input type="radio" name="despacho" checked={ajustes.automatico} onChange={() => alAjustes({ automatico: true })} /> <span><strong>Demo automática (acelerada)</strong><small>Se recibe, llega la unidad y se cierra solo, para probar sin otra pestaña.</small></span></label>
         </fieldset>
-        <label className="d-fila-ajuste">Velocidad del tiempo
-          <select value={velocidad} onChange={(e) => demo.fijarVelocidad(Number(e.target.value))}>
+        <label className="d-fila-ajuste">Velocidad de la simulación
+          <select value={velocidad} onChange={(e) => demo.fijarVelocidad(Number(e.target.value))} aria-describedby="nota-velocidad">
             <option value={1}>Real</option>
             <option value={10}>Acelerada ×10</option>
           </select>
         </label>
+        <p id="nota-velocidad" className="suave c-pequeno">{`Acelera al CAD simulado y el avance de las unidades. Las horas siempre son las reales de Querétaro. Los reportes de prueba se borran solos a las ${demo.HORAS_DATOS_DEMO} h.`}</p>
         <label className="d-fila-ajuste d-interruptor">Simular sin conexión
           <input type="checkbox" role="switch" checked={simularSinRed} onChange={(e) => alSimularSinRed(e.target.checked)} />
         </label>

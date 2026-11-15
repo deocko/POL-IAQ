@@ -1,7 +1,7 @@
 /**
  * CAD simulado.
  *
- * Recibe `incidente.creado` de Pol-IAQ (firma HMAC verificada) y responde como
+ * Recibe `incidente.creado` de POL-IAQ (firma HMAC verificada) y responde como
  * lo haría un CAD: acusa recibo, asigna una unidad, la mueve hacia el lugar,
  * marca "en sitio" y cierra. Sirve para demos y para probar la app ciudadana.
  *
@@ -19,7 +19,7 @@ const PASO_MS = Number(process.env.SIM_STEP_MS ?? 3000);
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Identifica qué CAD es por el secreto con el que firmó Pol-IAQ. */
+/** Identifica qué CAD es por el secreto con el que firmó POL-IAQ. */
 function cadPorFirma(ts: number, cuerpo: string, firma: string): string | undefined {
   return Object.entries(CADS).find(([, c]) => verificarFirma(c.secreto, ts, cuerpo, firma))?.[0];
 }
@@ -46,7 +46,7 @@ const ETIQUETA: Record<string, string> = {
 /**
  * Despacha la unidad de la corporación principal que indica la canalización.
  * Al acusar recibo devuelve el código CNIE con el que registró el folio (el
- * mismo que mandó Pol-IAQ si es un incidente vigente del CNIE V 3.0).
+ * mismo que mandó POL-IAQ si es un incidente vigente del CNIE V 3.0).
  */
 async function simular(cadId: string, folio: string, lat: number, lng: number, corporacion = 'policia_municipal', codigoCnie?: string | null) {
   let s = 0;
