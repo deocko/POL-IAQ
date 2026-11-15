@@ -48,6 +48,9 @@ export interface Reporte {
   escalaAlC5En: string | null;
   operable: boolean;
   transiciones: Estado[];
+  /** Solo demo: lo despacha la demo automática (el operador puede tomar el control). */
+  automatico?: boolean;
+  cerradoPorDemo?: boolean;
 }
 
 export interface UnidadDisponible {

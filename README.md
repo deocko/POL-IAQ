@@ -14,7 +14,7 @@ Plataforma ciudadana para reportar emergencias a las policías municipales de Qu
 | API (`services/api`) | **No está publicado** | Simulado en el navegador con la misma lógica de `@pol-iaq/shared` |
 | CAD simulado (`services/cad-simulator`) | **No está publicado** | Simulado en el navegador: recibe, asigna la unidad más cercana, la mueve por GPS simulado hasta el lugar y cierra (con reloj ×1 o ×10) |
 
-Recorrido: abre `/demo/`, regístrate (código `000000`, no se envía ningún SMS), elige incidente y ubicación de prueba y envía. Recibes un folio como `QRO-006-2026-000001`. Si eliges "Yo, desde la consola del operador", abre `/consola/` en otra pestaña del **mismo navegador**, entra con `operador`/`operador` y lleva el reporte por recibir → asignar → en camino → en sitio → cerrar; la app ciudadana se actualiza al instante. Si eliges "El CAD simulado", avanza solo hasta cerrado. Si nadie recibe un reporte en 90 s, se escala al C5 con el mismo folio. Las ubicaciones de prueba cubren los tres municipios piloto y una fuera del piloto (San Juan del Río → folio `QRO-000-…` del C5).
+Recorrido: abre `/demo/`, regístrate con cualquier teléfono de 10 dígitos (código `000000`, no se envía ningún SMS), toca lo que pasa y luego **Enviar reporte** (2 toques). Recibes un folio como `QRO-014-2026-000001` y ves llegar la unidad en el mapa. En **Perfil** eliges quién atiende: "Un operador en la consola" (como en el servicio real: abre `/consola/` en otra pestaña del **mismo navegador** con `operador`/`operador`, recibe el reporte y ciérralo con "Cerrar como atendido") o "Demo automática", que además cierra sola el reporte para acelerar el recorrido y lo indica en pantalla. Si nadie recibe un reporte en 90 s, se escala al C5 con el mismo folio. Las ubicaciones de prueba cubren los tres municipios piloto y una fuera del piloto (San Juan del Río → folio `QRO-000-…` del C5).
 
 Por qué así: la demo se publica en GitHub Pages (gratis, en el mismo repo, sin cuentas ni llaves de terceros). Pages solo sirve archivos estáticos, así que el API NestJS y el CAD simulado no pueden correr ahí: con `NEXT_PUBLIC_DEMO=1`, `apps/web/lib/demo/motor.ts` hace en el navegador lo mismo que ellos (folio, geocercas, máquina de estados, cuestionario, canalización, escalamiento al C5). Los datos viven en el `localStorage` de quien abre la demo, se comparten entre pestañas de ese navegador y se borran con "Borrar datos de la demo". **Solo datos de prueba: nada sale del navegador ni llega a ningún CAD o policía.** Para probar los servicios reales, usa el arranque rápido de abajo.
 
@@ -91,6 +91,12 @@ TEST_DATABASE_URL=postgres://poliaq:poliaq-dev@localhost:5432/poliaq_test pnpm t
 - **Sin conexión**: la app guarda el reporte en una cola y lo envía sola al volver la red; si después de 60 s no se ha podido enviar, ofrece llamar al 911 (`packages/shared/src/cola.ts`).
 - **Modo claro y oscuro**: la web sigue el tema del sistema y permite elegir Claro, Oscuro o Auto.
 
+## Identidad visual y experiencia
+
+- **Logo oficial**: original en `apps/web/public/logo-pol-iaq.jpg` y `apps/ciudadano/assets/logo-pol-iaq.jpg`. Variantes generadas a partir de él (sin deformar ni cambiar colores) en `apps/web/public/marca/`: logo completo, marca (escudo + burbuja, para espacios pequeños), iconos PWA 192/512 y *maskable*; `apps/web/app/favicon.ico`, `icon.png` y `apple-icon.png`; en la app móvil, `icon.png` (1024×1024), `splash-icon.png` sobre azul marino `#000D37` y el icono adaptativo de Android.
+- **Sistema de diseño común** (`apps/web/app/globals.css`): mismos colores, tipografía, radios y componentes en la app ciudadana, la consola y las páginas públicas; contraste AA en claro y oscuro; objetivos táctiles de 44 px o más; tamaños en `rem` para respetar la letra grande del teléfono.
+- **App ciudadana web**: barra de pestañas abajo (Reportar, Mi reporte, Perfil), reporte en 2 o 3 toques, botón de asistencia directa con 12 s para confirmar y cuenta atrás visible, "La policía verá…" antes de enviar, y estados de carga, vacío, error con "Reintentar" y éxito.
+
 ## Consola del operador/despachador
 
 `http://localhost:3001/consola` (`apps/web/app/consola`). Es para municipios **sin CAD integrado** y para supervisión:
@@ -114,7 +120,7 @@ TEST_DATABASE_URL=postgres://poliaq:poliaq-dev@localhost:5432/poliaq_test pnpm t
 - Trabajador de colas para la bandeja de salida y los temporizadores de acuse; Redis para WebSocket con varias instancias.
 - Contratar el proveedor de SMS (cuenta, remitente y registro de plantillas), Keycloak/OIDC, almacén de objetos con WORM y URLs prefirmadas (hoy la evidencia va en PostgreSQL).
 - mTLS y lista de IPs con cada CAD; adaptadores reales para los CAD de los tres municipios y el C5.
-- Revisión jurídica de `docs/legal` y convenios con cada municipio. Los datos que debe entregar jurídico están en [`docs/legal/PENDIENTES-JURIDICO.md`](docs/legal/PENDIENTES-JURIDICO.md); las páginas publicadas los muestran como "por definir".
+- Revisión jurídica de `docs/legal` y convenios con cada municipio. Los datos que debe entregar jurídico están en [`docs/legal/PENDIENTES-JURIDICO.md`](docs/legal/PENDIENTES-JURIDICO.md); mientras tanto las páginas publicadas omiten cada dato faltante o lo sustituyen por una frase general (sin huecos ni datos inventados), con el aviso "Versión preliminar en revisión jurídica".
 - Acordar las metas de tiempo con los municipios y el C5; servidor de rutas (OSRM o proveedor) y fuente real de GPS de las unidades (CAD, proveedor de AVL o app de la unidad).
 - Llevar a la app móvil la cola sin conexión, la identidad (seudónimo/anónimo) y la calificación, que hoy están en el API y en la demo web.
 - Llave de Google Maps para Android, proveedor de teselas para web y consola de operador.

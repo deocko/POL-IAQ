@@ -81,6 +81,8 @@ export interface ReporteDemo {
   actualizadoEn: string;
   /** Si el CAD simulado lo despacha solo (en lugar de la consola). */
   cadSimulado: { inicio: number; paso: number; enSitioEn?: number } | null;
+  /** Lo cerró la demo automática, no un operador. */
+  cerradoPorDemo?: boolean;
 }
 
 interface PosicionAvl { lat: number; lng: number; rumbo?: number; en: string }
@@ -443,6 +445,8 @@ export function vistaOperador(r: ReporteDemo) {
     historial: r.historial,
     tiempos: tiemposDe(r),
     opinion: r.opinion,
+    automatico: !!r.cadSimulado,
+    cerradoPorDemo: !!r.cerradoPorDemo,
     creadoEn: r.creadoEn,
     actualizadoEn: r.actualizadoEn,
     escalaAlC5En,
@@ -540,6 +544,8 @@ function aplicar(e: Estado, r: ReporteDemo, a: AccionDemo, autor: string) {
 // ---------------------------------------------------------------------------
 
 /** Pasos del CAD simulado, en segundos del reloj de la demo desde que se creó el reporte. */
+/** El cierre automático solo existe en la demo, para no esperar al operador. */
+export const NOTA_CIERRE_DEMO = 'Cerrado automáticamente por la demo (en el servicio real lo cierra el operador)';
 const SIM = { recibe: 20, asigna: 35, mensaje: 45, sale: 60, cierraTrasLlegar: 90 };
 function tic() {
   cambiar((e) => {
@@ -600,8 +606,9 @@ function avanzarSimulador(e: Estado, r: ReporteDemo, t: number): boolean {
     sim.paso = 4; cambio = true;
   }
   if (sim.paso === 4 && sim.enSitioEn && t - sim.enSitioEn >= SIM.cierraTrasLlegar * 1000) {
-    transicionar(r, 'cerrado', 'Atendido por la unidad (CAD simulado)');
+    transicionar(r, 'cerrado', NOTA_CIERRE_DEMO);
     r.cadSimulado = null;
+    r.cerradoPorDemo = true;
     cambio = true;
   }
   return cambio;

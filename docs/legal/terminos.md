@@ -69,4 +69,4 @@ Estos Términos se rigen por las leyes del Estado de Querétaro y, en lo que cor
 
 [CORREO] · [TELÉFONO] · [DOMICILIO]
 
-**Última actualización:** 13 de noviembre de 2026.
+**Última actualización:** 14 de noviembre de 2026.

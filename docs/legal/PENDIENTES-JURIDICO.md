@@ -1,8 +1,8 @@
 # Datos que debe proporcionar el área jurídica
 
-**Fecha:** 2026-11-14 · Aplica a los borradores de `docs/legal/` versión 2026-11-14.
+**Fecha:** 2026-11-15 · Aplica a los borradores de `docs/legal/` versión 2026-11-14.
 
-Mientras falten estos datos, las páginas publicadas muestran "(por definir)" o "(pendiente de revisión jurídica)" en su lugar. **Ninguno se llenó con un valor inventado.** Los valores entre corchetes con números (por ejemplo `[12 meses]`) son propuestas del borrador, no plazos aprobados.
+Mientras falten estos datos, las páginas publicadas **no muestran huecos**: cada dato que falta se omite o se sustituye por una frase general que remite a la versión definitiva (por ejemplo, "La identidad y el domicilio del responsable se incluirán en la versión definitiva de este aviso"), y arriba de cada página aparece el aviso "Versión preliminar en revisión jurídica". Las sustituciones exactas están en `apps/web/lib/legal.ts`. **Ninguno se llenó con un valor inventado.** Al recibir un dato, se escribe en el `.md` y se quita su sustitución. Los valores entre corchetes con números (por ejemplo `[12 meses]`) son propuestas del borrador, no plazos aprobados.
 
 ## Antes de llenar: decisiones de fondo
 

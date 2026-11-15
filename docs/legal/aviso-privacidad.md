@@ -108,4 +108,4 @@ Pol-IAQ está dirigido a personas mayores de 18 años. [CONFIRMAR CON JURÍDICO:
 
 Si cambiamos este aviso te lo mostraremos en la app antes de que sigas usándola y te pediremos aceptarlo de nuevo cuando el cambio lo requiera. La versión vigente está siempre en [URL] y en **Perfil > Privacidad**.
 
-**Última actualización:** 13 de noviembre de 2026.
+**Última actualización:** 14 de noviembre de 2026.
