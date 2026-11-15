@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { SCRIPT_TEMA } from '../lib/tema-script';
+import { VERSION, scriptVersion } from '../lib/version-script';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -23,6 +24,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es-MX" data-tema="claro" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+        {VERSION !== 'dev' && <meta name="poliaq-version" content={VERSION} />}
+        {VERSION !== 'dev' && <script dangerouslySetInnerHTML={{ __html: scriptVersion(process.env.NEXT_PUBLIC_BASE_PATH ?? '', VERSION) }} />}
       </head>
       <body>{children}</body>
     </html>

@@ -5,10 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './demo.css';
 import {
   ESPERA_ANTES_DE_911_SEG, TIPOS_CNIE, buscarCnie, debeOfrecer911, duracionTexto, encolar, enmascararTelefono, incidenteCnie, incidentesDeSubtipo, nombreLegible,
-  subtiposDeTipo, vaciarCola, type IncidenteCnie, type Identidad, type Opinion, type PendienteEnvio,
+  INCIDENTES_CNIE, SUBTIPOS_CNIE, SUBTIPOS_CNIE_BAJA, subtipoCnie, subtiposDeBajaDeTipo, subtiposDeTipo, vaciarCola, type IncidenteCnie, type Identidad, type Opinion, type PendienteEnvio,
 } from '@pol-iaq/shared/movil';
 import { CODIGO_SMS_DEMO } from '../../lib/demo/textos';
 import { horaLocal } from '../../lib/hora';
+import { etiquetaVersion } from '../../lib/version-script';
 import * as demo from '../../lib/demo/motor';
 import type { EvidenciaDemo, NuevoReporte as DatosReporte, ReporteDemo } from '../../lib/demo/motor';
 import { Mapa } from '../../lib/mapa/Mapa';
@@ -79,6 +80,11 @@ const ICONO_INCIDENTE: Record<string, string> = {
 const MOSAICO: Record<string, [string, string]> = Object.fromEntries(demo.CATALOGO.map((i) => [i.id, [ICONO_INCIDENTE[i.id] ?? '❗', i.nombreCorto]]));
 /** Nombre corto en el seguimiento, junto al subtipo CNIE: "Robo (CNIE 304)". */
 const SEGUIMIENTO: Record<string, string> = { 'robo-en-curso': 'Robo' };
+
+/** Código CNIE completo del reporte (5 dígitos; el subtipo solo si aún falta el incidente). */
+const codigoCnieDe = (r: Pick<ReporteDemo, 'cnie'>) => r.cnie?.incidente?.codigo ?? r.cnie?.subtipo.codigo ?? null;
+/** "Disparos (CNIE 30202)": así dos incidentes del mismo subtipo no se ven iguales. */
+const tituloConCodigo = (r: Pick<ReporteDemo, 'incidenteId' | 'asistenciaDirecta' | 'cnie'>) => `${tituloReporte(r)}${codigoCnieDe(r) ? ` (CNIE ${codigoCnieDe(r)})` : ''}`;
 
 /** Título del reporte para el ciudadano. En "Otra emergencia" con incidente elegido, su nombre. */
 function tituloReporte(r: Pick<ReporteDemo, 'incidenteId' | 'asistenciaDirecta' | 'cnie'>) {
@@ -518,7 +524,8 @@ function ErrorEnvio({ mensaje, alReintentar }: { mensaje: string; alReintentar: 
 
 /**
  * "Otra emergencia": todo el catálogo nacional en lenguaje simple (tipo, luego
- * subtipo, luego el caso) o buscando con palabras. No muestra códigos.
+ * subtipo, luego el caso) o buscando con palabras. Los casos muestran su código.
+ * Los subtipos dados de baja en la V 3.0 (502) se muestran como aviso con el subtipo que los reemplaza.
  */
 function ExplorarCatalogo({ alElegir, alVolver }: { alElegir: (codigo: string | null) => void; alVolver: () => void }) {
   const [texto, setTexto] = useState('');
@@ -532,7 +539,7 @@ function ExplorarCatalogo({ alElegir, alVolver }: { alElegir: (codigo: string | 
   const Caso = ({ i, contexto }: { i: IncidenteCnie; contexto?: boolean }) => (
     <li>
       <button type="button" onClick={() => alElegir(i.codigo)}>
-        <span>{nombreLegible(i.nombre)}{contexto && <span className="suave c-pequeno">{i.tipo.nombre} · {i.subtipo.nombreCorto}</span>}</span>
+        <span>{nombreLegible(i.nombre)}<span className="suave c-pequeno" data-testid="codigo-caso">{contexto ? `${i.codigo} · ${i.tipo.nombre} · ${i.subtipo.nombreCorto}` : i.codigo}</span></span>
         <span aria-hidden="true">›</span>
       </button>
     </li>
@@ -550,19 +557,32 @@ function ExplorarCatalogo({ alElegir, alVolver }: { alElegir: (codigo: string | 
       {texto.trim().length >= 2 ? (
         resultados.length ? (
           <ul className="d-lista-catalogo" aria-label="Resultados">{resultados.map((i) => <Caso key={i.codigo} i={i} contexto />)}</ul>
-        ) : <p className="suave d-nota">No encontramos eso. Prueba con otra palabra o descríbelo con tus palabras.</p>
+        ) : <p className="suave d-nota">{SUBTIPOS_CNIE_BAJA.some((b) => texto.trim().startsWith(b.codigo))
+          ? `Ese código se dio de baja en el CNIE V 3.0. ${SUBTIPOS_CNIE_BAJA.filter((b) => texto.trim().startsWith(b.codigo)).map((b) => `Los casos de ${b.nombreCorto} (${b.codigo}) ahora están en ${b.reemplazo}: búscalos con "${b.reemplazo}" o con "${b.nombreCorto.toLowerCase()}".`).join(' ')}`
+          : 'No encontramos eso. Prueba con otra palabra o descríbelo con tus palabras.'}</p>
       ) : !tipo ? (
-        <ul className="d-lista-catalogo" aria-label="Tipos de emergencia">
-          {TIPOS_CNIE.map((t) => (
-            <li key={t.codigo}><button type="button" onClick={() => setTipo(t.codigo)}><span>{t.nombre}</span><span aria-hidden="true">›</span></button></li>
-          ))}
-        </ul>
+        <>
+          <ul className="d-lista-catalogo" aria-label="Tipos de emergencia">
+            {TIPOS_CNIE.map((t) => (
+              <li key={t.codigo}><button type="button" onClick={() => setTipo(t.codigo)}><span>{t.nombre}</span><span aria-hidden="true">›</span></button></li>
+            ))}
+          </ul>
+          <p className="suave c-pequeno d-nota" data-testid="catalogo-conteo">{`Catálogo Nacional de Incidentes de Emergencia V 3.0: ${TIPOS_CNIE.length} tipos, ${SUBTIPOS_CNIE.length + SUBTIPOS_CNIE_BAJA.length} subtipos (${SUBTIPOS_CNIE.length} vigentes y ${SUBTIPOS_CNIE_BAJA.length} dado de baja) y ${INCIDENTES_CNIE.length} casos vigentes.`}</p>
+        </>
       ) : !subtipo ? (
-        <ul className="d-lista-catalogo" aria-label={`Opciones de ${nombreTipo}`}>
-          {subtiposDeTipo(tipo).map((x) => (
-            <li key={x.codigo}><button type="button" onClick={() => setSubtipo(x.codigo)}><span>{x.nombreCorto}</span><span aria-hidden="true">›</span></button></li>
+        <>
+          <ul className="d-lista-catalogo" aria-label={`Opciones de ${nombreTipo}`}>
+            {subtiposDeTipo(tipo).map((x) => (
+              <li key={x.codigo}><button type="button" onClick={() => setSubtipo(x.codigo)}><span>{x.nombreCorto}</span><span aria-hidden="true">›</span></button></li>
+            ))}
+          </ul>
+          {subtiposDeBajaDeTipo(tipo).map((x) => (
+            <p key={x.codigo} className="suave c-pequeno d-nota" data-testid="subtipo-baja">
+              {`${x.nombreCorto} (${x.codigo}) se dio de baja en el CNIE V 3.0. Ahora está en ${TIPOS_CNIE.find((t) => t.codigo === x.reemplazo[0])?.nombre} · ${subtipoCnie(x.reemplazo)?.nombreCorto} (${x.reemplazo}). `}
+              <button type="button" className="c-enlace" onClick={() => { setTipo(x.reemplazo[0]); setSubtipo(x.reemplazo); }}>{`Ver ${subtipoCnie(x.reemplazo)?.nombreCorto}`}</button>
+            </p>
           ))}
-        </ul>
+        </>
       ) : (
         <ul className="d-lista-catalogo" aria-label={`Casos de ${nombreSubtipo}`}>{incidentesDeSubtipo(subtipo).map((i) => <Caso key={i.codigo} i={i} />)}</ul>
       )}
@@ -800,7 +820,7 @@ function PantallaMiReporte({
             {mios.map((o) => (
               <li key={o.folio}>
                 <button type="button" onClick={() => alAbrir(o.folio)} aria-current={o.folio === folio ? 'true' : undefined} className={o.folio === folio ? 'actual' : ''}>
-                  <span><strong>{tituloReporte(o)}</strong><span className="suave c-pequeno">{o.folio}</span></span>
+                  <span><strong data-testid="cnie-lista">{tituloConCodigo(o)}</strong><span className="suave c-pequeno">{o.folio}</span></span>
                   <span className={`c-chip ${FINALES.includes(o.estado) ? 'c-chip-neutro' : ''}`}>{demo.etiquetaCiudadano(o.estado)}</span>
                 </button>
               </li>
@@ -850,7 +870,6 @@ function Seguimiento({ r, alNuevo }: { r: ReporteDemo; alNuevo: () => void }) {
     : null;
   const u = r.unidad;
   const enSitio = r.estado === 'en_sitio' || r.estado === 'cerrado';
-  const titulo = tituloReporte(r);
 
   function enviarMensaje(e: React.FormEvent) {
     e.preventDefault();
@@ -862,7 +881,7 @@ function Seguimiento({ r, alNuevo }: { r: ReporteDemo; alNuevo: () => void }) {
     <section className="d-seguimiento" aria-label={`Seguimiento del folio ${r.folio}`}>
       <div className="c-tarjeta d-hero">
         <div className="d-hero-fila">
-          <span className="suave c-pequeno d-subtitulo"><span data-testid="cnie-seguimiento">{`${titulo}${r.cnie ? ` (CNIE ${r.cnie.subtipo.codigo})` : ''}`}</span>{r.ubicacion.referencia && <span>{`· ${r.ubicacion.referencia}`}</span>}</span>
+          <span className="suave c-pequeno d-subtitulo"><span data-testid="cnie-seguimiento">{tituloConCodigo(r)}</span>{r.ubicacion.referencia && <span>{`· ${r.ubicacion.referencia}`}</span>}</span>
         </div>
         <p className={`d-estado d-${r.estado}`} data-testid="estado" role="status" aria-live="polite">{demo.etiquetaCiudadano(r.estado)}</p>
 
@@ -913,7 +932,7 @@ function Seguimiento({ r, alNuevo }: { r: ReporteDemo; alNuevo: () => void }) {
           {t.etapas.map((e) => (
             <li key={e.id} className={`d-etapa ${e.estado}`}>
               <span>{e.ciudadano}</span>
-              <span className="suave">{e.segundos == null ? (e.estado === 'omitida' ? '—' : 'pendiente') : `${duracionTexto(e.segundos)}${e.estado === 'en_curso' || e.estado === 'en_riesgo' ? '…' : ''}`}</span>
+              <span className="suave">{e.segundos == null ? (e.simultanea ? 'junto con el paso anterior' : e.estado === 'omitida' ? '—' : 'pendiente') : `${duracionTexto(e.segundos)}${e.estado === 'en_curso' || e.estado === 'en_riesgo' ? '…' : ''}`}</span>
             </li>
           ))}
         </ol>
@@ -1074,6 +1093,7 @@ function PantallaPerfil({
         {confirmarBorrar
           ? <div className="d-fila-botones"><button className="c-boton c-boton-peligro" onClick={alBorrar}>Sí, borrar todo</button><button className="c-boton-sec" onClick={() => setConfirmarBorrar(false)}>No</button></div>
           : <button className="c-enlace" onClick={() => setConfirmarBorrar(true)}>Borrar datos de la demo y salir</button>}
+        <p className="suave c-pequeno" data-testid="version">{etiquetaVersion()}</p>
       </section>
 
       <section className="c-tarjeta" aria-labelledby="docs">

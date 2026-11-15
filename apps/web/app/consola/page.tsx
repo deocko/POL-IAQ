@@ -10,6 +10,8 @@ import {
 import { Mapa } from '../../lib/mapa/Mapa';
 import { SelectorTema } from '../../lib/tema';
 import { Marca } from '../../lib/marca';
+import { horaLocal, ZONA_HORARIA } from '../../lib/hora';
+import { etiquetaVersion } from '../../lib/version-script';
 import * as demo from '../../lib/demo/motor';
 import {
   CORPORACION, DEMO, ERRORES, IDENTIDAD, LLEGO, ahoraMs, conectarOperacion, distanciaTexto, ESTADO, ErrorApi, api, esFinal, hace, hora, ordenar,
@@ -169,6 +171,7 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
           <span className="c-cabecera-titulo">Consola<span className="suave c-ocultable">{` · ${yo.operador.nombre}`}</span></span>
         </div>
         <div className="c-cabecera-der">
+          <Reloj />
           <span className={`c-conexion ${enLinea ? 'ok' : ''}`} role="status"><span className="c-punto" aria-hidden="true" />{enLinea ? 'En línea' : 'Reconectando…'}</span>
           <SelectorTema />
           <button className="c-boton-sec c-salir" onClick={alSalir}>Salir</button>
@@ -178,7 +181,7 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
         <span>{supervision ? 'Supervisión: todos los CAD' : misCads.map((c) => c.nombre).join(', ')}</span>
         {misCads.some((c) => c.modo === 'webhook') && <span className="c-chip">Los CAD con sistema propio se ven en solo lectura</span>}
       </div>
-      {DEMO && <div className="c-demo c-demo-barra c-linea"><span>{'Demo: el API, el CAD y el GPS de las unidades corren simulados en tu navegador. Nada aquí es una emergencia real.'}</span><Link href="/demo/">Abrir la app ciudadana</Link><Velocidad /></div>}
+      {DEMO && <div className="c-demo c-demo-barra c-linea"><span>{'Demo: el API, el CAD y el GPS de las unidades corren simulados en tu navegador. Nada aquí es una emergencia real.'}</span><Link href="/demo/">Abrir la app ciudadana</Link><Velocidad /><span className="suave" data-testid="version">{etiquetaVersion()}</span></div>}
       <nav className="c-pestanas" aria-label="Vistas de la consola">
         {([['bandeja', 'Bandeja'], ['unidades', 'Unidades (GPS)'], ['tiempos', 'Tiempos y quejas']] as const).map(([v, t]) => (
           <button key={v} className={vista === v ? 'activa' : ''} aria-pressed={vista === v} onClick={() => setVista(v)}>{t}</button>
@@ -219,8 +222,8 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
               <div className="c-etiquetas">
                 {r.asistenciaDirecta && <span className="c-chip c-chip-alerta">Asistencia directa</span>}
                 <span className={`c-chip e-${r.estado}`}>{ESTADO[r.estado]}</span>
-                <span className="c-chip">{`Prioridad ${r.prioridad}`}</span>
-                <span className={`c-chip ${r.cnie?.incidente ? '' : 'c-chip-aviso'}`}>{r.cnie ? `CNIE ${r.cnie.incidente?.codigo ?? r.cnie.subtipo.codigo}` : 'Sin código CNIE'}</span>
+                <span className="c-chip" title="La que usa POL-IAQ para despachar, según las respuestas">{`Prioridad operativa: ${r.prioridad}`}</span>
+                <span className={`c-chip ${r.cnie?.incidente ? '' : 'c-chip-aviso'}`} title="Código y prioridad oficial del CNIE V 3.0">{r.cnie ? `CNIE ${r.cnie.incidente?.codigo ?? r.cnie.subtipo.codigo}${r.cnie.prioridad ? ` · oficial ${r.cnie.prioridad}` : ''}` : 'Sin código CNIE'}</span>
                 {!r.operable && <span className="c-chip">Solo lectura</span>}
                 {r.automatico && <span className="c-chip c-chip-neutro">Demo automática</span>}
                 {r.opinion?.queja && <span className="c-chip c-chip-alerta">Queja</span>}
@@ -303,7 +306,7 @@ function Detalle({
         <div className="c-etiquetas">
           {r.asistenciaDirecta && <span className="c-chip c-chip-alerta">Botón de asistencia directa</span>}
           {r.escenarioId && <span className="c-chip">Acceso rápido de lugar guardado</span>}
-          <span className="c-chip">{`Prioridad ${r.prioridad}`}</span>
+          <span className="c-chip" data-testid="prioridad-operativa">{`Prioridad operativa (respuesta): ${r.prioridad}`}</span>
           {r.automatico && <span className="c-chip c-chip-neutro">Demo automática</span>}
         </div>
         {r.cerradoPorDemo && <p className="c-nota c-pequeno">Lo cerró la demo automática para acelerar el recorrido. En el servicio real, el reporte lo cierra el operador con “Cerrar como atendido”.</p>}
@@ -490,7 +493,6 @@ const ESTADO_ETAPA: Record<TiempoEtapa['estado'], string> = {
   cumplida: 'En meta', excedida: 'Fuera de meta', en_curso: 'En curso', en_riesgo: 'Por vencer', pendiente: 'Pendiente', omitida: '—',
 };
 
-/** Tiempo desde el reporte contra la meta de llegada, para la bandeja. */
 const ORIGEN_CNIE: Record<string, string> = {
   catalogo: 'Código de la opción que eligió el ciudadano',
   respuestas: 'Afinado con lo que contestó el ciudadano',
@@ -524,11 +526,12 @@ function ClasificacionCnie({ r, ocupado, hacer }: { r: Reporte; ocupado: boolean
         <>
           <p className="c-cnie-etiqueta" data-testid="cnie-etiqueta">{r.cnieEtiqueta}</p>
           <div className="c-etiquetas">
-            {c.prioridad && <span className={`c-chip ${c.prioridad === 'ALTA' ? 'c-chip-alerta' : ''}`}>{`Prioridad CNIE ${c.prioridad}`}</span>}
-            {difiere && <span className="c-chip">{`Operativa ${r.prioridad}`}</span>}
+            {c.prioridad && <span className={`c-chip ${c.prioridad === 'ALTA' ? 'c-chip-alerta' : ''}`} data-testid="prioridad-cnie">{`Prioridad CNIE (oficial): ${c.prioridad}`}</span>}
+            <span className="c-chip">{`Prioridad operativa (respuesta): ${r.prioridad}`}</span>
             {c.secundario && <span className="c-chip" title={nombreLegible(c.secundario.nombre)}>{`Secundario ${c.secundario.codigo} · ${nombreLegible(c.secundario.nombre)}`}</span>}
           </div>
-          <p className="suave c-pequeno">{ORIGEN_CNIE[c.origen]}{!c.incidente ? '. Falta el incidente: elígelo abajo.' : '.'}</p>
+          {difiere && <p className="suave c-pequeno" data-testid="prioridades-nota">{'No es un error que difieran: la prioridad CNIE es la oficial del catálogo nacional para este tipo de incidente; la operativa es la que usa POL-IAQ para despachar según lo que contestó el ciudadano (armas, heridos, si sigue ocurriendo). Las dos se guardan.'}</p>}
+          <p className="suave c-pequeno">{`${ORIGEN_CNIE[c.origen]}${!c.incidente ? '. Falta el incidente: elígelo abajo.' : '.'}`}</p>
         </>
       ) : (
         <p className="c-nota c-pequeno">Sin código CNIE. El ciudadano eligió “Otra emergencia”: asígnale el incidente que corresponda.</p>
@@ -601,10 +604,16 @@ function TablaCnie({ titulo, grupos }: { titulo: string; grupos: GrupoCnie[] }) 
   );
 }
 
+/** Tiempo desde el reporte contra la meta de llegada, para la bandeja; dice en palabras si va fuera de meta. */
 function ChipLlegada({ t }: { t: Reporte['tiempos']['llegada'] }) {
   if (t.segundos == null) return null;
   const cls = t.estado === 'excedida' ? 'c-chip-alerta' : t.estado === 'en_riesgo' ? 'c-chip-aviso' : t.estado === 'cumplida' ? 'c-chip-ok' : '';
-  return <span className={`c-chip ${cls}`} title="Desde el reporte hasta la llegada, contra la meta">{`${duracionTexto(t.segundos)} / meta ${Math.round(t.metaSegundos / 60)} min`}</span>;
+  const aviso = t.estado === 'excedida' ? 'Fuera de meta · ' : t.estado === 'en_riesgo' ? 'Por vencer · ' : '';
+  return (
+    <span className={`c-chip ${cls}`} data-testid="chip-llegada" data-estado={t.estado} title="Desde el reporte hasta la llegada de la unidad, contra la meta de llegada">
+      {`${aviso}${duracionTexto(t.segundos)} / meta ${Math.round(t.metaSegundos / 60)} min`}
+    </span>
+  );
 }
 
 function Tiempos({ t }: { t: Reporte['tiempos'] }) {
@@ -621,7 +630,7 @@ function Tiempos({ t }: { t: Reporte['tiempos'] }) {
               <th scope="row">{e.nombre}</th>
               <td>{e.segundos == null ? '—' : duracionTexto(e.segundos)}</td>
               <td>{duracionTexto(e.metaSegundos)}</td>
-              <td><span className={`c-chip t-chip-${e.estado}`}>{ESTADO_ETAPA[e.estado]}</span></td>
+              <td><span className={`c-chip t-chip-${e.estado}`}>{e.simultanea ? 'Mismo paso que la anterior' : ESTADO_ETAPA[e.estado]}</span></td>
             </tr>
           ))}
           <tr className={`t-${t.llegada.estado} c-total`}>
@@ -703,7 +712,7 @@ function VistaTiempos({ token, ahora, nombreCad, alAbrir }: { token: string; aho
               const metas = x.id === 'llegada' ? t.metas.llegada : t.metas.etapas[x.id];
               return (
                 <tr key={x.id}>
-                  <th scope="row">{x.nombre}<div className="suave c-pequeno">{`${x.n} ${x.n === 1 ? 'medido' : 'medidos'}`}</div></th>
+                  <th scope="row">{x.nombre}<div className="suave c-pequeno">{`${x.n} ${x.n === 1 ? 'medido' : 'medidos'}${x.sinMedir ? ` · ${x.sinMedir} en el mismo paso que la etapa anterior, sin tiempo propio` : ''}`}</div></th>
                   <td>{x.promedioSegundos == null ? '—' : duracionTexto(x.promedioSegundos)}</td>
                   <td>{x.medianaSegundos == null ? '—' : duracionTexto(x.medianaSegundos)}</td>
                   <td className="c-pequeno">{`${duracionTexto(metas.alta)} / ${duracionTexto(metas.media)} / ${duracionTexto(metas.baja)}`}</td>
@@ -740,6 +749,18 @@ function VistaTiempos({ token, ahora, nombreCad, alAbrir }: { token: string; aho
         </ul>
       </div>
     </section>
+  );
+}
+
+/** Hora actual de Querétaro (America/Mexico_City) en el encabezado; se actualiza cada segundo. */
+function Reloj() {
+  const [ahora, setAhora] = useState<number | null>(null);
+  useEffect(() => { setAhora(Date.now()); const t = setInterval(() => setAhora(Date.now()), 1000); return () => clearInterval(t); }, []);
+  if (ahora === null) return null;
+  return (
+    <time className="c-reloj" dateTime={new Date(ahora).toISOString()} data-testid="reloj" title={`Hora actual de Querétaro (${ZONA_HORARIA})`}>
+      {`${horaLocal(ahora, true)} · Querétaro`}
+    </time>
   );
 }
 

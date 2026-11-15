@@ -30,6 +30,15 @@ export const SUBTIPOS_CNIE: readonly SubtipoCnie[] = CNIE_V3.subtipos
   .filter((s) => s.vigente)
   .map((s) => ({ codigo: s.codigo, nombre: s.nombre, nombreCorto: s.nombreCorto, tipo: s.codigo[0] }));
 
+/**
+ * Subtipos dados de baja en la V 3.0. El PDF (p. 67) dice: "502 Subtipo Notificación de hallazgo: BAJA.
+ * Se crea el numeral 312"; sus incidentes 50201-50203 pasaron a 31201-31203 (tabla de la p. 22).
+ */
+export interface SubtipoCnieBaja extends SubtipoCnie { reemplazo: string }
+export const SUBTIPOS_CNIE_BAJA: readonly SubtipoCnieBaja[] = CNIE_V3.subtipos
+  .filter((s) => !s.vigente)
+  .map((s) => ({ codigo: s.codigo, nombre: s.nombre, nombreCorto: s.nombreCorto, tipo: s.codigo[0], reemplazo: ({ '502': '312' } as Record<string, string>)[s.codigo] ?? '' }));
+
 const TIPO = new Map(TIPOS_CNIE.map((t) => [t.codigo, t]));
 const SUBTIPO = new Map(SUBTIPOS_CNIE.map((s) => [s.codigo, s]));
 
@@ -50,6 +59,7 @@ export const tipoCnie = (codigo: string) => TIPO.get(codigo);
 export const subtipoCnie = (codigo: string) => SUBTIPO.get(codigo);
 export const incidenteCnie = (codigo: string) => INCIDENTE.get(codigo);
 export const subtiposDeTipo = (tipo: string) => SUBTIPOS_CNIE.filter((s) => s.tipo === tipo);
+export const subtiposDeBajaDeTipo = (tipo: string) => SUBTIPOS_CNIE_BAJA.filter((s) => s.tipo === tipo);
 export const incidentesDeSubtipo = (subtipo: string) => INCIDENTES_CNIE.filter((i) => i.subtipo.codigo === subtipo);
 
 export type ErrorCodigoCnie = 'formato' | 'inexistente' | 'retirado';
@@ -82,29 +92,35 @@ export function nombreLegible(nombre: string): string {
   return s.charAt(0).toLocaleUpperCase('es-MX') + s.slice(1);
 }
 
+/** Palabras que no ayudan a encontrar un incidente ("robo EN curso", "persona DE la tercera edad"). */
+const VACIAS = new Set(['a', 'al', 'con', 'de', 'del', 'el', 'en', 'es', 'la', 'las', 'lo', 'los', 'me', 'mi', 'o', 'por', 'que', 'se', 'su', 'un', 'una', 'y']);
+
 /**
- * Busca por código (o su inicio: "304" da todo el subtipo) o por palabras del
- * nombre del incidente, del subtipo o del tipo, sin importar acentos.
+ * Busca por código (o su inicio: "304" da todo el subtipo) o por frase: la frase se
+ * parte en palabras y basta con que coincida cualquiera de ellas con el nombre del
+ * incidente, del subtipo o del tipo, sin importar acentos. Primero los que coinciden
+ * con más palabras ("robo en curso" encuentra los robos aunque "curso" no aparezca).
  */
 export function buscarCnie(texto: string, limite = 30): IncidenteCnie[] {
   const t = texto.trim();
   if (!t) return [];
   if (/^\d{1,5}$/.test(t)) return INCIDENTES_CNIE.filter((i) => i.codigo.startsWith(t)).slice(0, limite);
-  const palabras = normalizar(t).split(' ').filter(Boolean);
+  const todas = normalizar(t).split(' ').filter(Boolean);
+  const utiles = todas.filter((p) => !VACIAS.has(p));
+  const palabras = utiles.length ? utiles : todas;
   const puntos = (i: IncidenteCnie) => {
-    const nombre = normalizar(i.nombre);
-    const contexto = normalizar(`${i.subtipo.nombre} ${i.subtipo.nombreCorto} ${i.tipo.nombre}`);
+    const nombre = normalizar(i.nombre).split(' ');
+    const contexto = normalizar(`${i.subtipo.nombre} ${i.subtipo.nombreCorto} ${i.tipo.nombre}`).split(' ');
+    let coinciden = 0;
     let n = 0;
     for (const p of palabras) {
-      if (nombre.split(' ').some((w) => w.startsWith(p))) n += 2;
-      else if (contexto.split(' ').some((w) => w.startsWith(p))) n += 1;
-      else return 0;
+      if (/^\d+$/.test(p) && i.codigo.startsWith(p)) { coinciden++; n += 3; } else if (nombre.some((w) => w.startsWith(p))) { coinciden++; n += 2; } else if (contexto.some((w) => w.startsWith(p))) { coinciden++; n += 1; }
     }
-    return n;
+    return { coinciden, n };
   };
-  return INCIDENTES_CNIE.map((i) => ({ i, n: puntos(i) }))
-    .filter((x) => x.n > 0)
-    .sort((a, b) => b.n - a.n || a.i.codigo.localeCompare(b.i.codigo))
+  return INCIDENTES_CNIE.map((i) => ({ i, ...puntos(i) }))
+    .filter((x) => x.coinciden > 0)
+    .sort((a, b) => b.coinciden - a.coinciden || b.n - a.n || a.i.codigo.localeCompare(b.i.codigo))
     .slice(0, limite)
     .map((x) => x.i);
 }

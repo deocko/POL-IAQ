@@ -130,6 +130,8 @@ function leer(): Estado {
     if (t) {
       const e = JSON.parse(t) as Estado;
       if (e.version === 3) memoria = depurar(e);
+      // Estado de una versión anterior de la demo: se migra (horas reales y código CNIE) en lugar de perderlo.
+      else if ((e.version as number) === 2) memoria = depurar(migrarV2(e));
     }
   } catch { /* sin almacenamiento: queda en memoria */ }
   return memoria;
@@ -162,7 +164,23 @@ function depurar(e: Estado): Estado {
   const limite = Date.now() - HORAS_DATOS_DEMO * 3600_000;
   const antes = e.reportes.length;
   e.reportes = e.reportes.filter((r) => new Date(r.creadoEn).getTime() >= limite);
-  if (e.reportes.length !== antes) try { localStorage.setItem(CLAVE, JSON.stringify(e)); } catch { /* sin almacenamiento */ }
+  // Reportes guardados sin código CNIE (de antes del CNIE): se clasifican con la misma regla que uno nuevo.
+  let clasificados = 0;
+  for (const r of e.reportes) {
+    if (r.cnie !== undefined) continue;
+    r.cnie = clasificarCnie(r.incidenteId, respuestasDe(r.cuestionario.entradas));
+    clasificados++;
+  }
+  if (e.reportes.length !== antes || clasificados) try { localStorage.setItem(CLAVE, JSON.stringify(e)); } catch { /* sin almacenamiento */ }
+  return e;
+}
+
+/** Versión 2: el reloj podía ir adelantado (×10). Lo que quedó con hora futura no es coherente y se descarta. */
+function migrarV2(e: Estado): Estado {
+  const ahoraReal = Date.now();
+  e.version = 3;
+  e.reportes = e.reportes.filter((r) => new Date(r.creadoEn).getTime() <= ahoraReal + 60_000);
+  e.reloj = { baseReal: ahoraReal, baseVirtual: ahoraReal, factor: e.reloj?.factor ?? 1 };
   return e;
 }
 export const velocidad = () => leer().reloj.factor;

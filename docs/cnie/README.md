@@ -12,7 +12,7 @@ del sistema se escribió a mano sin verificarlo contra él.
 | Subtipo | 3 | `302` Armas y explosivos |
 | Incidente | 5 | `30202` Detonación por arma de fuego · ALTA |
 
-- 7 tipos, 26 subtipos (25 vigentes; el `502` está retirado).
+- 7 tipos, 26 subtipos: 25 vigentes y el `502` Notificación de hallazgo, que el PDF da de **BAJA** (p. 67: "502 Subtipo Notificación de hallazgo: BAJA. Se crea el numeral 312"). Sus incidentes 50201-50203 pasaron a 31201-31203 (tabla de la p. 22). Vigentes por tipo: Médicos 3, Protección Civil 4, Seguridad 12, Servicios Públicos 1, Asistencia 2 (501 y 503), Otros Servicios 2, Mal Uso 1. La app no lo ofrece como opción: en Asistencia explica la baja y lleva al 312 (`SUBTIPOS_CNIE_BAJA`).
 - 361 incidentes vigentes con nombre y prioridad (ALTA, MEDIA, BAJA).
 - 12 códigos retirados, listados aparte (`CODIGOS_CNIE_RETIRADOS`): `10212` y `30704` (dados de baja) y
   `30902`, `50201`, `50202`, `50203`, `60101`, `60102`, `70102`, `70103`, `70105`, `70108`.
@@ -52,7 +52,7 @@ y siguen siendo válidos.
 | Violencia familiar | 305 | 30503; pareja o expareja 30502 | `es_pareja` |
 | Disparos | 302 | 30202; en escuela 30206 | `en_escuela` |
 | Persona sospechosa | 309 | 30904; vehículo sospechoso 30307 | `es_vehiculo` |
-| Accidente vial | 101 | sin lesionados 30309; con lesionados según `tipo_accidente` (10103, 10104, 10107, 10109, 10116) | `tipo_accidente` |
+| Accidente vial | 101 | sin lesionados 30309; con lesionados según `tipo_accidente` (10103, 10104, 10107, 10109, 10116); con lesionados sin saber el vehículo, o si no se contestó, 10104 (vehículo automotor con persona(s) lesionada(s)), sin corrección manual | `tipo_accidente` |
 | Emergencia médica | 103 | según `sintoma` (10301, 10302, 10305, 10307, 10308, 10314, 10315, 10316, 10204); inconsciente sin respirar 10313 | `sintoma` |
 | Persona lesionada | 102 | según `tipo_lesion` (10204, 10206, 10208, 10209, 10211, 10213, 10220, 10222, 10225); sangrado 10207 | `tipo_lesion` |
 | Incendio | 203 | según `tipo_incendio` (20301, 20302, 20303, 20304, 20307, 20310, 20311) | `tipo_incendio` |
@@ -64,6 +64,21 @@ y siguen siendo válidos.
 Reglas: se hace **una sola pregunta de afinado por caso** (`afinaCnie` en el protocolo), al final y fuera del
 tope de preguntas. Si no se sabe si hubo violencia, se clasifica "con violencia" (la variante de prioridad más
 alta). El código secundario `30903` (violencia contra las mujeres) solo lo pone el operador.
+
+**Folios sin código (migración).** Al arrancar, el API clasifica con estas mismas reglas los folios guardados que
+no tienen `cnie` (`ReportesService.clasificarSinCnie`) y deja `cnie_migrado` en la auditoría con el actor
+`sistema:migracion_cnie`. La demo hace lo mismo al leer su estado guardado. Los datos de ejemplo nacen ya
+clasificados. Solo "Otro" sin elegir incidente queda "Sin código CNIE".
+
+**Búsqueda.** `buscarCnie` separa la frase en palabras, quita las vacías ("en", "de", "a", "con"…) y ordena por
+cuántas palabras coinciden: "robo en curso" o "robo a casa con violencia" encuentran resultados (el segundo pone
+30413 primero). Un número busca por el inicio del código ("302" o "30202"). Cada resultado muestra su código.
+Una prueba recorre los 26 subtipos (25 vigentes y el 502 de baja) y los 361 incidentes vigentes (sin los 12 retirados) y confirma que todos se
+encuentran por código y por nombre.
+
+**Dos prioridades.** La **Prioridad CNIE (oficial)** es la del catálogo nacional para el incidente. La
+**Prioridad operativa (respuesta)** es la que usa POL-IAQ para despachar según las respuestas (armas, heridos,
+si sigue ocurriendo). Pueden diferir; la consola muestra las dos con esas etiquetas y una nota cuando difieren.
 
 ## Anonimato por subtipo
 
@@ -82,4 +97,5 @@ alta). El código secundario `30903` (violencia contra las mujeres) solo lo pone
   `incidente.reclasificado` o enviando otro `codigoCnie` en `incidente.recibido` ([`docs/api/asyncapi.yaml`](../api/asyncapi.yaml)).
 - Consola: etiqueta "CNIE 30202 · Seguridad / Armas y explosivos / Detonación por arma de fuego · ALTA",
   corrección con búsqueda y auditoría, tablero por tipo y subtipo.
-- App ciudadana: sin códigos al reportar; en el seguimiento, "Robo (CNIE 304)".
+- App ciudadana: sin códigos al reportar; en «Mis reportes» y en el seguimiento, el código completo de 5 dígitos,
+  por ejemplo "Disparos (CNIE 30202)". En el explorador de "Otra emergencia" cada caso muestra su código.

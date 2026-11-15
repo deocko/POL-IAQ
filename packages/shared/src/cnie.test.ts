@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CATALOGO_SEMILLA, CODIGOS_CNIE_RETIRADOS, CODIGOS_DEL_MAPEO, INCIDENTES_CNIE, PROTOCOLO_PROVISIONAL, SUBTIPOS_CNIE, TIPOS_CNIE,
+  CATALOGO_SEMILLA, CNIE_V3, CODIGOS_CNIE_RETIRADOS, CODIGOS_DEL_MAPEO, SUBTIPOS_CNIE_BAJA, INCIDENTES_CNIE, PROTOCOLO_PROVISIONAL, SUBTIPOS_CNIE, TIPOS_CNIE,
   buscarCnie, clasificarCnie, etiquetaCnie, incidenteCnie, incidentePorId, permiteAnonimo, preguntasPara, validarCodigoCnie,
 } from './index';
 
@@ -11,6 +11,31 @@ describe('CNIE V 3.0 cargado desde el PDF oficial', () => {
     expect(SUBTIPOS_CNIE.map((s) => s.codigo)).not.toContain('502');
     expect(INCIDENTES_CNIE).toHaveLength(361);
     expect(CODIGOS_CNIE_RETIRADOS.map((r) => r.codigo)).toEqual(['10212', '30704', '30902', '50201', '50202', '50203', '60101', '60102', '70102', '70103', '70105', '70108']);
+  });
+
+  it('conteo exhaustivo: 26 subtipos (25 vigentes y el 502 retirado), 361 incidentes y el buscador llega a todos', () => {
+    expect(CNIE_V3.subtipos).toHaveLength(26);
+    expect(CNIE_V3.subtipos.filter((x) => !x.vigente).map((x) => x.codigo)).toEqual(['502']);
+    expect(new Set(INCIDENTES_CNIE.map((i) => i.codigo)).size).toBe(361);
+    const porTipo = Object.fromEntries(TIPOS_CNIE.map((t) => [t.codigo, SUBTIPOS_CNIE.filter((x) => x.tipo === t.codigo).length]));
+    expect(Object.values(porTipo).reduce((a, b) => a + b, 0)).toBe(25);
+    // Conteo por tipo de la verificación en vivo (Mensaje 8): Seguridad 12, Médicos 3, Protección Civil 4,
+    // Servicios Públicos 1, Asistencia 2 (501 y 503; el 502 está de BAJA en el PDF), Otros Servicios 2, Mal Uso 1.
+    expect(porTipo).toEqual({ 1: 3, 2: 4, 3: 12, 4: 1, 5: 2, 6: 2, 7: 1 });
+    for (const i of INCIDENTES_CNIE) {
+      expect(buscarCnie(i.codigo).map((x) => x.codigo), i.codigo).toEqual([i.codigo]);
+      expect(buscarCnie(i.nombre, 400).map((x) => x.codigo), i.nombre).toContain(i.codigo);
+    }
+    for (const r of CODIGOS_CNIE_RETIRADOS) expect(buscarCnie(r.codigo), r.codigo).toEqual([]);
+  });
+
+  it('el 502 Notificación de hallazgo está de BAJA (PDF p. 67) y sus casos viven en 312', () => {
+    expect(SUBTIPOS_CNIE_BAJA).toEqual([{ codigo: '502', nombre: 'Notificación de hallazgo', nombreCorto: 'Notificación de hallazgo', tipo: '5', reemplazo: '312' }]);
+    expect(INCIDENTES_CNIE.filter((i) => i.subtipo.codigo === '312').map((i) => i.codigo)).toEqual(['31201', '31202', '31203']);
+    for (const [viejo, nuevo] of [['50201', '31201'], ['50202', '31202'], ['50203', '31203']]) {
+      expect(validarCodigoCnie(viejo)).toMatchObject({ ok: false, error: 'retirado', reemplazo: nuevo });
+    }
+    expect(buscarCnie('hallazgo').map((i) => i.codigo)).toEqual(expect.arrayContaining(['31201', '31202', '31203']));
   });
 
   it('ningún código retirado aparece como vigente', () => {
@@ -54,6 +79,14 @@ describe('CNIE V 3.0 cargado desde el PDF oficial', () => {
     expect(buscarCnie('detonacion arma').map((i) => i.codigo)).toContain('30202');
     expect(buscarCnie('30902')).toEqual([]);
     expect(buscarCnie('estupro')).toEqual([]);
+  });
+
+  it('busca por frase: basta con que coincida una palabra, y primero lo que coincide con más', () => {
+    const r = buscarCnie('robo en curso').map((i) => i.codigo);
+    expect(r.length).toBeGreaterThan(0);
+    expect(r.every((c) => incidenteCnie(c)!.nombre.includes('ROBO'))).toBe(true);
+    expect(buscarCnie('robo a casa con violencia')[0].codigo).toBe('30413');
+    expect(buscarCnie('disparos 30202')[0].codigo).toBe('30202');
   });
 });
 
@@ -124,7 +157,10 @@ describe('afinar el código con las respuestas', () => {
   it('accidente sin heridos pasa a 30309 (tipo 3, subtipo 303)', () => {
     const c = clasificarCnie('accidente-vial', { heridos: false })!;
     expect(c).toMatchObject({ tipo: { codigo: '3' }, subtipo: { codigo: '303' }, incidente: { codigo: '30309' }, origen: 'respuestas' });
-    expect(codigo('accidente-vial', { heridos: true })).toBeNull();
+    // Con heridos se clasifica solo (10104, vehículo automotor con lesionados) aunque no se conteste el tipo de accidente.
+    expect(codigo('accidente-vial', { heridos: true })).toBe('10104');
+    expect(codigo('accidente-vial', { heridos: true, tipo_accidente: 'no_sabe' })).toBe('10104');
+    expect(codigo('accidente-vial', { heridos: true, tipo_accidente: 'auto' })).toBe('10104');
     expect(codigo('accidente-vial', { heridos: true, tipo_accidente: 'moto' })).toBe('10103');
     expect(codigo('accidente-vial', { heridos: true, tipo_accidente: 'varios' })).toBe('10107');
   });
