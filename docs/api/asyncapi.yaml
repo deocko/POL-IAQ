@@ -35,7 +35,7 @@ channels:
   desdeCad:
     address: /v1/cad/{cadId}/eventos
     parameters:
-      cadId: { enum: [cad-queretaro, cad-corregidora, cad-el-marques, c5-queretaro] }
+      cadId: { enum: [cad-amealco-de-bonfil, cad-pinal-de-amoles, cad-arroyo-seco, cad-cadereyta-de-montes, cad-colon, cad-corregidora, cad-ezequiel-montes, cad-huimilpan, cad-jalpan-de-serra, cad-landa-de-matamoros, cad-el-marques, cad-pedro-escobedo, cad-penamiller, cad-queretaro, cad-san-joaquin, cad-san-juan-del-rio, cad-tequisquiapan, cad-toliman, c5-queretaro] }
     messages:
       incidenteRecibido: { $ref: '#/components/messages/incidenteRecibido' }
       unidadAsignada: { $ref: '#/components/messages/unidadAsignada' }
@@ -165,7 +165,7 @@ components:
                 prioridad: { type: string, enum: [alta, media, baja] }
                 corporacionSugerida: { type: string }
                 ubicacion: { $ref: '#/components/schemas/Ubicacion' }
-                municipioClave: { type: [string, 'null'] }
+                municipioClave: { type: [string, 'null'], pattern: '^22\d{3}$', example: '22016', description: 'Clave INEGI de 5 dígitos (22001–22018).' }
                 descripcion: { type: string }
                 respuestas: { type: object }
                 asistenciaDirecta: { type: boolean, description: 'Botón de asistencia directa (antes "botón de pánico")' }
@@ -180,6 +180,14 @@ components:
                     confiabilidad: { type: number, minimum: 0, maximum: 1 }
                     identidad: { type: string, enum: [completa, seudonimo, anonimo], description: 'Con seudónimo, `nombre` es el seudónimo y `telefono` llega enmascarado; anónimo, nombre "Anónimo" y teléfono vacío. Se contesta por el chat del folio.' }
                 evidencias: { type: array, items: { $ref: '#/components/schemas/EnlaceEvidencia' } }
+                estadoActual:
+                  description: 'Opcional (compatible con v1). Solo cuando se reenvía un folio en curso, p. ej. al migrar un municipio de Modo B a Modo A. El CAD no debe mandar el acuse de nuevo como si fuera nuevo.'
+                  type: object
+                  properties:
+                    estado: { type: string }
+                    folioCad: { type: [string, 'null'] }
+                    unidad: { oneOf: [{ type: object, properties: { unidadId: { type: string }, corporacion: { type: string }, etiqueta: { type: string } } }, { type: 'null' }] }
+                    historial: { type: array, items: { type: object, properties: { estado: { type: string }, en: { type: string, format: date-time } } } }
     IncidenteActualizado:
       allOf:
         - $ref: '#/components/schemas/Base'

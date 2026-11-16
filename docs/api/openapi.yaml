@@ -23,6 +23,8 @@ tags:
   - name: Reportes
   - name: Evidencia
   - name: Integración CAD
+  - name: Municipios
+  - name: Reportes por municipio
 paths:
   /v1/auth/otp:
     post:
@@ -479,6 +481,12 @@ paths:
       operationId: unidadesOperador
       security: [{ operador: [] }]
       responses: { '200': { description: OK } }
+    post:
+      tags: [Municipios]
+      summary: Registra o da de baja una unidad (patrulla, motopatrulla, ambulancia, bomberos) de un CAD en Modo B
+      operationId: guardarUnidad
+      security: [{ operador: [] }]
+      responses: { '200': { description: OK }, '403': { description: '`cad_ajeno`' }, '409': { description: '`unidad_de_otro_cad` o `unidad_ocupada`' } }
   /v1/operador/tiempos:
     get:
       tags: [Consola de operador]
@@ -486,6 +494,135 @@ paths:
       operationId: tiemposOperador
       security: [{ operador: [] }]
       responses: { '200': { description: '`metas`, `resumen` por etapa (promedio, mediana, % en meta), `reportes` (con `cnie`), `quejas`, `calificacionPromedio` y `porCnie` { `tipos`, `subtipos` }: por grupo CNIE, `reportes`, `quejas` y `llegada` (promedio, mediana, % en meta). Los folios sin clasificación van en `sin`.' } }
+  /v1/admin/cads:
+    get:
+      tags: [Municipios]
+      summary: Los 19 CAD (18 municipios y C5) con modo, estado, conexión y casos de prueba. Solo supervisión.
+      operationId: listaCads
+      security: [{ operador: [] }]
+      responses: { '200': { description: OK } }
+  /v1/admin/cads/{cadId}:
+    parameters: [{ $ref: '#/components/parameters/CadId' }]
+    get:
+      tags: [Municipios]
+      summary: Alta de un CAD (incluye polígono; nunca el secreto)
+      operationId: verCad
+      security: [{ operador: [] }]
+      responses: { '200': { description: OK } }
+    put:
+      tags: [Municipios]
+      summary: 'Alta o cambio: nombre, clave (5 dígitos), modo, polígono, webhookUrl, secreto HMAC, certificadoSha256, ipsPermitidas, contactoTecnico. Ver docs/interconexion/ALTA-MUNICIPIO.md'
+      operationId: guardarCad
+      security: [{ operador: [] }]
+      responses: { '200': { description: OK }, '400': { $ref: '#/components/responses/DatosInvalidos' } }
+  /v1/admin/cads/{cadId}/casos/{caso}:
+    parameters: [{ $ref: '#/components/parameters/CadId' }, { name: caso, in: path, required: true, schema: { type: string, enum: [acuse, asignacion, gps, cierre, reclasificacion, transferencia, reintentos, duplicado] } }]
+    post:
+      tags: [Municipios]
+      summary: Registra el resultado de un caso de prueba `{ ok, detalle }`
+      operationId: registrarCaso
+      security: [{ operador: [] }]
+      responses: { '200': { description: OK } }
+  /v1/admin/cads/{cadId}/estado:
+    parameters: [{ $ref: '#/components/parameters/CadId' }]
+    post:
+      tags: [Municipios]
+      summary: '`{ estado: pruebas | activo | suspendido, motivo? }`'
+      operationId: estadoCad
+      security: [{ operador: [] }]
+      responses: { '200': { description: OK }, '409': { description: '`casos_pendientes`, `falta_mtls_o_ips` o `sin_unidades`' } }
+  /v1/admin/cads/{cadId}/migrar:
+    parameters: [{ $ref: '#/components/parameters/CadId' }]
+    post:
+      tags: [Municipios]
+      summary: Migra de Modo B a Modo A sin perder folios; reenvía los activos como incidente.creado con estadoActual
+      operationId: migrarCad
+      security: [{ operador: [] }]
+      responses: { '200': { description: OK }, '409': { description: '`no_es_consola` o `casos_pendientes`' } }
+  /v1/admin/cads/{cadId}/bandeja:
+    parameters: [{ $ref: '#/components/parameters/CadId' }, { name: folio, in: query, schema: { type: string } }]
+    get:
+      tags: [Municipios]
+      summary: Entregas hacia el CAD con intentos y estado
+      operationId: bandejaCad
+      security: [{ operador: [] }]
+      responses: { '200': { description: OK } }
+  /v1/admin/cads/{cadId}/reenviar:
+    parameters: [{ $ref: '#/components/parameters/CadId' }]
+    post:
+      tags: [Municipios]
+      summary: 'Reentrega el alta de un folio con el mismo eventoId `{ folio }`'
+      operationId: reenviarCad
+      security: [{ operador: [] }]
+      responses: { '200': { description: OK } }
+  /v1/admin/auditoria:
+    get:
+      tags: [Municipios]
+      summary: Bitácora de un folio
+      operationId: auditoria
+      security: [{ operador: [] }]
+      parameters: [{ name: folio, in: query, required: true, schema: { type: string } }]
+      responses: { '200': { description: OK } }
+  /v1/operador/estadistica:
+    get:
+      tags: [Reportes por municipio]
+      summary: Volumen, tiempos y quejas con desgloses por municipio (clave de 5 dígitos), CAD, CNIE (tipo, subtipo, incidente), corporación y unidad. Igual en Modo A y Modo B.
+      operationId: estadistica
+      security: [{ operador: [] }]
+      parameters:
+        - { name: cadId, in: query, schema: { type: string } }
+        - { name: municipio, in: query, schema: { type: string, pattern: '^22\d{3}$' } }
+        - { name: periodo, in: query, schema: { type: string, enum: [diario, semanal, mensual] } }
+        - { name: fecha, in: query, schema: { type: string, format: date } }
+        - { name: desde, in: query, schema: { type: string, format: date } }
+        - { name: hasta, in: query, schema: { type: string, format: date } }
+      responses: { '200': { description: OK } }
+  /v1/operador/estadistica/folios.csv:
+    get:
+      tags: [Reportes por municipio]
+      summary: Un renglón por folio, sin datos personales (mismos filtros)
+      operationId: foliosCsv
+      security: [{ operador: [] }]
+      responses: { '200': { description: text/csv } }
+  /v1/operador/sesnsp:
+    get:
+      tags: [Reportes por municipio]
+      summary: Meses disponibles y cierres del reporte mensual al SESNSP. Solo supervisión.
+      operationId: sesnsp
+      security: [{ operador: [] }]
+      responses: { '200': { description: OK } }
+  /v1/operador/sesnsp/{mes}:
+    parameters: [{ name: mes, in: path, required: true, schema: { type: string, pattern: '^\d{4}-\d{2}$' } }]
+    get:
+      tags: [Reportes por municipio]
+      summary: Reporte del mes por clave de 5 dígitos y código CNIE (borrador o cerrado)
+      operationId: sesnspMes
+      security: [{ operador: [] }]
+      responses: { '200': { description: OK } }
+  /v1/operador/sesnsp/{mes}/cerrar:
+    parameters: [{ name: mes, in: path, required: true, schema: { type: string, pattern: '^\d{4}-\d{2}$' } }]
+    post:
+      tags: [Reportes por municipio]
+      summary: Congela el mes (solo meses terminados). Las correcciones posteriores salen como ajustes del mes siguiente.
+      operationId: cerrarMes
+      security: [{ operador: [] }]
+      responses: { '200': { description: OK }, '409': { description: '`mes_en_curso` o `mes_ya_cerrado`' } }
+  /v1/operador/sesnsp/{mes}/{archivo}:
+    parameters:
+      - { name: mes, in: path, required: true, schema: { type: string, pattern: '^\d{4}-\d{2}$' } }
+      - { name: archivo, in: path, required: true, schema: { type: string, enum: [reporte.csv, ajustes.csv, reporte.xlsx] } }
+    get:
+      tags: [Reportes por municipio]
+      summary: Exportación CSV o Excel del reporte mensual
+      operationId: archivoSesnsp
+      security: [{ operador: [] }]
+      responses: { '200': { description: text/csv o xlsx } }
+  /v1/publico/tiempos:
+    get:
+      tags: [Reportes por municipio]
+      summary: Versión pública agregada por municipio (sin datos personales ni folios)
+      operationId: tiemposPublicos
+      responses: { '200': { description: OK } }
 components:
   securitySchemes:
     ciudadano:
@@ -512,7 +649,7 @@ components:
       name: cadId
       in: path
       required: true
-      schema: { type: string, enum: [cad-queretaro, cad-corregidora, cad-el-marques, c5-queretaro] }
+      schema: { type: string, enum: [cad-amealco-de-bonfil, cad-pinal-de-amoles, cad-arroyo-seco, cad-cadereyta-de-montes, cad-colon, cad-corregidora, cad-ezequiel-montes, cad-huimilpan, cad-jalpan-de-serra, cad-landa-de-matamoros, cad-el-marques, cad-pedro-escobedo, cad-penamiller, cad-queretaro, cad-san-joaquin, cad-san-juan-del-rio, cad-tequisquiapan, cad-toliman, c5-queretaro] }
   responses:
     DatosInvalidos:
       description: '`datos_invalidos`'
@@ -644,7 +781,7 @@ components:
         estado: { $ref: '#/components/schemas/Estado' }
         estadoTexto: { type: string, example: La unidad va en camino }
         ubicacion: { $ref: '#/components/schemas/Ubicacion' }
-        municipioClave: { type: [string, 'null'], example: '006' }
+        municipioClave: { type: [string, 'null'], pattern: '^22\d{3}$', example: '22016', description: 'Clave INEGI de 5 dígitos (22001–22018); el folio conserva los 3 dígitos del municipio.' }
         asistenciaDirecta: { type: boolean }
         cnieSubtipo: { type: [string, 'null'], example: '304', description: 'Subtipo CNIE para el seguimiento ("Robo (CNIE 304)").' }
         escenarioId: { type: [string, 'null'] }

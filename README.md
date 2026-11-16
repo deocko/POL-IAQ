@@ -26,10 +26,13 @@ Publicación: el flujo `.github/workflows/demo-pages.yml` construye `pnpm --filt
 | --- | --- | --- |
 | `packages/shared` | Tipos, catálogo semilla, folio, máquina de estados, geocercas, contrato de eventos CAD y firma HMAC | Con pruebas |
 | `services/api` | API NestJS: registro con OTP por SMS y aceptación legal, reportes, evidencia con hash, webhooks CAD, escalamiento al C5, seguimiento por WebSocket, avisos por SMS | Con pruebas de punta a punta en memoria y en PostgreSQL |
-| `services/cad-simulator` | CAD simulado: acusa, asigna unidad, la mueve y cierra el reporte | Listo para demos |
+| `services/cad-simulator` | CAD simulado: acusa, asigna unidad, la mueve y cierra el reporte (contrato v1 o formato nativo de referencia) | Listo para demos |
+| `services/cad-adaptador` | Adaptador de referencia POL-IAQ ⇄ CAD municipal (Modo A), alojado o instalado en el municipio, y la suite de los 8 casos de certificación | Con prueba de punta a punta |
 | `apps/ciudadano` | App Expo (Android/iOS/Web): registro, botón de asistencia directa, despachadora 911 virtual (voz/texto), lugares guardados con accesos rápidos, catálogo, foto con hash, seguimiento con mapa de la unidad en vivo y chat | Scaffold; compila Android y web |
 | `apps/web` | Next.js: Aviso de Privacidad y Términos, consola del operador y la demo pública (`/demo`, modo `NEXT_PUBLIC_DEMO=1`) | En uso |
 | `docs/api` | `openapi.yaml` (API pública) y `asyncapi.yaml` (contrato de eventos con los CAD) | v0.1 |
+| `docs/interconexion` | Adaptador, alta de municipios, reporte mensual SESNSP y producción fase 1 | v1 |
+| `docs/municipios` | Claves INEGI de 5 dígitos y polígonos de los 18 municipios | INEGI 2022 |
 | `docs/legal` | Aviso de Privacidad integral y simplificado, Términos y Condiciones | Borradores para revisión jurídica |
 | `services/api/db/migraciones` | Esquema PostgreSQL + PostGIS; el API aplica las migraciones al arrancar | En uso |
 
@@ -116,6 +119,15 @@ Cada reporte lleva su código oficial del CNIE V 3.0 (junio 2024): tipo, subtipo
 - Operadores en `OPERADORES_JSON` (clave con `pnpm --filter @pol-iaq/api hash-clave '<clave>'`), cada uno limitado a sus `cadIds` (`*` = supervisión). Fuera de producción existe `operador` / `operador`. Unidades en `UNIDADES_JSON` (en desarrollo hay unidades de ejemplo por CAD).
 - La web apunta al API con `NEXT_PUBLIC_API_URL` (por defecto `http://localhost:3000`).
 
+## Municipios: interconexión, Modo A y Modo B
+
+Los 18 municipios de Querétaro tienen su `cadId` y su clave INEGI de 5 dígitos (22001–22018), que va en `municipioClave` y en todo reporte y exportación; el folio conserva su formato (`QRO-016-2026-000001`). Un reporte se enruta por geocerca: si el municipio no está conectado lo atiende el C5 con la clave del municipio.
+
+- **Modo A (CAD propio):** el municipio se conecta con el contrato v1, directo o con el adaptador de referencia ([`ADAPTADOR.md`](docs/interconexion/ADAPTADOR.md)). Antes de producción pasa los 8 casos en el ambiente de pruebas ([`ALTA-MUNICIPIO.md`](docs/interconexion/ALTA-MUNICIPIO.md)).
+- **Modo B (consola):** despacha desde la consola web con sus unidades registradas. Puede migrar a Modo A sin perder folios.
+- **Reportes:** iguales en ambos modos, por municipio, CNIE, corporación y unidad; CSV y PDF por periodo; versión pública en `/tiempos`. Reporte mensual al SESNSP con cierre congelado ([`SESNSP.md`](docs/interconexion/SESNSP.md)).
+- Producción fase 1: [`PRODUCCION-FASE1.md`](docs/interconexion/PRODUCCION-FASE1.md).
+
 ## SMS
 
 `SMS_PROVIDER=simulado` (por defecto) o `twilio` con `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` y `TWILIO_FROM` (número o Messaging Service `MG…`). En producción el API no arranca con el simulado. Para otro proveedor implementa `ProveedorSms` en `services/api/src/sms/sms.ts`.
@@ -125,10 +137,10 @@ Cada reporte lleva su código oficial del CNIE V 3.0 (junio 2024): tipo, subtipo
 - Sustituir el protocolo provisional de la despachadora virtual por el Protocolo Nacional de Atención de Llamadas de Emergencia 9-1-1 vigente, validado con el C5 (`docs/protocolos`).
 - Consola: cambiar los usuarios en configuración por SSO (OIDC) con segundo factor, y cargar el padrón real de unidades de cada municipio.
 - Decidir si "Persona sospechosa" (CNIE 30904, subtipo 309) puede seguir siendo anónima ([`docs/cnie`](docs/cnie/README.md)).
-- Sustituir las geocercas aproximadas por los polígonos oficiales de INEGI.
+- Validar con el C5 o con cada municipio los polígonos de INEGI 2022 (sobre todo en los límites) y confirmar el formato oficial del reporte mensual al SESNSP.
 - Trabajador de colas para la bandeja de salida y los temporizadores de acuse; Redis para WebSocket con varias instancias.
 - Contratar el proveedor de SMS (cuenta, remitente y registro de plantillas), Keycloak/OIDC, almacén de objetos con WORM y URLs prefirmadas (hoy la evidencia va en PostgreSQL).
-- mTLS y lista de IPs con cada CAD; adaptadores reales para los CAD de los tres municipios y el C5.
+- Configurar el proxy de mTLS y las listas de IPs de cada CAD; conectores reales (sobre el adaptador de referencia) para los CAD de cada municipio y el C5.
 - Revisión jurídica de `docs/legal` y convenios con cada municipio. La lista cerrada de lo que debe entregar jurídico (22 datos y 7 decisiones, con dónde va cada uno y en qué formato) está en [`docs/legal/PENDIENTES-JURIDICO.md`](docs/legal/PENDIENTES-JURIDICO.md); mientras tanto las páginas publicadas omiten cada dato faltante o lo sustituyen por una frase general (sin huecos ni datos inventados), con el aviso "Versión preliminar en revisión jurídica".
 - Acordar las metas de tiempo con los municipios y el C5; servidor de rutas (OSRM o proveedor) y fuente real de GPS de las unidades (CAD, proveedor de AVL o app de la unidad).
 - Llevar a la app móvil la cola sin conexión, la identidad (seudónimo/anónimo) y la calificación, que hoy están en el API y en la demo web.

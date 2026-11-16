@@ -26,7 +26,8 @@ export default function Inicio() {
           </ol>
         </section>
       )}
-      <p className="suave">Municipios del piloto: Querétaro, Corregidora y El Marqués.</p>
+      <p className="suave">Municipios del piloto: Querétaro, Corregidora y El Marqués. Los demás municipios se conectan con su CAD o con la consola; mientras tanto, sus reportes los atiende el C5.</p>
+      <p><Link href="/tiempos/">Tiempos de respuesta públicos</Link></p>
       <blockquote>POL-IAQ no sustituye al 911. Si no puedes usar la app, llama al <a href="tel:911">911</a>.</blockquote>
       <ul className="enlaces-legales">
         <li><Link href="/legal/aviso-privacidad/">Aviso de privacidad integral</Link></li>
