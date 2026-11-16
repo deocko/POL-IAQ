@@ -4,7 +4,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
-  ESTADOS_FINALES, METAS_PROVISIONALES, agruparPorCnie, candidatasPorCercania, medirTiempos, puedeDespachar, minutosDe, resumirTiempos, subtipoCnie, type EventoDesdeCad, type UnidadAvl,
+  CORPORACIONES, ESTADOS_FINALES, METAS_PROVISIONALES, TIPOS_UNIDAD, agruparPorCnie, candidatasPorCercania, medirTiempos, puedeDespachar, minutosDe, resumirTiempos, subtipoCnie, type EventoDesdeCad, type UnidadAvl,
 } from '@pol-iaq/shared';
 import { AvlService, RutasService } from '../despacho/avl.service';
 import { Almacen } from '../almacen/almacen';
@@ -17,6 +17,7 @@ import { CONFIG, claveValida, type Config } from '../config';
 import { ProtocolosService } from '../protocolos/protocolos.service';
 import { OperadorGuard, puedeVer, type OperadorSesion } from './operador.guard';
 import { CADS_CONOCIDOS, consolaOpera, vistaOperador } from './vista';
+import { RegistroCadService } from '../municipios/registro-cad.service';
 
 const DURACION_SESION_SEG = 12 * 60 * 60;
 const MAX_FALLOS = 5;
@@ -44,6 +45,16 @@ const AccionSchema = z.discriminatedUnion('accion', [
 ]);
 type Accion = z.infer<typeof AccionSchema>;
 
+const UnidadSchema = z.object({
+  unidadId: z.string().trim().regex(/^[A-Za-z0-9-]{1,30}$/, 'Clave de unidad: letras, números y guiones'),
+  cadId: z.string().min(1),
+  tipo: z.enum(TIPOS_UNIDAD.map((t) => t.id) as [string, ...string[]]),
+  corporacion: z.enum(CORPORACIONES.map((c) => c.id) as [string, ...string[]]),
+  etiqueta: z.string().trim().min(2).max(60),
+  activa: z.boolean().default(true),
+  base: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).optional(),
+});
+
 /**
  * Consola web del operador/despachador. Sirve a municipios sin CAD integrado
  * (CAD en modo `consola`) y a supervisión, que ve todo en solo lectura donde
@@ -62,6 +73,7 @@ export class OperadorController {
     @Inject(ProtocolosService) private readonly protocolos: ProtocolosService,
     @Inject(AvlService) private readonly avl: AvlService,
     @Inject(RutasService) private readonly rutas: RutasService,
+    @Inject(RegistroCadService) private readonly registro: RegistroCadService,
   ) {}
 
   @Post('sesion')
@@ -111,10 +123,24 @@ export class OperadorController {
     const activos = await this.almacen.reportesPorCad(req.operador.cads, true);
     const ocupadas = new Map(activos.filter((r) => r.unidad).map((r) => [r.unidad!.unidadId, r.folio]));
     return {
-      unidades: this.config.unidades
-        .filter((u) => puedeVer(req.operador, u.cadId))
+      unidades: this.registro.unidadesDe(req.operador.cads)
         .map((u) => ({ ...u, ocupadaEn: ocupadas.get(u.unidadId) ?? null, posicion: this.avl.posicion(u.unidadId) ?? null })),
     };
+  }
+
+  /** Alta, cambio o baja (activa: false) de una unidad de un CAD que opera el operador (Modo B, o padrón del Modo A). */
+  @Post('unidades')
+  @HttpCode(200)
+  @UseGuards(OperadorGuard)
+  async guardarUnidad(@Req() req: { operador: OperadorSesion }, @Body(new ZodPipe(UnidadSchema)) body: z.infer<typeof UnidadSchema>) {
+    if (!puedeVer(req.operador, body.cadId) || !CADS_CONOCIDOS.some((c) => c.id === body.cadId)) throw new ForbiddenException({ codigo: 'cad_ajeno' });
+    if (body.activa === false) {
+      const activos = await this.almacen.reportesPorCad([body.cadId], true);
+      const folio = activos.find((r) => r.unidad?.unidadId === body.unidadId)?.folio;
+      if (folio) throw new ConflictException({ codigo: 'unidad_ocupada', mensaje: `La unidad atiende el folio ${folio}.` });
+    }
+    const u = await this.registro.guardarUnidad(body as Parameters<RegistroCadService['guardarUnidad']>[0], `operador:${req.operador.usuario}`);
+    return { unidad: u };
   }
 
   /** Tablero de tiempos de respuesta: cada etapa contra su meta, y quejas. */
@@ -230,6 +256,8 @@ export class OperadorController {
         return { ...base, tipo: 'incidente.reclasificado', datos: { codigoCnie: a.codigoCnie, codigoCnieSecundario: a.codigoCnieSecundario, motivo: a.motivo, operador: op.nombre } };
       case 'transferir':
         if (a.cadDestinoId === cadId || !CADS_CONOCIDOS.some((c) => c.id === a.cadDestinoId)) throw new BadRequestException({ codigo: 'cad_destino_invalido' });
+        // Solo a un CAD que ya recibe reportes (Modo A o B activo) o al C5.
+        if (!this.registro.conectado(a.cadDestinoId)) throw new BadRequestException({ codigo: 'cad_destino_no_conectado', mensaje: 'Ese municipio aún no está conectado a POL-IAQ; transfiere al C5.' });
         return { ...base, tipo: 'incidente.transferido', datos: { cadDestinoId: a.cadDestinoId, motivo: a.motivo } };
     }
   }
@@ -237,7 +265,7 @@ export class OperadorController {
   private yoDe(op: OperadorSesion) {
     return {
       operador: op,
-      cads: CADS_CONOCIDOS.map((c) => ({ ...c, modo: consolaOpera(this.config, c.id) ? 'consola' : 'webhook', mio: puedeVer(op, c.id) })),
+      cads: CADS_CONOCIDOS.map((c) => ({ ...c, modo: consolaOpera(this.config, c.id) ? 'consola' : 'webhook', mio: puedeVer(op, c.id), conectado: this.registro.conectado(c.id), estado: this.config.cads[c.id]?.estado ?? null })),
       protocolo: { version: this.protocolos.vigente().version, estado: this.protocolos.vigente().estado },
     };
   }

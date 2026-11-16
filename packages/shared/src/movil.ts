@@ -19,3 +19,7 @@ export * from './tiempos';
 export * from './identidad';
 export * from './cola';
 export * from './unidades-ejemplo';
+export * from './interconexion';
+export * from './estadistica';
+export * from './sesnsp';
+export * from './xlsx';

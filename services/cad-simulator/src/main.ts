@@ -1,107 +1,25 @@
 /**
- * CAD simulado.
+ * CAD simulado (ver simulador.ts).
  *
- * Recibe `incidente.creado` de POL-IAQ (firma HMAC verificada) y responde como
- * lo haría un CAD: acusa recibo, asigna una unidad, la mueve hacia el lugar,
- * marca "en sitio" y cierra. Sirve para demos y para probar la app ciudadana.
- *
- * Variables: SIM_PORT (4000), POLIAQ_URL (http://localhost:3000) y CADS_JSON
+ * Modo `contrato` (por omisión): SIM_PORT (4000), POLIAQ_URL (http://localhost:3000) y CADS_JSON
  * (el mismo JSON que usa el API, para conocer el secreto de cada CAD).
+ *
+ * Modo `nativo` (SIM_MODO=nativo), detrás de services/cad-adaptador: ADAPTADOR_URL, SIM_CAD_ID,
+ * SIM_TOKEN_ADAPTADOR (el tokenDesdeCad del adaptador) y SIM_TOKEN_ENTRADA (el tokenHaciaCad).
  */
-import { createServer } from 'node:http';
-import { randomUUID } from 'node:crypto';
-import { EventoHaciaCadSchema, etiquetaCnie, firmar, validarCodigoCnie, verificarFirma, type CadConfigLike } from './tipos';
+import { crearSimulador, type UnidadSimulada } from './simulador';
 
 const PORT = Number(process.env.SIM_PORT ?? 4000);
-const POLIAQ_URL = process.env.POLIAQ_URL ?? 'http://localhost:3000';
-const CADS = JSON.parse(process.env.CADS_JSON ?? '{}') as Record<string, CadConfigLike>;
-const PASO_MS = Number(process.env.SIM_STEP_MS ?? 3000);
-
-const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Identifica qué CAD es por el secreto con el que firmó POL-IAQ. */
-function cadPorFirma(ts: number, cuerpo: string, firma: string): string | undefined {
-  return Object.entries(CADS).find(([, c]) => verificarFirma(c.secreto, ts, cuerpo, firma))?.[0];
-}
-
-async function enviar(cadId: string, folio: string, secuencia: number, tipo: string, datos: Record<string, unknown>) {
-  const cuerpo = JSON.stringify({ eventoId: randomUUID(), folio, secuencia, ocurridoEn: new Date().toISOString(), tipo, datos });
-  const ts = Math.floor(Date.now() / 1000);
-  const resp = await fetch(`${POLIAQ_URL}/v1/cad/${cadId}/eventos`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-poliaq-timestamp': String(ts), 'x-poliaq-firma': firmar(CADS[cadId].secreto, ts, cuerpo) },
-    body: cuerpo,
-  });
-  console.log(`[${cadId}] ${folio} ${tipo} -> ${resp.status}`);
-}
-
-const ETIQUETA: Record<string, string> = {
-  policia_municipal: 'Patrulla',
-  policia_estatal: 'Patrulla estatal',
-  cruz_roja: 'Ambulancia',
-  bomberos: 'Unidad de bomberos',
-  proteccion_civil: 'Protección Civil',
-};
-
-/**
- * Despacha la unidad de la corporación principal que indica la canalización.
- * Al acusar recibo devuelve el código CNIE con el que registró el folio (el
- * mismo que mandó POL-IAQ si es un incidente vigente del CNIE V 3.0).
- */
-async function simular(cadId: string, folio: string, lat: number, lng: number, corporacion = 'policia_municipal', codigoCnie?: string | null) {
-  let s = 0;
-  const unidadId = `U-${Math.floor(100 + Math.random() * 900)}`;
-  const registrado = codigoCnie && validarCodigoCnie(codigoCnie).ok ? { codigoCnie } : {};
-  await enviar(cadId, folio, ++s, 'incidente.recibido', { folioCad: `${cadId.toUpperCase()}-${Date.now() % 100000}`, operador: 'Operador simulado', ...registrado });
-  await espera(PASO_MS);
-  await enviar(cadId, folio, ++s, 'unidad.asignada', { unidadId, corporacion, etiqueta: `${ETIQUETA[corporacion] ?? 'Unidad'} ${unidadId.slice(2)}`, etaMinutos: 6 });
-  await enviar(cadId, folio, ++s, 'mensaje.operador', { texto: 'Recibimos tu reporte, una unidad va en camino.', autor: 'Operador simulado' });
-  // La unidad arranca ~1.5 km al norte y se acerca en 6 pasos.
-  for (let i = 6; i >= 1; i--) {
-    await espera(PASO_MS);
-    await enviar(cadId, folio, ++s, 'unidad.posicion', { unidadId, lat: lat + 0.0025 * i, lng: lng + 0.001 * i, etaMinutos: i });
-  }
-  await espera(PASO_MS);
-  await enviar(cadId, folio, ++s, 'incidente.estado', { estado: 'en_sitio' });
-  await espera(PASO_MS * 2);
-  await enviar(cadId, folio, ++s, 'incidente.estado', { estado: 'cerrado', nota: 'Atendido por la unidad (simulación)' });
-}
-
-createServer((req, res) => {
-  if (req.method !== 'POST' || req.url !== '/eventos') {
-    res.writeHead(404).end();
-    return;
-  }
-  const partes: Buffer[] = [];
-  req.on('data', (c: Buffer) => partes.push(c));
-  req.on('end', () => {
-    const cuerpo = Buffer.concat(partes).toString('utf8');
-    const cadId = cadPorFirma(Number(req.headers['x-poliaq-timestamp']), cuerpo, String(req.headers['x-poliaq-firma'] ?? ''));
-    if (!cadId) {
-      res.writeHead(401).end();
-      return;
-    }
-    const p = EventoHaciaCadSchema.safeParse(JSON.parse(cuerpo));
-    if (!p.success) {
-      res.writeHead(400).end();
-      return;
-    }
-    res.writeHead(202).end();
-    const ev = p.data;
-    console.log(`[${cadId}] recibido ${ev.tipo} ${ev.folio}`);
-    if (ev.tipo === 'incidente.creado') {
-      const { canalizacion, cuestionario, cnie, codigoCnie } = ev.datos;
-      console.log(`[${cadId}] ${cnie ? etiquetaCnie(cnie) : 'Sin clasificación CNIE (la asigna el operador)'}${cnie?.secundario ? ` · secundario ${cnie.secundario.codigo}` : ''}`);
-      const v = codigoCnie ? validarCodigoCnie(codigoCnie) : null;
-      if (v && !v.ok) console.warn(`[${cadId}] ${ev.folio}: ${v.mensaje}`);
-      console.log(`[${cadId}] canalización: ${canalizacion.prioridad} -> ${canalizacion.corporaciones.join(', ')}${canalizacion.alertas.length ? ` (${canalizacion.alertas.join('; ')})` : ''}`);
-      if (cuestionario.entradas.length) console.log(cuestionario.transcripcion);
-      void simular(cadId, ev.folio, ev.datos.ubicacion.lat, ev.datos.ubicacion.lng, canalizacion.corporaciones[0], codigoCnie).catch((e) => console.error(e));
-    } else if (ev.datos.cnie !== undefined) {
-      console.log(`[${cadId}] ${ev.folio} clasificación: ${ev.datos.cnie ? etiquetaCnie(ev.datos.cnie) : 'sin código'}`);
-    }
-    if (ev.tipo === 'incidente.actualizado' && ev.datos.cuestionario) {
-      console.log(`[${cadId}] ${ev.folio} cuestionario actualizado:\n${ev.datos.cuestionario.transcripcion}`);
-    }
-  });
-}).listen(PORT, () => console.log(`CAD simulado escuchando en :${PORT}, enviando a ${POLIAQ_URL}`));
+const modo = process.env.SIM_MODO === 'nativo' ? 'nativo' : 'contrato';
+const sim = crearSimulador({
+  modo,
+  pasoMs: Number(process.env.SIM_STEP_MS ?? 3000),
+  polIaqUrl: process.env.POLIAQ_URL ?? 'http://localhost:3000',
+  cads: JSON.parse(process.env.CADS_JSON ?? '{}') as Record<string, { secreto: string }>,
+  adaptadorUrl: process.env.ADAPTADOR_URL ?? 'http://localhost:4100',
+  cadId: process.env.SIM_CAD_ID,
+  tokenHaciaAdaptador: process.env.SIM_TOKEN_ADAPTADOR,
+  tokenEntrada: process.env.SIM_TOKEN_ENTRADA || undefined,
+  unidades: process.env.SIM_UNIDADES_JSON ? (JSON.parse(process.env.SIM_UNIDADES_JSON) as UnidadSimulada[]) : undefined,
+});
+sim.servidor.listen(PORT, () => console.log(`CAD simulado (${modo}) escuchando en :${PORT}`));

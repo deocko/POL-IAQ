@@ -65,7 +65,8 @@ export class EventosCadService {
     switch (ev.tipo) {
       case 'incidente.recibido':
         r.folioCad = ev.datos.folioCad;
-        this.reportes.cambiarEstado(r, 'validado', 'Recibido por el CAD');
+        // Un folio reenviado ya en curso (migración B→A) conserva su estado: solo se toma el folio del CAD.
+        if (r.estado === 'recibido' || r.estado === 'transferido') this.reportes.cambiarEstado(r, 'validado', 'Recibido por el CAD');
         // El CAD registró otro código: cuenta como corrección (queda en la bitácora).
         if (ev.datos.codigoCnie && ev.datos.codigoCnie !== r.codigoCnie) {
           await this.reportes.corregirCnie(r, { codigoCnie: ev.datos.codigoCnie, motivo: 'Código con el que el CAD registró el folio' }, actor);

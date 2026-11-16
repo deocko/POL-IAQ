@@ -1,15 +1,17 @@
 import {
-  CAD_ESTATAL_ID, ESTADOS, ETIQUETAS_CIUDADANO, MUNICIPIOS_PILOTO, etiquetaCnie, incidentePorId, medirTiempos, preguntasPendientes, reportanteVisible, protocoloDe, puedeTransicionar, respuestasDe, type Protocolo,
+  CAD_ESTATAL_ID, CAD_IDS, ESTADOS, ETIQUETAS_CIUDADANO, etiquetaCnie, municipioPorCad, nombreDeCad, incidentePorId, medirTiempos, preguntasPendientes, reportanteVisible, protocoloDe, puedeTransicionar, respuestasDe, type Protocolo,
 } from '@pol-iaq/shared';
 import type { Ciudadano, Reporte } from '../almacen/modelos';
 import { cuestionarioParaCad, type DespachadorCadService } from '../cad/despachador.service';
 import type { Config } from '../config';
 
-/** CAD conocidos, con su nombre para la consola. */
-export const CADS_CONOCIDOS: { id: string; nombre: string }[] = [
-  ...MUNICIPIOS_PILOTO.map((m) => ({ id: m.cadId, nombre: `CAD ${m.nombre}` })),
-  { id: CAD_ESTATAL_ID, nombre: 'C5 Querétaro (estatal)' },
-];
+/** Los CAD del contrato (18 municipios y el C5), con su nombre y clave INEGI de 5 dígitos. */
+export const CADS_CONOCIDOS: { id: string; nombre: string; clave: string | null; piloto: boolean }[] = CAD_IDS.map((id) => ({
+  id,
+  nombre: id === CAD_ESTATAL_ID ? 'C5 Querétaro (estatal)' : nombreDeCad(id),
+  clave: municipioPorCad(id)?.clave ?? null,
+  piloto: municipioPorCad(id)?.piloto ?? false,
+}));
 
 export const consolaOpera = (config: Config, cadId: string) => config.cads[cadId]?.modo === 'consola';
 

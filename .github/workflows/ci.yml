@@ -7,7 +7,7 @@ on:
 
 jobs:
   backend:
-    name: Paquete compartido, API y CAD simulado
+    name: Paquete compartido, API, CAD simulado y adaptador
     runs-on: ubuntu-latest
     services:
       postgres:

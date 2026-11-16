@@ -62,6 +62,16 @@ export const IncidenteCreadoSchema = Base.extend({
     /** Con seudónimo el teléfono llega enmascarado; anónimo, sin nombre ni teléfono (se contesta por el chat del folio). */
     reportante: z.object({ nombre: z.string(), telefono: z.string(), confiabilidad: z.number().min(0).max(1), identidad: IdentidadSchema.optional() }),
     evidencias: z.array(z.object({ id: z.string(), tipo: z.string(), url: z.url(), sha256: z.string(), expiraEn: z.iso.datetime() })),
+    /**
+     * Opcional (compatible con v1). Solo en el reenvío de un folio que ya estaba en curso, p. ej. al
+     * migrar un municipio de la consola (Modo B) a su CAD (Modo A): estado, unidad e historial actuales.
+     */
+    estadoActual: z.object({
+      estado: EstadoSchema,
+      folioCad: z.string().nullable(),
+      unidad: z.object({ unidadId: z.string(), corporacion: z.string(), etiqueta: z.string() }).nullable(),
+      historial: z.array(z.object({ estado: EstadoSchema, en: z.iso.datetime(), nota: z.string().optional() })),
+    }).optional(),
   }),
 });
 

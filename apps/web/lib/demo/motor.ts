@@ -297,13 +297,15 @@ export function crearReporte(d: NuevoReporte): ReporteDemo {
   if (identidad === 'seudonimo' && !d.alias?.trim()) throw new ErrorDemo(400, 'falta_seudonimo');
   const cnie = clasificarCnie(incidente.id, respuestasDadas, d.codigoCnie);
   return cambiar((e) => {
-    const ruta = enrutarPorUbicacion(lugar.lat, lugar.lng);
+    const ruta = enrutarPorUbicacion(lugar.lat, lugar.lng, (cadId) => cadConectado(e, cadId));
     const iso = ahoraIso();
     const anio = new Date(iso).getUTCFullYear();
-    const clave = ruta.municipio?.claveInegi ?? null;
-    const k = `${clave ?? '000'}-${anio}`;
+    // El folio lleva la parte municipal (014); municipioClave, la clave INEGI completa (22014).
+    const claveFolio = ruta.municipio?.claveFolio ?? null;
+    const clave = ruta.municipio?.clave ?? null;
+    const k = `${claveFolio ?? '000'}-${anio}`;
     e.consecutivos[k] = (e.consecutivos[k] ?? 0) + 1;
-    const folio = generarFolio(clave, anio, e.consecutivos[k]);
+    const folio = generarFolio(claveFolio, anio, e.consecutivos[k]);
     const { validas } = resolverEntradas(PROTOCOLO, incidente.id, d.respuestas, 'formulario', iso);
     const canalizacion = canalizar(PROTOCOLO, incidente, respuestasDe(validas), { asistenciaDirecta: d.asistenciaDirecta });
     const r: ReporteDemo = {

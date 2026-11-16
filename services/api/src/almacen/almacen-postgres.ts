@@ -1,9 +1,9 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Pool, type PoolClient, type QueryResultRow } from 'pg';
-import { ESTADOS_FINALES, PERFIL_VACIO, type Perfil } from '@pol-iaq/shared';
+import { ESTADOS_FINALES, PERFIL_VACIO, claveCompleta, type CierreMensual, type Perfil } from '@pol-iaq/shared';
 import { Almacen } from './almacen';
 import { migrar } from './migraciones';
-import type { Auditoria, Ciudadano, Envio, Evidencia, Mensaje, Otp, Reporte } from './modelos';
+import type { Auditoria, Ciudadano, Envio, Evidencia, Mensaje, Otp, RegistroCad, Reporte, UnidadRegistrada } from './modelos';
 
 const iso = (d: Date | string | null | undefined) => (d == null ? undefined : new Date(d).toISOString());
 const num = (x: string | number | null | undefined) => (x == null ? undefined : Number(x));
@@ -194,7 +194,7 @@ export class AlmacenPostgres extends Almacen {
           ...(f.precision_m != null && { precisionMetros: Number(f.precision_m) }),
           ...(f.referencia != null && { referencia: f.referencia }),
         },
-        municipioClave: f.municipio_clave,
+        municipioClave: claveCompleta(f.municipio_clave),
         cadId: f.cad_id,
         folioCad: f.folio_cad ?? undefined,
         descripcion: f.descripcion ?? undefined,
@@ -257,6 +257,14 @@ export class AlmacenPostgres extends Almacen {
     return this.cargarReportes(
       `WHERE ($1::boolean OR cad_id = ANY($2)) AND (NOT $3::boolean OR estado <> ALL($4)) ORDER BY creado_en DESC LIMIT 200`,
       [todos, cadIds, soloActivos, [...ESTADOS_FINALES]],
+    );
+  }
+
+  async reportesEntre(cadIds: string[], desdeIso: string | null, hastaIso: string | null) {
+    const todos = !cadIds.length || cadIds.includes('*');
+    return this.cargarReportes(
+      `WHERE ($1::boolean OR cad_id = ANY($2)) AND ($3::timestamptz IS NULL OR creado_en >= $3) AND ($4::timestamptz IS NULL OR creado_en < $4) ORDER BY creado_en`,
+      [todos, cadIds, desdeIso, hastaIso],
     );
   }
 
@@ -393,6 +401,67 @@ export class AlmacenPostgres extends Almacen {
     await this.q('UPDATE otp SET intentos = $2, usado = $3 WHERE id = $1', [id, c.intentos, c.usado]);
   }
 
+  // ── Registro de CAD, unidades y cierres SESNSP ───────────────────────────
+
+  async registrosCad() {
+    const { rows } = await this.q('SELECT * FROM registro_cad ORDER BY cad_id');
+    return rows.map((f): RegistroCad => ({
+      cadId: f.cad_id, nombre: f.nombre, clave: f.clave, modo: f.modo, estado: f.estado,
+      ...(f.poligono && { poligono: f.poligono }),
+      ...(f.webhook_url && { webhookUrl: f.webhook_url }),
+      ...(f.secreto_cifrado && { secretoCifrado: f.secreto_cifrado }),
+      ...(f.certificado_sha256 && { certificadoSha256: f.certificado_sha256 }),
+      ipsPermitidas: f.ips_permitidas ?? [], contactoTecnico: f.contacto_tecnico, casosPrueba: f.casos_prueba ?? {},
+      ...(f.migracion && { migracion: f.migracion }),
+      creadoEn: iso(f.creado_en)!, actualizadoEn: iso(f.actualizado_en)!,
+    }));
+  }
+
+  async guardarRegistroCad(r: RegistroCad) {
+    await this.q(
+      `INSERT INTO registro_cad (cad_id, nombre, clave, modo, estado, poligono, webhook_url, secreto_cifrado, certificado_sha256, ips_permitidas, contacto_tecnico, casos_prueba, migracion, creado_en, actualizado_en)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       ON CONFLICT (cad_id) DO UPDATE SET nombre = EXCLUDED.nombre, clave = EXCLUDED.clave, modo = EXCLUDED.modo, estado = EXCLUDED.estado,
+         poligono = EXCLUDED.poligono, webhook_url = EXCLUDED.webhook_url, secreto_cifrado = EXCLUDED.secreto_cifrado, certificado_sha256 = EXCLUDED.certificado_sha256,
+         ips_permitidas = EXCLUDED.ips_permitidas, contacto_tecnico = EXCLUDED.contacto_tecnico, casos_prueba = EXCLUDED.casos_prueba, migracion = EXCLUDED.migracion,
+         actualizado_en = EXCLUDED.actualizado_en`,
+      [r.cadId, r.nombre, r.clave, r.modo, r.estado, r.poligono ? JSON.stringify(r.poligono) : null, r.webhookUrl ?? null, r.secretoCifrado ?? null, r.certificadoSha256 ?? null,
+        r.ipsPermitidas, JSON.stringify(r.contactoTecnico), JSON.stringify(r.casosPrueba), r.migracion ? JSON.stringify(r.migracion) : null, r.creadoEn, r.actualizadoEn],
+    );
+  }
+
+  async unidadesRegistradas() {
+    const { rows } = await this.q('SELECT * FROM unidad_registrada ORDER BY cad_id, unidad_id');
+    return rows.map((f): UnidadRegistrada => ({
+      unidadId: f.unidad_id, cadId: f.cad_id, tipo: f.tipo, corporacion: f.corporacion, etiqueta: f.etiqueta, activa: f.activa,
+      ...(f.base_lat != null && { base: { lat: Number(f.base_lat), lng: Number(f.base_lng) } }),
+      registradaEn: iso(f.registrada_en)!, registradaPor: f.registrada_por,
+    }));
+  }
+
+  async guardarUnidad(u: UnidadRegistrada) {
+    await this.q(
+      `INSERT INTO unidad_registrada (unidad_id, cad_id, tipo, corporacion, etiqueta, activa, base_lat, base_lng, registrada_en, registrada_por)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (unidad_id) DO UPDATE SET tipo = EXCLUDED.tipo, corporacion = EXCLUDED.corporacion, etiqueta = EXCLUDED.etiqueta, activa = EXCLUDED.activa,
+         base_lat = EXCLUDED.base_lat, base_lng = EXCLUDED.base_lng`,
+      [u.unidadId, u.cadId, u.tipo, u.corporacion, u.etiqueta, u.activa, u.base?.lat ?? null, u.base?.lng ?? null, u.registradaEn, u.registradaPor],
+    );
+  }
+
+  async cierresSesnsp() {
+    const { rows } = await this.q('SELECT * FROM cierre_sesnsp ORDER BY mes');
+    return rows.map((f): CierreMensual => ({ mes: f.mes, cerradoEn: iso(f.cerrado_en)!, cerradoPor: f.cerrado_por, filas: f.filas, ajustes: f.ajustes, foto: f.foto }));
+  }
+
+  async guardarCierreSesnsp(c: CierreMensual) {
+    const { rowCount } = await this.q(
+      'INSERT INTO cierre_sesnsp (mes, cerrado_en, cerrado_por, filas, ajustes, foto) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (mes) DO NOTHING',
+      [c.mes, c.cerradoEn, c.cerradoPor, JSON.stringify(c.filas), JSON.stringify(c.ajustes), JSON.stringify(c.foto)],
+    );
+    return rowCount === 1;
+  }
+
   // ── Bandeja de salida ─────────────────────────────────────────────────────
 
   async guardarEnvio(e: Envio) {
@@ -401,6 +470,11 @@ export class AlmacenPostgres extends Almacen {
        ON CONFLICT (evento_id) DO UPDATE SET intentos = EXCLUDED.intentos, estado = EXCLUDED.estado`,
       [e.evento.eventoId, e.cadId, e.evento.folio, e.evento.tipo, JSON.stringify(e.evento), e.intentos, e.estado],
     );
+  }
+
+  async enviosDe(folio: string) {
+    const { rows } = await this.q('SELECT cad_id, cuerpo, intentos, estado FROM bandeja_salida WHERE folio = $1 ORDER BY creado_en', [folio]);
+    return rows.map((f): Envio => ({ cadId: f.cad_id, evento: f.cuerpo, intentos: f.intentos, estado: f.estado }));
   }
 
   async enviosPendientes() {
