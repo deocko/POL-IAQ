@@ -35,8 +35,28 @@ export interface Municipio {
 
 export const CLAVE_ESTADO_QRO = '22';
 
-/** CAD estatal (C5). Recibe lo que cae en un municipio no conectado o fuera del estado. */
+/**
+ * Respaldo estatal: el CQ CIAS (Centro de Información y Análisis para la Seguridad de Querétaro), que
+ * opera el 911 y el 089 en todo el estado. Recibe lo que cae en un municipio sin conectar o sin
+ * capacidad, los reportes anónimos (089) y lo que no acusa un CAD municipal a tiempo.
+ * El identificador técnico `c5-queretaro` se conserva por compatibilidad con el contrato v1.
+ */
 export const CAD_ESTATAL_ID = 'c5-queretaro';
+export const NOMBRE_RESPALDO_ESTATAL = 'CQ CIAS';
+export const NOMBRE_RESPALDO_ESTATAL_LARGO = 'Centro de Información y Análisis para la Seguridad de Querétaro';
+
+/**
+ * Actor 19: el Estado, responsable de accidentes estatales y tramos estatales (definido por Diego).
+ * PENDIENTE de decisión de Diego: su clave, si es un CAD con bandeja propia o solo un destino de
+ * transferencia, y el criterio que hace estatal a un folio. Por eso no tiene `cadId` ni enruta nada.
+ */
+export const ACTOR_ESTADO = {
+  id: 'estado',
+  nombre: 'Estado',
+  ambito: 'Accidentes estatales y tramos estatales',
+  clave: null,
+  pendiente: 'Clave, tipo de actor (CAD con bandeja propia o destino de transferencia) y regla de enrutado: pendientes de decisión de Diego.',
+} as const;
 
 /** `cad-` + nombre sin acentos, en minúsculas y con guiones: "San Juan del Río" → `cad-san-juan-del-rio`. */
 export function cadIdDeNombre(nombre: string): string {
@@ -76,9 +96,9 @@ export function municipioPorCad(cadId: string): Municipio | undefined {
   return MUNICIPIOS_QRO.find((m) => m.cadId === cadId);
 }
 
-/** "CAD San Juan del Río" o "C5 Querétaro". */
+/** "CAD San Juan del Río" o "CQ CIAS". */
 export function nombreDeCad(cadId: string): string {
-  if (cadId === CAD_ESTATAL_ID) return 'C5 Querétaro';
+  if (cadId === CAD_ESTATAL_ID) return NOMBRE_RESPALDO_ESTATAL;
   const m = municipioPorCad(cadId);
   return m ? `CAD ${m.nombre}` : cadId;
 }

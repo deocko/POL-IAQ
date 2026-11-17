@@ -61,6 +61,8 @@ const UnidadSchema = z.object({
  * el CAD despacha en su propio sistema.
  * TODO(fase 1): SSO (OIDC) con segundo factor en lugar de usuarios en configuración.
  */
+const DisponibilidadSchema = z.object({ sinOperador: z.boolean(), nota: z.string().max(200).optional() });
+
 @Controller('v1/operador')
 export class OperadorController {
   private readonly fallos = new Map<string, number[]>();
@@ -98,6 +100,19 @@ export class OperadorController {
   @UseGuards(OperadorGuard)
   yo(@Req() req: { operador: OperadorSesion }) {
     return this.yoDe(req.operador);
+  }
+
+  /**
+   * Marca o quita «sin operador disponible» en un CAD municipal que opera el operador. Mientras esté
+   * marcado, los reportes nuevos del municipio van al CQ CIAS con ese motivo.
+   */
+  @Post('cads/:cadId/disponibilidad')
+  @HttpCode(200)
+  @UseGuards(OperadorGuard)
+  async disponibilidad(@Req() req: { operador: OperadorSesion }, @Param('cadId') cadId: string, @Body(new ZodPipe(DisponibilidadSchema)) body: z.infer<typeof DisponibilidadSchema>) {
+    if (!puedeVer(req.operador, cadId)) throw new ForbiddenException({ codigo: 'cad_ajeno' });
+    const d = await this.registro.marcarDisponibilidad(cadId, body.sinOperador, body.nota ?? null, `operador:${req.operador.usuario}`);
+    return { disponibilidad: d, sinCapacidad: this.registro.capacidad(cadId) };
   }
 
   @Get('reportes')
@@ -257,7 +272,7 @@ export class OperadorController {
       case 'transferir':
         if (a.cadDestinoId === cadId || !CADS_CONOCIDOS.some((c) => c.id === a.cadDestinoId)) throw new BadRequestException({ codigo: 'cad_destino_invalido' });
         // Solo a un CAD que ya recibe reportes (Modo A o B activo) o al C5.
-        if (!this.registro.conectado(a.cadDestinoId)) throw new BadRequestException({ codigo: 'cad_destino_no_conectado', mensaje: 'Ese municipio aún no está conectado a POL-IAQ; transfiere al C5.' });
+        if (!this.registro.conectado(a.cadDestinoId)) throw new BadRequestException({ codigo: 'cad_destino_no_conectado', mensaje: 'Ese municipio aún no está conectado a POL-IAQ; transfiere al CQ CIAS.' });
         return { ...base, tipo: 'incidente.transferido', datos: { cadDestinoId: a.cadDestinoId, motivo: a.motivo } };
     }
   }
@@ -265,7 +280,7 @@ export class OperadorController {
   private yoDe(op: OperadorSesion) {
     return {
       operador: op,
-      cads: CADS_CONOCIDOS.map((c) => ({ ...c, modo: consolaOpera(this.config, c.id) ? 'consola' : 'webhook', mio: puedeVer(op, c.id), conectado: this.registro.conectado(c.id), estado: this.config.cads[c.id]?.estado ?? null })),
+      cads: CADS_CONOCIDOS.map((c) => ({ ...c, modo: consolaOpera(this.config, c.id) ? 'consola' : 'webhook', mio: puedeVer(op, c.id), conectado: this.registro.conectado(c.id), estado: this.config.cads[c.id]?.estado ?? null, sinCapacidad: this.registro.conectado(c.id) ? this.registro.capacidad(c.id) : null, sinOperador: !!this.registro.disponibilidadDe(c.id)?.sinOperador })),
       protocolo: { version: this.protocolos.vigente().version, estado: this.protocolos.vigente().estado },
     };
   }

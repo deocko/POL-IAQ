@@ -1,4 +1,4 @@
-import type { ClasificacionCnie, Identidad, OpinionGuardada } from '@pol-iaq/shared';
+import type { ClasificacionCnie, Identidad, OpinionGuardada, RutaFolio } from '@pol-iaq/shared';
 import type { CasoPruebaCad, ContactoTecnico, EstadoCad, ModoCad, ResultadoCaso, TipoUnidad } from '@pol-iaq/shared';
 import type { Canalizacion, Corporacion, Cuestionario, EstadoIncidente, EventoHaciaCad, Prioridad, Ubicacion } from '@pol-iaq/shared';
 
@@ -84,6 +84,8 @@ export interface Reporte {
   historial: { estado: EstadoIncidente; en: string; nota?: string }[];
   creadoEn: string;
   actualizadoEn: string;
+  /** Cómo se enrutó al crearse: CAD de origen, motivo del respaldo (CQ CIAS) y canal (911/089). */
+  ruta?: RutaFolio;
   /** Secuencia del último evento enviado al CAD. */
   secuenciaSalida: number;
   /** Secuencia del último evento aceptado desde el CAD. */
@@ -152,6 +154,15 @@ export interface RegistroCad {
   actualizadoEn: string;
   /** Si pasó de Modo B (consola) a Modo A (webhook), cuándo y cuántos folios se reenviaron. */
   migracion?: { en: string; por: string; foliosReenviados: number };
+}
+
+/** Si el municipio puede contestar ahora: sin operador disponible, sus reportes van al CQ CIAS. */
+export interface DisponibilidadCad {
+  cadId: string;
+  sinOperador: boolean;
+  nota: string | null;
+  en: string;
+  por: string;
 }
 
 /** Unidad registrada desde la consola (Modo B) o reportada por el CAD (Modo A). */

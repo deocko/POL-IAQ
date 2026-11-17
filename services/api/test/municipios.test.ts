@@ -75,7 +75,7 @@ describe.skipIf(!TEST_DATABASE_URL)('migración 006 en PostgreSQL', () => {
       const { rows } = await pool.query("INSERT INTO ciudadano (telefono, nombre) VALUES ('+520000000000', 'Demo') RETURNING id");
       await pool.query(`INSERT INTO reporte (folio, ciudadano_id, incidente_id, prioridad, corporacion_sugerida, ubicacion, municipio_clave, cad_id, estado)
         VALUES ('QRO-014-2026-000777', $1, 'emergencia-medica', 'alta', 'cruz_roja', ST_SetSRID(ST_MakePoint(-100.39, 20.59), 4326)::geography, '014', 'cad-queretaro', 'cerrado')`, [rows[0].id]);
-      expect(await migrar(pool)).toEqual(['006_municipios_interconexion.sql']);
+      expect(await migrar(pool)).toEqual(['006_municipios_interconexion.sql', '007_respaldo_cq_cias.sql']);
       const r = await pool.query("SELECT municipio_clave FROM reporte WHERE folio = 'QRO-014-2026-000777'");
       expect(r.rows[0].municipio_clave).toBe('22014');
       await pool.query("INSERT INTO cierre_sesnsp (mes, cerrado_en, cerrado_por, filas, ajustes, foto) VALUES ('2026-01', now(), 'prueba', '[]', '[]', '{}')");
@@ -138,7 +138,7 @@ describe.each(ALMACENES)('interconexión con los 18 municipios (Modo A y Modo B)
     expect(mun.body.map((m: { clave: string }) => m.clave)).toEqual(Array.from({ length: 18 }, (_, i) => `22${String(i + 1).padStart(3, '0')}`));
   });
 
-  it('un municipio sin conectar va al C5 con su propia clave', async () => {
+  it('un municipio sin conectar va al CQ CIAS con su propia clave', async () => {
     const r = await reporte('22016');
     expect(r.folio).toMatch(/^QRO-016-/);
     const v = await http.get(`/v1/operador/reportes/${r.folio}`).set(sup);
@@ -180,6 +180,46 @@ describe.each(ALMACENES)('interconexión con los 18 municipios (Modo A y Modo B)
     // Transferir a un municipio que no está conectado no se permite; al C5, sí.
     expect((await accion(sjr, r.folio, { accion: 'transferir', cadDestinoId: 'cad-tequisquiapan' })).body.codigo).toBe('cad_destino_no_conectado');
     expect((await accion(sjr, r.folio, { accion: 'transferir', cadDestinoId: 'c5-queretaro', motivo: 'Apoyo estatal' })).body).toMatchObject({ cadId: 'c5-queretaro', municipioClave: '22016' });
+  });
+
+  it('sin capacidad (sin unidades o sin operador) el reporte va al CQ CIAS desde su creación, con el motivo', async () => {
+    // Tequisquiapan en Modo B sin unidades: conectado pero sin capacidad.
+    expect((await http.put('/v1/admin/cads/cad-tequisquiapan').set(sup).send({ nombre: 'CAD Tequisquiapan', clave: '22017', modo: 'consola', contactoTecnico: contacto })).body).toMatchObject({ conectado: true, sinCapacidad: 'sin unidades en servicio' });
+    const t = await reporte('22017');
+    const vt = (await http.get(`/v1/operador/reportes/${t.folio}`).set(sup)).body;
+    expect(vt).toMatchObject({ cadId: 'c5-queretaro', municipioClave: '22017', ruta: { cadOrigen: 'c5-queretaro', motivo: 'sin_capacidad', detalle: 'sin unidades en servicio', canal: '911' } });
+    expect(vt.respaldo).toBe('Atiende CQ CIAS — municipio sin capacidad (sin unidades en servicio)');
+    expect(vt.historial[0]).toMatchObject({ estado: 'recibido', nota: vt.respaldo });
+
+    // San Juan del Río (activo, con unidades) sin operador disponible: también al CQ CIAS; al quitarlo, vuelve a su CAD.
+    expect((await http.post('/v1/operador/cads/cad-queretaro/disponibilidad').set(sjr).send({ sinOperador: true })).status).toBe(403);
+    expect((await http.post('/v1/operador/cads/cad-san-juan-del-rio/disponibilidad').set(sjr).send({ sinOperador: true })).body).toMatchObject({ sinCapacidad: 'sin operador disponible' });
+    const s1 = await reporte('22016');
+    expect((await http.get(`/v1/operador/reportes/${s1.folio}`).set(sup)).body).toMatchObject({ cadId: 'c5-queretaro', ruta: { motivo: 'sin_capacidad', detalle: 'sin operador disponible' }, respaldo: 'Atiende CQ CIAS — municipio sin capacidad (sin operador disponible)' });
+    expect((await http.get('/v1/operador/yo').set(sjr)).body.cads.find((c: { id: string }) => c.id === 'cad-san-juan-del-rio')).toMatchObject({ sinOperador: true, sinCapacidad: 'sin operador disponible' });
+    expect((await http.post('/v1/operador/cads/cad-san-juan-del-rio/disponibilidad').set(sjr).send({ sinOperador: false })).body.sinCapacidad).toBeNull();
+    const s2 = await reporte('22016');
+    expect((await http.get(`/v1/operador/reportes/${s2.folio}`).set(sup)).body).toMatchObject({ cadId: 'cad-san-juan-del-rio', ruta: { cadOrigen: 'cad-san-juan-del-rio', motivo: null }, respaldo: null });
+    const bitacora = (await http.get('/v1/admin/auditoria?folio=').set(sup)).body.entradas ?? [];
+    expect(Array.isArray(bitacora)).toBe(true);
+  });
+
+  it('reporte anónimo: va por el 089 al CQ CIAS y no lleva datos personales al folio ni al CSV', async () => {
+    const res = await http.post('/v1/reportes').set(await ciudadano()).send({ incidenteId: 'ruido-rina', identidad: 'anonimo', ubicacion: puntoEn('22006') });
+    expect(res.status).toBe(201);
+    const v = (await http.get(`/v1/operador/reportes/${res.body.folio}`).set(sup)).body;
+    expect(v).toMatchObject({ cadId: 'c5-queretaro', municipioClave: '22006', ruta: { canal: '089', motivo: 'anonimo_089' }, reportante: { nombre: 'Anónimo', telefono: '' } });
+    expect(v.respaldo).toBe('Atiende CQ CIAS — reporte anónimo (089)');
+    const alta = app.get(DespachadorCadService).bandeja.find((e) => e.evento.folio === res.body.folio && e.evento.tipo === 'incidente.creado')!;
+    expect(alta.cadId).toBe('c5-queretaro');
+    expect(JSON.stringify(alta.evento)).not.toMatch(/Ciudadana Demo|\+52442555/);
+    const guardado = (await almacen.reporte(res.body.folio))!;
+    expect(JSON.stringify({ ...guardado, ciudadanoId: undefined })).not.toMatch(/Ciudadana Demo|\+52442555/);
+    const hoy = new Date().toISOString().slice(0, 10);
+    const csv = (await http.get(`/v1/operador/estadistica/folios.csv?municipio=22006&periodo=mensual&fecha=${hoy}`).set(sup)).text;
+    const fila = csv.split('\r\n').find((l) => l.startsWith(res.body.folio))!;
+    expect(fila).toContain(',CQ CIAS,CQ CIAS,reporte anónimo (089),089,');
+    expect(csv).not.toMatch(/Ciudadana Demo|\+52|C5/);
   });
 
   it('alta en Modo A: secreto cifrado, 8 casos antes de producción, IPs y mTLS', async () => {
@@ -273,6 +313,11 @@ describe.each(ALMACENES)('interconexión con los 18 municipios (Modo A y Modo B)
     expect(csv.headers['content-type']).toContain('text/csv');
     expect(csv.text).toContain(',22016,San Juan del Río,');
     expect(csv.text).not.toMatch(/\+52|Ciudadana Demo/);
+    // Origen y responsable actual en columnas separadas; la tabla agrupa por el responsable actual.
+    expect(csv.text.split('\r\n')[0]).toContain('municipio,cad_origen,cad_responsable_actual,motivo_respaldo,canal,estado');
+    expect(e.body.porCadOrigen.length).toBeGreaterThan(0);
+    const c5 = e.body.porCad.find((g: { clave: string }) => g.clave === 'c5-queretaro');
+    expect(c5.deOtroCad).toBeGreaterThanOrEqual(1); // el folio que San Juan del Río transfirió al CQ CIAS
   });
 
   it('reporte mensual al SESNSP: borrador, cierre congelado y correcciones en el mes siguiente', async () => {
@@ -301,6 +346,32 @@ describe.each(ALMACENES)('interconexión con los 18 municipios (Modo A y Modo B)
     const nov = await http.get('/v1/operador/sesnsp/2026-11').set(sup);
     expect(nov.body.ajustes).toEqual([expect.objectContaining({ mesOrigen: '2026-10', claveMunicipio: '22016', deltaProcedentes: -1, deltaImprocedentesCancelados: 1, deltaTotal: 0 })]);
     expect(nov.body.ajustes[0].nota).toContain('Corrección del 2026-10');
+  });
+
+  it('SESNSP: un folio abierto no mueve las medianas con el reloj y un mes cerrado exporta siempre el mismo archivo', async () => {
+    // Folio de septiembre que sigue abierto (asignado, sin salir): la etapa "salida" corre con el reloj.
+    const base = (await almacen.reporte((await almacen.reportesEntre(['*'], null, null))[0].folio))!;
+    const abierto = {
+      ...structuredClone(base), folio: 'QRO-014-2026-900002', municipioClave: '22014', estado: 'asignado' as const, cadId: 'cad-queretaro', creadoEn: '2026-09-05T18:00:00.000Z', actualizadoEn: '2026-09-05T18:06:00.000Z',
+      historial: [{ estado: 'recibido' as const, en: '2026-09-05T18:00:00.000Z' }, { estado: 'validado' as const, en: '2026-09-05T18:01:00.000Z' }, { estado: 'asignado' as const, en: '2026-09-05T18:03:00.000Z' }],
+    };
+    await almacen.guardarReporte(abierto);
+    const b1 = await http.get('/v1/operador/sesnsp/2026-09/reporte.csv').set(sup);
+    await new Promise((r) => setTimeout(r, 1200));
+    const b2 = await http.get('/v1/operador/sesnsp/2026-09/reporte.csv').set(sup);
+    expect(b1.headers['content-disposition']).toContain('sesnsp-2026-09-borrador.csv');
+    expect(b2.text).toBe(b1.text);
+    const fila = b1.text.split('\r\n').find((l) => l.startsWith('2026-09,22014'))!.split(',');
+    // recepción 60 s, asignación 120 s; salida, traslado y llegada siguen abiertas: vacías (no cuentan con el reloj).
+    expect(fila.slice(-5)).toEqual(['60', '120', '', '', '']);
+    expect((await http.post('/v1/operador/sesnsp/2026-09/cerrar').set(sup)).body.estado).toBe('cerrado');
+    const c1 = await http.get('/v1/operador/sesnsp/2026-09/reporte.csv').set(sup);
+    await almacen.guardarReporte({ ...abierto, estado: 'en_camino', historial: [...abierto.historial, { estado: 'en_camino', en: '2026-09-05T18:05:00.000Z' }] });
+    await new Promise((r) => setTimeout(r, 1200));
+    const c2 = await http.get('/v1/operador/sesnsp/2026-09/reporte.csv').set(sup);
+    expect(c1.headers['content-disposition']).toContain('sesnsp-2026-09-cerrado.csv');
+    expect(Buffer.from(c2.text).equals(Buffer.from(c1.text))).toBe(true);
+    expect((await http.get('/v1/operador/sesnsp/2026-09').set(sup)).body).toMatchObject({ estado: 'cerrado' });
   });
 
   it('versión pública agregada sin datos personales', async () => {

@@ -5,7 +5,7 @@ import {
   normalizarHuella, tipoUnidadDe, type AltaCad, type CasoPruebaCad, type Enrutamiento, type Municipio, type TipoUnidad,
 } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
-import type { RegistroCad, UnidadRegistrada } from '../almacen/modelos';
+import type { DisponibilidadCad, RegistroCad, UnidadRegistrada } from '../almacen/modelos';
 import { CONFIG, type CadConfig, type Config, type UnidadConfig } from '../config';
 
 /** Llave AES-256 para los secretos de los CAD, derivada de TOKEN_SECRET. */
@@ -55,6 +55,7 @@ export class RegistroCadService implements OnModuleInit {
   private readonly baseUnidades: UnidadConfig[];
   private registros = new Map<string, RegistroCad>();
   private unidades = new Map<string, UnidadRegistrada>();
+  private disponibilidad = new Map<string, DisponibilidadCad>();
 
   constructor(
     @Inject(CONFIG) private readonly config: Config,
@@ -72,6 +73,7 @@ export class RegistroCadService implements OnModuleInit {
   async recargar() {
     this.registros = new Map((await this.almacen.registrosCad()).map((r) => [r.cadId, r]));
     this.unidades = new Map((await this.almacen.unidadesRegistradas()).map((u) => [u.unidadId, u]));
+    this.disponibilidad = new Map((await this.almacen.disponibilidades()).map((d) => [d.cadId, d]));
     const cads: Record<string, CadConfig> = structuredClone(this.baseCads);
     for (const r of this.registros.values()) {
       cads[r.cadId] = {
@@ -111,13 +113,41 @@ export class RegistroCadService implements OnModuleInit {
     return !this.config.produccion;
   }
 
+  /**
+   * ¿El municipio puede contestar ahora? null = sí; si no, el motivo (sus reportes nuevos van al CQ CIAS).
+   * - Modo B (consola): sin unidades en servicio registradas.
+   * - Cualquier modo: marcado «sin operador disponible» desde la consola.
+   * En Modo A las unidades las maneja el CAD propio: no se revisan aquí.
+   */
+  capacidad(cadId: string): string | null {
+    if (cadId === CAD_ESTATAL_ID) return null;
+    const motivos: string[] = [];
+    if (this.config.cads[cadId]?.modo === 'consola' && !this.config.unidades.some((u) => u.cadId === cadId)) motivos.push('sin unidades en servicio');
+    if (this.disponibilidad.get(cadId)?.sinOperador) motivos.push('sin operador disponible');
+    return motivos.length ? motivos.join(' y ') : null;
+  }
+
+  disponibilidadDe(cadId: string): DisponibilidadCad | null {
+    return this.disponibilidad.get(cadId) ?? null;
+  }
+
+  /** Marca o quita «sin operador disponible» de un CAD municipal (queda en la bitácora). */
+  async marcarDisponibilidad(cadId: string, sinOperador: boolean, nota: string | null, quien: string) {
+    if (cadId === CAD_ESTATAL_ID || !CAD_IDS.includes(cadId)) throw new BadRequestException({ codigo: 'cad_invalido' });
+    const d: DisponibilidadCad = { cadId, sinOperador, nota: nota?.trim() || null, en: new Date().toISOString(), por: quien };
+    await this.almacen.guardarDisponibilidad(d);
+    await this.almacen.auditar({ actor: quien, accion: sinOperador ? 'cad_sin_operador' : 'cad_con_operador', detalle: { cadId, nota: d.nota } });
+    this.disponibilidad.set(cadId, d);
+    return d;
+  }
+
   /** Geocerca vigente del municipio (la del alta, si trae una; si no, INEGI 2022). */
   geocerca(m: Municipio) {
     return this.config.cads[m.cadId]?.poligono ?? m.geocerca;
   }
 
-  enrutar(lat: number, lng: number): Enrutamiento {
-    return enrutarPorUbicacion(lat, lng, (id) => this.conectado(id), (m) => this.geocerca(m));
+  enrutar(lat: number, lng: number, opciones: { anonimo?: boolean } = {}): Enrutamiento {
+    return enrutarPorUbicacion(lat, lng, (id) => this.conectado(id), (m) => this.geocerca(m), { capacidad: (id) => this.capacidad(id), anonimo: opciones.anonimo });
   }
 
   /** Revisa estado, IP y certificado de cliente de una llamada de un CAD (la firma se revisa aparte). */
@@ -156,6 +186,9 @@ export class RegistroCadService implements OnModuleInit {
       modo,
       estado: cad?.estado ?? (cad && (cad.webhookUrl || cad.modo === 'consola') ? 'activo' : null),
       conectado: this.conectado(cadId),
+      /** Conectado pero sin capacidad (sus reportes nuevos van al CQ CIAS): el motivo; si no, null. */
+      sinCapacidad: this.conectado(cadId) ? this.capacidad(cadId) : null,
+      sinOperador: !!this.disponibilidad.get(cadId)?.sinOperador,
       webhookUrl: cad?.webhookUrl ?? null,
       tieneSecreto: !!cad?.secreto,
       certificadoSha256: cad?.certificadoSha256 ?? null,

@@ -3,7 +3,7 @@
 import { io } from 'socket.io-client';
 import * as demo from '../../lib/demo/motor';
 import { horaLocal } from '../../lib/hora';
-import type { ClasificacionCnie, Estadistica, FilaSesnsp, AjusteSesnsp, GrupoCnie, MetasTiempo, OpinionGuardada, Periodo, ResumenEtapa, TiemposReporte, TipoUnidad } from '@pol-iaq/shared/movil';
+import type { ClasificacionCnie, Estadistica, FilaSesnsp, AjusteSesnsp, GrupoCnie, MetasTiempo, OpinionGuardada, Periodo, ResumenEtapa, TiemposReporte, TipoUnidad, RutaFolio } from '@pol-iaq/shared/movil';
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 /** Demo pública: sin servidor, el API y el CAD simulado corren en el navegador. */
@@ -14,7 +14,7 @@ export type Estado = 'recibido' | 'validado' | 'asignado' | 'en_camino' | 'en_si
 
 export interface Yo {
   operador: { usuario: string; nombre: string; cads: string[] };
-  cads: { id: string; nombre: string; clave: string | null; piloto: boolean; modo: 'consola' | 'webhook'; mio: boolean; conectado: boolean; estado: 'pruebas' | 'activo' | 'suspendido' | null }[];
+  cads: { id: string; nombre: string; clave: string | null; piloto: boolean; modo: 'consola' | 'webhook'; mio: boolean; conectado: boolean; estado: 'pruebas' | 'activo' | 'suspendido' | null; sinCapacidad?: string | null; sinOperador?: boolean }[];
   protocolo: { version: string; estado: 'provisional' | 'vigente' | 'retirado' };
 }
 
@@ -54,6 +54,10 @@ export interface Reporte {
   creadoEn: string;
   actualizadoEn: string;
   escalaAlC5En: string | null;
+  /** Cómo se enrutó al crearse: CAD de origen, motivo por el que lo atiende el CQ CIAS y canal (911 / 089). */
+  ruta?: RutaFolio;
+  /** "Atiende CQ CIAS — municipio sin capacidad (…)", o null si lo atiende el municipio. */
+  respaldo?: string | null;
   operable: boolean;
   transiciones: Estado[];
   /** Solo demo: lo despacha la demo automática (el operador puede tomar el control). */
@@ -86,7 +90,7 @@ export interface Tablero {
 
 export interface VistaCad {
   cadId: string; nombre: string; clave: string | null; claveFolio: string | null; municipio: string | null; piloto: boolean; registrado: boolean;
-  modo: 'webhook' | 'consola' | null; estado: 'pruebas' | 'activo' | 'suspendido' | null; conectado: boolean; webhookUrl: string | null; tieneSecreto: boolean;
+  modo: 'webhook' | 'consola' | null; estado: 'pruebas' | 'activo' | 'suspendido' | null; conectado: boolean; sinCapacidad: string | null; sinOperador: boolean; webhookUrl: string | null; tieneSecreto: boolean;
   certificadoSha256: string | null; ipsPermitidas: string[]; poligonoPropio: boolean; contactoTecnico: { nombre: string; correo: string } | null;
   casosPrueba: { id: string; nombre: string; resultado: { ok: boolean; en: string; detalle?: string } | null }[]; casosPendientes: string[]; unidades: number;
   migracion: { en: string; por: string; foliosReenviados: number } | null; actualizadoEn: string | null;
@@ -98,8 +102,8 @@ export interface AltaCad {
 export interface UnidadNueva { unidadId: string; cadId: string; tipo: TipoUnidad; corporacion: string; etiqueta: string; activa: boolean }
 export interface FiltroReportes { cadId?: string; municipio?: string; periodo?: Periodo; fecha?: string }
 export type EstadisticaVista = Estadistica & { periodo: { desde?: string; hasta?: string; etiqueta: string; periodo: string }; metas: MetasTiempo };
-export interface ListaSesnsp { mesActual: string; cierres: { mes: string; cerradoEn: string; cerradoPor: string; filas: number; total: number; ajustes: number }[]; nota: string }
-export interface MesSesnsp { estado: 'cerrado' | 'borrador'; mes: string; cerradoEn: string | null; cerradoPor: string | null; filas: FilaSesnsp[]; ajustes: AjusteSesnsp[] }
+export interface ListaSesnsp { mesActual: string; cierres: { mes: string; cerradoEn: string; cerradoPor: string; filas: number; total: number; ajustes: number; prueba?: boolean }[]; nota: string; cierreDePrueba?: boolean }
+export interface MesSesnsp { estado: 'cerrado' | 'borrador'; mes: string; cerradoEn: string | null; cerradoPor: string | null; filas: FilaSesnsp[]; ajustes: AjusteSesnsp[]; prueba?: boolean }
 export interface Archivo { nombre: string; tipo: string; datos: string | Uint8Array }
 
 export type Accion =
@@ -152,7 +156,8 @@ const apiDemo = {
   foliosCsv: (t: string, f: FiltroReportes) => enDemo<Archivo>(() => demo.reportes.foliosCsv(t, f)),
   sesnsp: (t: string) => enDemo<ListaSesnsp>(() => demo.sesnsp.lista(t)),
   sesnspMes: (t: string, mes: string) => enDemo<MesSesnsp>(() => demo.sesnsp.mes(t, mes)),
-  cerrarMes: (t: string, mes: string) => enDemo<MesSesnsp>(() => demo.sesnsp.cerrar(t, mes)),
+  cerrarMes: (t: string, mes: string, prueba = false) => enDemo<MesSesnsp>(() => demo.sesnsp.cerrar(t, mes, prueba)),
+  disponibilidad: (t: string, cadId: string, sinOperador: boolean) => enDemo<unknown>(() => demo.marcarDisponibilidad(t, cadId, sinOperador)),
   archivoSesnsp: (t: string, mes: string, a: 'reporte.csv' | 'ajustes.csv' | 'reporte.xlsx') => enDemo<Archivo>(() => demo.sesnsp.archivo(t, mes, a)),
 };
 
@@ -187,7 +192,8 @@ const apiReal = {
   foliosCsv: (t: string, f: FiltroReportes) => bajar(`/v1/operador/estadistica/folios.csv${consulta(f)}`, t, 'poliaq-folios.csv'),
   sesnsp: (t: string) => llamar<ListaSesnsp>('/v1/operador/sesnsp', t),
   sesnspMes: (t: string, mes: string) => llamar<MesSesnsp>(`/v1/operador/sesnsp/${mes}`, t),
-  cerrarMes: (t: string, mes: string) => llamar<MesSesnsp>(`/v1/operador/sesnsp/${mes}/cerrar`, t, { method: 'POST' }),
+  cerrarMes: (t: string, mes: string, _prueba = false) => llamar<MesSesnsp>(`/v1/operador/sesnsp/${mes}/cerrar`, t, { method: 'POST' }),
+  disponibilidad: (t: string, cadId: string, sinOperador: boolean) => llamar<unknown>(`/v1/operador/cads/${cadId}/disponibilidad`, t, { method: 'POST', body: JSON.stringify({ sinOperador }) }),
   archivoSesnsp: (t: string, mes: string, a: 'reporte.csv' | 'ajustes.csv' | 'reporte.xlsx') => bajar(`/v1/operador/sesnsp/${mes}/${a}`, t, `sesnsp-${mes}-${a}`),
 };
 
@@ -266,14 +272,14 @@ export const ERRORES: Record<string, string> = {
   folio_de_otra_jurisdiccion: 'El reporte cambió de CAD. Actualiza la bandeja.',
   folio_no_encontrado: 'El reporte ya no está en tu bandeja.',
   sin_unidades_disponibles: 'No hay unidades libres con GPS en este CAD. Asigna una a mano o transfiere.',
-  cad_destino_no_conectado: 'Ese municipio aún no está conectado a POL-IAQ; transfiere al C5.',
+  cad_destino_no_conectado: 'Ese municipio aún no está conectado a POL-IAQ; transfiere al CQ CIAS.',
   casos_pendientes: 'Faltan casos de prueba aprobados para pasar a producción.',
   sin_unidades: 'Registra al menos una unidad antes de activar el despacho desde la consola.',
   falta_secreto: 'El Modo A requiere el secreto HMAC compartido (mínimo 32 caracteres).',
   usar_migracion: 'Para pasar un municipio activo de la consola a su CAD usa la migración (conserva folios e historial).',
   unidad_de_otro_cad: 'Esa clave de unidad ya es de otro CAD.',
   unidad_ocupada: 'La unidad atiende un reporte; libérala antes de darla de baja.',
-  solo_supervision: 'Solo supervisión (C5) puede hacer esto.',
+  solo_supervision: 'Solo supervisión puede hacer esto.',
   mes_en_curso: 'Solo se cierran meses terminados.',
   mes_ya_cerrado: 'Ese mes ya está cerrado: no se reescribe. Las correcciones salen en el mes siguiente.',
   municipio_desconocido: 'Usa la clave INEGI de 5 dígitos (22001 a 22018).',

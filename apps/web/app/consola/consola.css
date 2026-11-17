@@ -147,7 +147,11 @@
 .c-form-unidad .c-boton { min-height: var(--toque); }
 .c-campo-linea { display: flex; align-items: center; gap: var(--e2); margin-top: 0; }
 .c-sesnsp td, .c-sesnsp th { white-space: nowrap; }
-.c-sesnsp th[scope="row"] { white-space: normal; min-width: 180px; }
+/* Encabezados en dos renglones (y con guion suave) para que a 1280 px o más la tabla quepa sin desplazamiento. */
+.c-sesnsp thead th { white-space: normal; vertical-align: bottom; hyphens: manual; }
+.c-sesnsp .c-grupo-col { text-align: center; border-bottom: 1px solid var(--borde); }
+.c-sesnsp th[scope="row"] { white-space: normal; min-width: 160px; }
+.c-panel-ancho { max-width: 1400px; }
 .c-solo-imprimir { display: none; }
 details.c-tarjeta > summary { cursor: pointer; font-weight: 700; min-height: var(--toque); display: flex; align-items: center; }
 
@@ -164,3 +168,6 @@ details.c-tarjeta > summary { cursor: pointer; font-weight: 700; min-height: var
 .c-publico { max-width: 960px; margin: 0 auto; padding: var(--e4); display: grid; gap: var(--e3); }
 .c-publico h1 { margin: 0; font-size: 1.5rem; }
 .c-publico h2 { font-size: 1.125rem; margin: 0 0 var(--e2); }
+/* Respaldo estatal (CQ CIAS): por qué lo atiende el CQ CIAS desde su creación. */
+.c-respaldo { margin: 4px 0 0; font-weight: 700; color: var(--aviso); }
+.c-acciones-fila button { white-space: nowrap; }

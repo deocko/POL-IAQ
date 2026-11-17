@@ -16,6 +16,9 @@ export function filaEstadistica(r: Reporte): FilaEstadistica {
     tiempos: medirTiempos(r.historial, r.prioridad),
     queja: !!r.opinion?.queja,
     calificacion: r.opinion?.calificacion ?? null,
+    cadOrigen: r.ruta?.cadOrigen ?? r.cadId,
+    respaldo: r.ruta?.motivo ?? null,
+    canal: r.ruta?.canal ?? '911',
   };
 }
 

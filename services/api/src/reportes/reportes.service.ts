@@ -3,8 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   canalizar, clasificacionDe, clasificarCnie, esQueja, permiteAnonimo, generarFolio, incidentePorId, puedeTransicionar, resolverEntradas, respuestasDe,
   validarCodigoCnie, ESTADOS_FINALES, type ClasificacionCnie,
-  type CrearReporte, type EntradaGuardada, type EstadoIncidente, type IncidenteCatalogo, type Opinion, type Prioridad, type ResponderCuestionario, type SolicitarEvidencia,
-} from '@pol-iaq/shared';
+  type CrearReporte, type EntradaGuardada, type EstadoIncidente, type IncidenteCatalogo, type Opinion, type Prioridad, type ResponderCuestionario, type SolicitarEvidencia, rutaDe, textoRespaldo } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
 import type { Ciudadano, Evidencia, Reporte } from '../almacen/modelos';
 import { BusService } from '../comun/bus.service';
@@ -101,7 +100,9 @@ export class ReportesService implements OnModuleInit {
     const cnie = clasificarCnie(incidente.id, todas, datos.codigoCnie);
     const canalizacion = canalizar(protocolo, incidente, respuestas, { asistenciaDirecta: datos.asistenciaDirecta });
 
-    const ruta = this.registro.enrutar(datos.ubicacion.lat, datos.ubicacion.lng);
+    // Anónimo: va por el 089 al CQ CIAS. Sin CAD municipal conectado o sin capacidad, también al CQ CIAS.
+    const ruta = this.registro.enrutar(datos.ubicacion.lat, datos.ubicacion.lng, { anonimo: datos.identidad === 'anonimo' });
+    const notaRuta = textoRespaldo(ruta) ?? undefined;
     const ahora = new Date();
     // El folio lleva la parte municipal (014); municipioClave, la clave INEGI completa (22014).
     const claveFolio = ruta.municipio?.claveFolio ?? null;
@@ -132,14 +133,15 @@ export class ReportesService implements OnModuleInit {
       estado: 'recibido',
       evidencias: [],
       mensajes: [],
-      historial: [{ estado: 'recibido', en: iso }],
+      historial: [{ estado: 'recibido', en: iso, ...(notaRuta && { nota: notaRuta }) }],
+      ruta: rutaDe(ruta),
       creadoEn: iso,
       actualizadoEn: iso,
       secuenciaSalida: 0,
       secuenciaEntrada: 0,
     };
     await this.almacen.guardarReporte(reporte);
-    await this.almacen.auditar({ actor: `ciudadano:${ciudadano.id}`, accion: 'reporte_creado', folio, detalle: { cadId: ruta.cadId, escenarioId: escenario?.id, protocolo: protocolo.version, cnie: cnie?.incidente?.codigo ?? cnie?.subtipo.codigo ?? null } });
+    await this.almacen.auditar({ actor: `ciudadano:${ciudadano.id}`, accion: 'reporte_creado', folio, detalle: { cadId: ruta.cadId, motivo: ruta.motivo, canal: ruta.canal, escenarioId: escenario?.id, protocolo: protocolo.version, cnie: cnie?.incidente?.codigo ?? cnie?.subtipo.codigo ?? null } });
     // El envío al CAD modifica la secuencia de salida: va con el reporte bloqueado.
     return this.almacen.conReporte(folio, async () => {
       const r = (await this.almacen.reporte(folio))!;

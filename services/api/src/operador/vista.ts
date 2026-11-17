@@ -1,5 +1,5 @@
 import {
-  CAD_ESTATAL_ID, CAD_IDS, ESTADOS, ETIQUETAS_CIUDADANO, etiquetaCnie, municipioPorCad, nombreDeCad, incidentePorId, medirTiempos, preguntasPendientes, reportanteVisible, protocoloDe, puedeTransicionar, respuestasDe, type Protocolo,
+  CAD_ESTATAL_ID, CAD_IDS, ESTADOS, ETIQUETAS_CIUDADANO, etiquetaCnie, municipioPorCad, nombreDeCad, incidentePorId, medirTiempos, preguntasPendientes, reportanteVisible, protocoloDe, textoRespaldo, puedeTransicionar, respuestasDe, type Protocolo,
 } from '@pol-iaq/shared';
 import type { Ciudadano, Reporte } from '../almacen/modelos';
 import { cuestionarioParaCad, type DespachadorCadService } from '../cad/despachador.service';
@@ -8,7 +8,7 @@ import type { Config } from '../config';
 /** Los CAD del contrato (18 municipios y el C5), con su nombre y clave INEGI de 5 dígitos. */
 export const CADS_CONOCIDOS: { id: string; nombre: string; clave: string | null; piloto: boolean }[] = CAD_IDS.map((id) => ({
   id,
-  nombre: id === CAD_ESTATAL_ID ? 'C5 Querétaro (estatal)' : nombreDeCad(id),
+  nombre: nombreDeCad(id),
   clave: municipioPorCad(id)?.clave ?? null,
   piloto: municipioPorCad(id)?.piloto ?? false,
 }));
@@ -23,7 +23,7 @@ export function vistaOperador(r: Reporte, ciudadano: Ciudadano | undefined, prot
   const incidente = incidentePorId(r.incidenteId);
   const pendientes = preguntasPendientes(protocolo, r.incidenteId, respuestasDe(r.cuestionario.entradas));
   const operable = consolaOpera(config, r.cadId);
-  // Sin acuse a tiempo, el despachador lo escala al C5 (ver DespachadorCadService).
+  // Sin acuse a tiempo, el despachador lo escala al CQ CIAS (ver DespachadorCadService).
   const escalaAlC5En = r.estado === 'recibido' && !r.folioCad && r.cadId !== CAD_ESTATAL_ID
     ? new Date(new Date(r.creadoEn).getTime() + config.esperaAcuseSeg * 1000).toISOString()
     : null;
@@ -62,6 +62,10 @@ export function vistaOperador(r: Reporte, ciudadano: Ciudadano | undefined, prot
     creadoEn: r.creadoEn,
     actualizadoEn: r.actualizadoEn,
     escalaAlC5En,
+    /** Cómo se enrutó al crearse (CAD de origen, motivo del respaldo y canal). Sin datos personales. */
+    ruta: r.ruta ?? { cadOrigen: r.cadId, motivo: null, canal: '911' as const },
+    /** "Atiende CQ CIAS — municipio sin capacidad (…)", o null si lo atiende el municipio. */
+    respaldo: textoRespaldo(r.ruta),
     /** Solo los CAD en modo consola se operan aquí; los demás despachan en su propio sistema. */
     operable,
     transiciones: operable ? ESTADOS.filter((e) => puedeTransicionar(r.estado, e)) : [],

@@ -1,5 +1,5 @@
 import type { CierreMensual, Perfil } from '@pol-iaq/shared';
-import type { Auditoria, Ciudadano, Envio, Evidencia, Otp, RegistroCad, Reporte, UnidadRegistrada } from './modelos';
+import type { Auditoria, Ciudadano, Envio, Evidencia, Otp, DisponibilidadCad, RegistroCad, Reporte, UnidadRegistrada } from './modelos';
 
 /**
  * Persistencia del API. Hay dos implementaciones:
@@ -62,6 +62,8 @@ export abstract class Almacen {
   /** Registro de CAD (alta de municipios). */
   abstract registrosCad(): Promise<RegistroCad[]>;
   abstract guardarRegistroCad(r: RegistroCad): Promise<void>;
+  abstract disponibilidades(): Promise<DisponibilidadCad[]>;
+  abstract guardarDisponibilidad(d: DisponibilidadCad): Promise<void>;
 
   /** Unidades dadas de alta desde la consola o el CAD (se suman a las de configuración). */
   abstract unidadesRegistradas(): Promise<UnidadRegistrada[]>;

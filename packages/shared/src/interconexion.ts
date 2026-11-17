@@ -73,7 +73,7 @@ const Ip = z.string().regex(/^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-fA-F:]+)(?:\/\d{1
 
 /** Alta o cambio de un CAD (onboarding). El secreto nunca se devuelve una vez guardado. */
 export const AltaCadSchema = z.object({
-  cadId: z.string().refine((x) => CAD_IDS.includes(x), 'cadId desconocido: debe ser uno de los 18 municipios o el C5'),
+  cadId: z.string().refine((x) => CAD_IDS.includes(x), 'cadId desconocido: debe ser uno de los 18 municipios o el CQ CIAS'),
   nombre: z.string().trim().min(3).max(120),
   /** Clave INEGI de 5 dígitos del municipio (22001–22018). El C5 no lleva clave. */
   clave: z.string().regex(/^22\d{3}$/).nullable(),
@@ -89,7 +89,7 @@ export const AltaCadSchema = z.object({
   contactoTecnico: z.object({ nombre: z.string().trim().min(3).max(120), correo: z.email(), telefono: z.string().regex(/^\+?\d{10,13}$/).optional() }),
 }).superRefine((x, ctx) => {
   const esperada = x.cadId === CAD_ESTATAL_ID ? null : municipioPorCad(x.cadId)?.clave ?? null;
-  if (x.clave !== esperada) ctx.addIssue({ code: 'custom', path: ['clave'], message: `La clave de ${x.cadId} es ${esperada ?? 'null (C5)'}` });
+  if (x.clave !== esperada) ctx.addIssue({ code: 'custom', path: ['clave'], message: `La clave de ${x.cadId} es ${esperada ?? 'null (CQ CIAS)'}` });
   if (x.modo === 'webhook' && !x.webhookUrl) ctx.addIssue({ code: 'custom', path: ['webhookUrl'], message: 'Modo A (webhook) requiere webhookUrl' });
 });
 export type AltaCad = z.infer<typeof AltaCadSchema>;

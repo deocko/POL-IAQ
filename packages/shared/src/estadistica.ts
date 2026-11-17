@@ -2,13 +2,14 @@
  * Reportes y estadística por municipio (los mismos datos en Modo A y Modo B).
  *
  * Todo sale de los folios: volumen, tiempos contra meta y quejas, agrupados por municipio, CNIE
- * (tipo, subtipo e incidente, comparable entre municipios y con el C5), corporación y unidad.
+ * (tipo, subtipo e incidente, comparable entre municipios y con el CQ CIAS), corporación y unidad.
  * La versión pública no lleva datos personales y oculta los grupos con pocos reportes.
  */
 import type { ClasificacionCnie } from './cnie';
 import type { EstadoIncidente } from './estados';
 import { CORPORACIONES } from './interconexion';
-import { CAD_ESTATAL_ID, municipioPorClave, nombreDeCad } from './municipios';
+import { TEXTO_RESPALDO, type MotivoRespaldo } from './geo';
+import { municipioPorClave, nombreDeCad } from './municipios';
 import { resumirTiempos, type ResumenEtapa, type TiemposReporte } from './tiempos';
 
 export type Periodo = 'diario' | 'semanal' | 'mensual';
@@ -26,6 +27,12 @@ export interface FilaEstadistica {
   tiempos: TiemposReporte;
   queja: boolean;
   calificacion?: number | null;
+  /** CAD al que se mandó al crearlo (antes de escalar o transferir). Sin dato = el actual. */
+  cadOrigen?: string;
+  /** Por qué lo atiende el CQ CIAS desde su creación (null = el CAD del municipio). */
+  respaldo?: MotivoRespaldo | null;
+  /** 911, o 089 si es anónimo. */
+  canal?: '911' | '089';
 }
 
 export interface Grupo {
@@ -35,6 +42,8 @@ export interface Grupo {
   quejas: number;
   /** Desde que se levanta el reporte hasta que llega la unidad. */
   llegada: ResumenEtapa;
+  /** Solo en `porCad`: folios que este CAD tiene hoy pero se crearon para otro (escalados o transferidos). */
+  deOtroCad?: number;
 }
 
 const ZONA = 'America/Mexico_City';
@@ -97,8 +106,16 @@ export function estadistica(filas: FilaEstadistica[]) {
     calificacionPromedio: califs.length ? Math.round((califs.reduce((a, b) => a + b, 0) / califs.length) * 10) / 10 : null,
     etapas: resumirTiempos(filas.map((f) => f.tiempos)),
     porMunicipio: agrupar(filas, (f) => ({ clave: f.municipioClave ?? '000', nombre: nombreMunicipio(f) })),
-    /** Quién atendió: el CAD del municipio o el C5. */
-    porCad: agrupar(filas, (f) => ({ clave: f.cadId, nombre: f.cadId === CAD_ESTATAL_ID ? 'C5 Querétaro' : nombreDeCad(f.cadId) })),
+    /**
+     * Responsable actual (tras escalamiento o transferencia): el CAD del municipio o el CQ CIAS.
+     * `deOtroCad` cuenta los que se crearon para otro CAD; el CSV trae `cad_origen` y `cad_responsable_actual`.
+     */
+    porCad: agrupar(filas, (f) => ({ clave: f.cadId, nombre: nombreDeCad(f.cadId) })).map((g) => ({
+      ...g,
+      deOtroCad: filas.filter((f) => f.cadId === g.clave && (f.cadOrigen ?? f.cadId) !== f.cadId).length,
+    })),
+    /** CAD de origen: al que se mandó cada folio al crearlo. */
+    porCadOrigen: agrupar(filas, (f) => ({ clave: f.cadOrigen ?? f.cadId, nombre: nombreDeCad(f.cadOrigen ?? f.cadId) })),
     porTipo: agrupar(filas, (f) => (f.cnie ? { clave: f.cnie.tipo.codigo, nombre: f.cnie.tipo.nombre } : SIN_CNIE)),
     porSubtipo: agrupar(filas, (f) => (f.cnie ? { clave: f.cnie.subtipo.codigo, nombre: f.cnie.subtipo.nombre } : SIN_CNIE)),
     porIncidente: agrupar(filas, (f) => (f.cnie?.incidente ? { clave: f.cnie.incidente.codigo, nombre: f.cnie.incidente.nombre } : f.cnie ? { clave: `${f.cnie.subtipo.codigo}xx`, nombre: `${f.cnie.subtipo.nombre} (sin incidente)` } : SIN_CNIE)),
@@ -115,12 +132,13 @@ const celda = (v: unknown) => {
 
 /** CSV por folio (UTF-8 con BOM para Excel). Sin nombre ni teléfono del reportante. */
 export function csvFolios(filas: FilaEstadistica[]): string {
-  const enc = ['folio', 'fecha_local', 'municipio_clave', 'municipio', 'cad', 'estado', 'prioridad_operativa', 'cnie_tipo', 'cnie_subtipo', 'cnie_incidente', 'cnie_nombre', 'corporacion', 'unidad', 'recepcion_s', 'asignacion_s', 'salida_s', 'traslado_s', 'llegada_s', 'llegada_meta_s', 'llegada_en_meta', 'queja'];
+  const enc = ['folio', 'fecha_local', 'municipio_clave', 'municipio', 'cad_origen', 'cad_responsable_actual', 'motivo_respaldo', 'canal', 'estado', 'prioridad_operativa', 'cnie_tipo', 'cnie_subtipo', 'cnie_incidente', 'cnie_nombre', 'corporacion', 'unidad', 'recepcion_s', 'asignacion_s', 'salida_s', 'traslado_s', 'llegada_s', 'llegada_meta_s', 'llegada_en_meta', 'queja'];
   const filasCsv = filas.map((f) => {
     const e = Object.fromEntries(f.tiempos.etapas.map((x) => [x.id, x.segundos]));
     const l = f.tiempos.llegada;
     return [
-      f.folio, fechaLocal(f.creadoEn), f.municipioClave ?? '', nombreMunicipio(f), nombreDeCad(f.cadId), f.estado, f.prioridad,
+      f.folio, fechaLocal(f.creadoEn), f.municipioClave ?? '', nombreMunicipio(f), nombreDeCad(f.cadOrigen ?? f.cadId), nombreDeCad(f.cadId),
+      f.respaldo ? TEXTO_RESPALDO[f.respaldo] : '', f.canal ?? '911', f.estado, f.prioridad,
       f.cnie?.tipo.codigo ?? '', f.cnie?.subtipo.codigo ?? '', f.cnie?.incidente?.codigo ?? '', f.cnie?.incidente?.nombre ?? f.cnie?.subtipo.nombre ?? '',
       f.unidad?.corporacion ?? '', f.unidad?.etiqueta ?? '',
       e.recepcion ?? '', e.asignacion ?? '', e.salida ?? '', e.traslado ?? '', l.segundos ?? '', l.metaSegundos,

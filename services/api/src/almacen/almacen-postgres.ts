@@ -3,7 +3,7 @@ import { Pool, type PoolClient, type QueryResultRow } from 'pg';
 import { ESTADOS_FINALES, PERFIL_VACIO, claveCompleta, type CierreMensual, type Perfil } from '@pol-iaq/shared';
 import { Almacen } from './almacen';
 import { migrar } from './migraciones';
-import type { Auditoria, Ciudadano, Envio, Evidencia, Mensaje, Otp, RegistroCad, Reporte, UnidadRegistrada } from './modelos';
+import type { Auditoria, Ciudadano, Envio, Evidencia, Mensaje, Otp, DisponibilidadCad, RegistroCad, Reporte, UnidadRegistrada } from './modelos';
 
 const iso = (d: Date | string | null | undefined) => (d == null ? undefined : new Date(d).toISOString());
 const num = (x: string | number | null | undefined) => (x == null ? undefined : Number(x));
@@ -25,7 +25,7 @@ const SELECT_REPORTE = `
          ST_Y(ubicacion::geometry) AS lat, ST_X(ubicacion::geometry) AS lng, precision_m, referencia,
          municipio_clave, cad_id, folio_cad, descripcion, respuestas, asistencia_directa, escenario_id, cuestionario, canalizacion,
          ocultar_identidad_a_unidad, estado, secuencia_salida, secuencia_entrada, creado_en, actualizado_en,
-         identidad, alias, opinion, cnie, cnie_correcciones
+         identidad, alias, opinion, cnie, cnie_correcciones, ruta
     FROM reporte`;
 
 /**
@@ -186,6 +186,7 @@ export class AlmacenPostgres extends Almacen {
         codigoCnie: f.codigo_cnie,
         cnie: f.cnie ?? null,
         correccionesCnie: f.cnie_correcciones ?? [],
+        ...(f.ruta && { ruta: f.ruta }),
         prioridad: f.prioridad,
         corporacionSugerida: f.corporacion_sugerida,
         ubicacion: {
@@ -279,14 +280,14 @@ export class AlmacenPostgres extends Almacen {
         `INSERT INTO reporte (folio, ciudadano_id, incidente_id, codigo_cnie, prioridad, corporacion_sugerida, ubicacion,
             precision_m, referencia, municipio_clave, cad_id, folio_cad, descripcion, respuestas, asistencia_directa,
             ocultar_identidad_a_unidad, estado, secuencia_salida, secuencia_entrada, creado_en, actualizado_en,
-            escenario_id, cuestionario, canalizacion, identidad, alias, opinion, cnie, cnie_correcciones)
-         VALUES ($1, $2, $3, $4, $5, $6, ${PUNTO('$7', '$8')}, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
+            escenario_id, cuestionario, canalizacion, identidad, alias, opinion, cnie, cnie_correcciones, ruta)
+         VALUES ($1, $2, $3, $4, $5, $6, ${PUNTO('$7', '$8')}, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
          ON CONFLICT (folio) DO UPDATE SET
             respuestas = EXCLUDED.respuestas, cuestionario = EXCLUDED.cuestionario, canalizacion = EXCLUDED.canalizacion,
             prioridad = EXCLUDED.prioridad, cad_id = EXCLUDED.cad_id, folio_cad = EXCLUDED.folio_cad,
             estado = EXCLUDED.estado, secuencia_salida = EXCLUDED.secuencia_salida,
             secuencia_entrada = EXCLUDED.secuencia_entrada, actualizado_en = EXCLUDED.actualizado_en,
-            opinion = EXCLUDED.opinion, codigo_cnie = EXCLUDED.codigo_cnie, cnie = EXCLUDED.cnie, cnie_correcciones = EXCLUDED.cnie_correcciones`,
+            opinion = EXCLUDED.opinion, codigo_cnie = EXCLUDED.codigo_cnie, cnie = EXCLUDED.cnie, cnie_correcciones = EXCLUDED.cnie_correcciones, ruta = EXCLUDED.ruta`,
         [
           r.folio, r.ciudadanoId, r.incidenteId, r.codigoCnie, r.prioridad, r.corporacionSugerida, r.ubicacion.lng, r.ubicacion.lat,
           r.ubicacion.precisionMetros ?? null, r.ubicacion.referencia ?? null, r.municipioClave, r.cadId, r.folioCad ?? null,
@@ -295,6 +296,7 @@ export class AlmacenPostgres extends Almacen {
           r.escenarioId ?? null, JSON.stringify(r.cuestionario), JSON.stringify(r.canalizacion),
           r.identidad ?? 'completa', r.alias ?? null, r.opinion ? JSON.stringify(r.opinion) : null,
           r.cnie ? JSON.stringify(r.cnie) : null, JSON.stringify(r.correccionesCnie ?? []),
+          r.ruta ? JSON.stringify(r.ruta) : null,
         ],
       );
 
@@ -415,6 +417,19 @@ export class AlmacenPostgres extends Almacen {
       ...(f.migracion && { migracion: f.migracion }),
       creadoEn: iso(f.creado_en)!, actualizadoEn: iso(f.actualizado_en)!,
     }));
+  }
+
+  async disponibilidades() {
+    const { rows } = await this.q('SELECT * FROM disponibilidad_cad ORDER BY cad_id');
+    return rows.map((f): DisponibilidadCad => ({ cadId: f.cad_id, sinOperador: f.sin_operador, nota: f.nota, en: iso(f.en)!, por: f.por }));
+  }
+
+  async guardarDisponibilidad(d: DisponibilidadCad) {
+    await this.q(
+      `INSERT INTO disponibilidad_cad (cad_id, sin_operador, nota, en, por) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (cad_id) DO UPDATE SET sin_operador = EXCLUDED.sin_operador, nota = EXCLUDED.nota, en = EXCLUDED.en, por = EXCLUDED.por`,
+      [d.cadId, d.sinOperador, d.nota, d.en, d.por],
+    );
   }
 
   async guardarRegistroCad(r: RegistroCad) {

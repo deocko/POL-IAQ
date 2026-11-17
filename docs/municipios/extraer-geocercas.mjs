@@ -59,7 +59,7 @@ const salida = `/**
  * jurisdicción simplificado (Douglas-Peucker, ${TOLERANCIA}° ≈ 100 m), en [lng, lat] WGS84.
  * Fuente: Marco Geoestadístico de INEGI 2022, versión GeoJSON de CONABIO
  * (${FUENTE_URL}), SHA-256 ${sha256}.
- * Antes de producción: validar cada polígono con su municipio y con el C5.
+ * Antes de producción: validar cada polígono con su municipio y con el CQ CIAS.
  */
 export const FUENTE_GEOCERCAS = { url: '${FUENTE_URL}', sha256: '${sha256}', marco: 'INEGI Marco Geoestadístico 2022 (vía CONABIO)', toleranciaGrados: ${TOLERANCIA} } as const;
 

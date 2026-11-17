@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AltaCadSchema, CAD_ESTATAL_ID, CAD_IDS, CASOS_PRUEBA_CAD, MUNICIPIOS_QRO, casosPendientes, cerrarMes, claveCompleta, csvSesnsp, enrutarPorUbicacion,
   estadistica, estadisticaPublica, generarFolio, ipPermitida, medirTiempos, municipioEn, municipioPorClave, puntoEnPoligono, rangoPeriodo, tipoUnidadDe, xlsxSesnsp,
-  incidenteCnie, type FilaEstadistica,
+  incidenteCnie, type FilaEstadistica, ACTOR_ESTADO, nombreDeCad, puntoInterior as puntoDentro, resumirTiempos, textoRespaldo,
 } from './index';
 
 const CLAVES = {
@@ -160,5 +160,30 @@ describe('estadística y reporte mensual al SESNSP', () => {
     const xlsx = xlsxSesnsp(c);
     expect([...xlsx.slice(0, 4)]).toEqual([0x50, 0x4b, 0x03, 0x04]);
     expect(new TextDecoder().decode(xlsx)).toContain('xl/worksheets/sheet3.xml');
+  });
+});
+
+describe('respaldo estatal (CQ CIAS)', () => {
+  const sjr = puntoDentro(municipioPorClave('22016')!.geocerca)!;
+  const qro = puntoDentro(municipioPorClave('22014')!.geocerca)!;
+  it('anónimo va por el 089; sin conectar o sin capacidad, al CQ CIAS con su motivo; con capacidad, a su CAD', () => {
+    expect(nombreDeCad(CAD_ESTATAL_ID)).toBe('CQ CIAS');
+    expect(enrutarPorUbicacion(qro.lat, qro.lng, undefined, undefined, { anonimo: true })).toMatchObject({ cadId: CAD_ESTATAL_ID, motivo: 'anonimo_089', canal: '089' });
+    expect(enrutarPorUbicacion(sjr.lat, sjr.lng)).toMatchObject({ cadId: CAD_ESTATAL_ID, motivo: 'municipio_sin_conectar', canal: '911' });
+    const sinCap = enrutarPorUbicacion(qro.lat, qro.lng, undefined, undefined, { capacidad: () => 'sin operador disponible' });
+    expect(sinCap).toMatchObject({ cadId: CAD_ESTATAL_ID, motivo: 'sin_capacidad', detalle: 'sin operador disponible' });
+    expect(textoRespaldo(sinCap)).toBe('Atiende CQ CIAS — municipio sin capacidad (sin operador disponible)');
+    expect(enrutarPorUbicacion(qro.lat, qro.lng, undefined, undefined, { capacidad: () => null })).toMatchObject({ cadId: 'cad-queretaro', motivo: null });
+    expect(enrutarPorUbicacion(19, -90)).toMatchObject({ municipio: null, motivo: 'fuera_de_queretaro' });
+  });
+  it('las medianas solo cuentan etapas terminadas: no cambian con el reloj', () => {
+    const h = [{ estado: 'recibido' as const, en: '2026-09-05T18:00:00Z' }, { estado: 'validado' as const, en: '2026-09-05T18:01:00Z' }, { estado: 'asignado' as const, en: '2026-09-05T18:03:00Z' }];
+    const a = resumirTiempos([medirTiempos(h, 'alta', Date.parse('2026-09-05T18:10:00Z'))]);
+    const b = resumirTiempos([medirTiempos(h, 'alta', Date.parse('2026-09-05T19:10:00Z'))]);
+    expect(a).toEqual(b);
+    expect(a.map((x) => x.medianaSegundos)).toEqual([60, 120, null, null, null]);
+  });
+  it('el actor 19 (Estado) tiene ámbito pero no clave ni regla de enrutado', () => {
+    expect(ACTOR_ESTADO).toMatchObject({ nombre: 'Estado', ambito: 'Accidentes estatales y tramos estatales', clave: null });
   });
 });

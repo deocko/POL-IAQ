@@ -6,7 +6,7 @@ import './consola.css';
 import {
   buscarCnie, duracionTexto, estimarRuta, etiquetaCnie, incidenteCnie, nombreLegible, subtipoPermiteAnonimo, type GrupoCnie, type IncidenteCnie, type TiempoEtapa,
   puedeDespachar, etaSuperaMeta,
-  municipioPorClave,
+  municipioPorClave, NOMBRE_RESPALDO_ESTATAL, TEXTO_ANONIMA_089,
 } from '@pol-iaq/shared/movil';
 import { Mapa } from '../../lib/mapa/Mapa';
 import { SelectorTema } from '../../lib/tema';
@@ -237,6 +237,7 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
                 {!esFinal(r.estado) && <ChipLlegada t={r.tiempos.llegada} />}
               </div>
               <div className="suave c-pequeno">{`${r.folio} · ${nombreCad(r.cadId)}`}</div>
+              {r.ruta?.canal === '089' ? <div className="c-pequeno c-respaldo">{TEXTO_ANONIMA_089}</div> : r.respaldo && <div className="c-pequeno c-respaldo">{r.respaldo}</div>}
               {r.escalaAlC5En && <Cuenta hasta={r.escalaAlC5En} ahora={ahora} />}
             </button>
           ))}
@@ -254,7 +255,7 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
 
 function Cuenta({ hasta, ahora }: { hasta: string; ahora: number }) {
   const s = Math.round((new Date(hasta).getTime() - ahora) / 1000);
-  return <div className="c-cuenta">{s > 0 ? `Sin acuse: se escala al C5 en ${s} s` : 'Escalando al C5…'}</div>;
+  return <div className="c-cuenta">{s > 0 ? `Sin acuse: se escala al ${NOMBRE_RESPALDO_ESTATAL} en ${s} s` : `Escalando al ${NOMBRE_RESPALDO_ESTATAL}…`}</div>;
 }
 
 function Detalle({
@@ -315,8 +316,11 @@ function Detalle({
           {r.escenarioId && <span className="c-chip">Acceso rápido de lugar guardado</span>}
           <span className="c-chip" data-testid="municipio-clave" title="Clave INEGI del municipio donde ocurre">{r.municipioClave ? `Municipio ${r.municipioClave} · ${municipioPorClave(r.municipioClave)?.nombre ?? ''}` : 'Fuera de Querétaro'}</span>
           <span className="c-chip" data-testid="prioridad-operativa">{`Prioridad operativa (respuesta): ${r.prioridad}`}</span>
+          {r.ruta?.canal === '089' && <span className="c-chip c-chip-aviso" data-testid="canal">{TEXTO_ANONIMA_089}</span>}
           {r.automatico && <span className="c-chip c-chip-neutro">Demo automática</span>}
         </div>
+        {r.respaldo && <p className="c-respaldo" data-testid="respaldo">{r.respaldo}</p>}
+        {r.ruta && r.ruta.cadOrigen !== r.cadId && <p className="suave c-pequeno" data-testid="cad-origen">{`Se creó para ${nombreCad(r.ruta.cadOrigen)}; hoy lo atiende ${nombreCad(r.cadId)}.`}</p>}
         {r.cerradoPorDemo && <p className="c-nota c-pequeno">Lo cerró la demo automática para acelerar el recorrido. En el servicio real, el reporte lo cierra el operador con “Cerrar como atendido”.</p>}
         {r.escalaAlC5En && <Cuenta hasta={r.escalaAlC5En} ahora={ahora} />}
       </div>
@@ -336,7 +340,7 @@ function Detalle({
           <h3>Reportante</h3>
           {r.reportante ? (
             <>
-              <div className="c-linea"><span>{r.reportante.nombre}</span>{r.reportante.identidad && r.reportante.identidad !== 'completa' && <span className="c-chip">{IDENTIDAD[r.reportante.identidad]}</span>}</div>
+              <div className="c-linea"><span>{r.reportante.identidad === 'anonimo' ? TEXTO_ANONIMA_089 : r.reportante.nombre}</span>{r.reportante.identidad && r.reportante.identidad !== 'completa' && <span className="c-chip">{IDENTIDAD[r.reportante.identidad]}</span>}</div>
               {r.reportante.identidad === 'completa' || !r.reportante.identidad
                 ? <a href={`tel:${r.reportante.telefono}`}>{r.reportante.telefono}</a>
                 : <div className="suave c-pequeno" data-testid="telefono-oculto">{`${r.reportante.telefono ? `Teléfono oculto, termina en ${r.reportante.telefono.slice(-4)}` : 'Sin teléfono'}. Contesta por el chat del folio.`}</div>}

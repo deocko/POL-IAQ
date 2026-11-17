@@ -128,7 +128,7 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
     this.almacen.aparte(() => {
       const t = setTimeout(() => {
         this.temporizadores.delete(t);
-        void this.escalarSiNoAcuso(folio, cadId, ciudadano, escenario).catch((err) => this.log.error(`${folio}: no se pudo escalar al C5: ${(err as Error).message}`));
+        void this.escalarSiNoAcuso(folio, cadId, ciudadano, escenario).catch((err) => this.log.error(`${folio}: no se pudo escalar al CQ CIAS: ${(err as Error).message}`));
       }, this.config.esperaAcuseSeg * 1000);
       t.unref();
       this.temporizadores.add(t);
@@ -140,7 +140,7 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
     await this.almacen.conReporte(folio, async () => {
       const r = await this.almacen.reporte(folio);
       if (!r || r.folioCad || r.cadId !== cadId || r.estado !== 'recibido') return;
-      this.log.warn(`${folio}: ${cadId} no acusó en ${this.config.esperaAcuseSeg}s, se escala al C5`);
+      this.log.warn(`${folio}: ${cadId} no acusó en ${this.config.esperaAcuseSeg}s, se escala al CQ CIAS`);
       await this.almacen.auditar({ actor: 'sistema', accion: 'escalado_c5_sin_acuse', folio, detalle: { cadId } });
       r.cadId = CAD_ESTATAL_ID;
       await this.enviarCreado(r, ciudadano, escenario);

@@ -53,7 +53,7 @@ export class EstadisticaController {
   // ── Reporte mensual al SESNSP (solo supervisión: es estatal) ─────────────
 
   private supervision(op: OperadorSesion) {
-    if (!esSupervision(op)) throw new ForbiddenException({ codigo: 'solo_supervision', mensaje: 'El reporte al SESNSP lo genera supervisión (C5).' });
+    if (!esSupervision(op)) throw new ForbiddenException({ codigo: 'solo_supervision', mensaje: 'El reporte al SESNSP lo genera supervisión (CQ CIAS).' });
   }
 
   private async delMes(mes: string): Promise<FilaEstadistica[]> {
@@ -93,7 +93,7 @@ export class EstadisticaController {
     return {
       mesActual: mesLocal(new Date().toISOString()),
       cierres: cierres.map((c) => ({ mes: c.mes, cerradoEn: c.cerradoEn, cerradoPor: c.cerradoPor, filas: c.filas.length, total: c.filas.reduce((n, f) => n + f.total, 0), ajustes: c.ajustes.length })),
-      nota: 'Columnas según lo pedido por POL-IAQ; el formato oficial del CNI/SESNSP está por confirmar con el C5.',
+      nota: 'Columnas según lo pedido por POL-IAQ; el formato oficial del CNI/SESNSP está por confirmar con el CQ CIAS.',
     };
   }
 
@@ -128,7 +128,7 @@ export class EstadisticaController {
     this.validarMes(mes);
     const cerrado = (await this.almacen.cierresSesnsp()).find((x) => x.mes === mes);
     const c = cerrado ?? (await this.borrador(mes, req.operador.usuario));
-    const sufijo = cerrado ? '' : '-borrador';
+    const sufijo = cerrado ? '-cerrado' : '-borrador';
     if (archivo === 'reporte.csv') return descargar(res, `sesnsp-${mes}${sufijo}.csv`, 'text/csv; charset=utf-8', csvSesnsp(c));
     if (archivo === 'ajustes.csv') return descargar(res, `sesnsp-${mes}-ajustes${sufijo}.csv`, 'text/csv; charset=utf-8', csvAjustesSesnsp(c));
     if (archivo === 'reporte.xlsx') return descargar(res, `sesnsp-${mes}${sufijo}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xlsxSesnsp(c));

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { ESTADOS_FINALES, PERFIL_VACIO, type CierreMensual, type Perfil } from '@pol-iaq/shared';
 import { Almacen } from './almacen';
-import type { Auditoria, Ciudadano, Envio, Otp, RegistroCad, Reporte, UnidadRegistrada } from './modelos';
+import type { Auditoria, Ciudadano, Envio, Otp, DisponibilidadCad, RegistroCad, Reporte, UnidadRegistrada } from './modelos';
 
 const copia = <T>(x: T): T => structuredClone(x);
 
@@ -135,6 +135,13 @@ export class AlmacenMemoria extends Almacen {
   }
   async guardarRegistroCad(r: RegistroCad) {
     this.registros.set(r.cadId, copia(r));
+  }
+  private disponibilidad = new Map<string, DisponibilidadCad>();
+  async disponibilidades() {
+    return [...this.disponibilidad.values()].map(copia);
+  }
+  async guardarDisponibilidad(d: DisponibilidadCad) {
+    this.disponibilidad.set(d.cadId, copia(d));
   }
   async unidadesRegistradas() {
     return [...this.unidades.values()].map(copia);

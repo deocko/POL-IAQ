@@ -54,7 +54,7 @@ export async function certificar(o: OpcionesCertificacion): Promise<Record<CasoP
   const sup = (await api<{ token: string }>('/v1/operador/sesion', { cuerpo: o.supervisor })).body.token;
   if (!sup) throw new Error('No se pudo entrar como supervisión: revisa usuario y clave.');
   const cad = (await api<{ poligono: [number, number][] | null; estado: string | null; modo: string | null }>(`/v1/admin/cads/${o.cadId}`, { token: sup })).body;
-  if (!cad.poligono) throw new Error(`${o.cadId} no tiene polígono (¿es el C5?).`);
+  if (!cad.poligono) throw new Error(`${o.cadId} no tiene polígono (¿es el CQ CIAS?).`);
   const punto = puntoInterior(cad.poligono);
   if (!punto) throw new Error('No se encontró un punto dentro de la geocerca.');
 
@@ -86,7 +86,7 @@ export async function certificar(o: OpcionesCertificacion): Promise<Record<CasoP
   const conAcuse = await esperar(a, (v) => !!v.folioCad || v.cadId !== o.cadId, o.esperaAcuseSeg + 2);
   const tAcuse = conAcuse && (Date.parse(conAcuse.historial.find((h) => h.estado === 'validado')?.en ?? '') - Date.parse(conAcuse.creadoEn)) / 1000;
   anotar('acuse', !!conAcuse?.folioCad && conAcuse.cadId === o.cadId && tAcuse !== null && tAcuse <= o.esperaAcuseSeg,
-    conAcuse?.folioCad ? `folio del CAD ${conAcuse.folioCad} en ${tAcuse?.toFixed(1)} s (límite ${o.esperaAcuseSeg} s)` : 'sin acuse a tiempo (el folio se escaló al C5)');
+    conAcuse?.folioCad ? `folio del CAD ${conAcuse.folioCad} en ${tAcuse?.toFixed(1)} s (límite ${o.esperaAcuseSeg} s)` : 'sin acuse a tiempo (el folio se escaló al CQ CIAS)');
   const asignado = await esperar(a, (v) => !!v.unidad);
   anotar('asignacion', !!asignado?.unidad, asignado?.unidad ? `unidad ${asignado.unidad.unidadId}` : 'sin unidad asignada');
   const enCamino = await esperar(a, (v) => v.unidad?.lat !== undefined && paso(v, 'en_camino'));

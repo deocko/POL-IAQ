@@ -47,12 +47,14 @@ export interface TiempoEtapa {
   estado: EstadoEtapa;
   /** La etapa empezó y terminó en el mismo paso que la anterior: no se mide (no cuenta como 0 s). */
   simultanea?: true;
+  /** La etapa sigue abierta: `segundos` corre con el reloj. No entra en promedios, medianas ni % en meta. */
+  abierta?: true;
 }
 
 export interface TiemposReporte {
   etapas: TiempoEtapa[];
   /** Desde el alta hasta la llegada (o hasta ahora si sigue en curso). */
-  llegada: { segundos: number | null; metaSegundos: number; estado: EstadoEtapa };
+  llegada: { segundos: number | null; metaSegundos: number; estado: EstadoEtapa; abierta?: true };
   metasVersion: string;
 }
 
@@ -82,7 +84,7 @@ export function medirTiempos(
     const meta = metas.etapas[e.id][prioridad];
     const inicio = primera.get(e.desde) ?? finAnterior;
     const fin = primera.get(e.hasta);
-    let r: Pick<TiempoEtapa, 'segundos' | 'estado' | 'simultanea'>;
+    let r: Pick<TiempoEtapa, 'segundos' | 'estado' | 'simultanea' | 'abierta'>;
     if (inicio !== undefined && fin !== undefined && fin - inicio < MISMO_PASO_MS) {
       // La etapa empezó y terminó en el mismo paso (p. ej. "recibir" asigna sola la unidad más cercana, o se
       // marcó la llegada sin haber salido): no hay tiempo de esa etapa que medir. Contarla como 0 s bajaría
@@ -93,7 +95,7 @@ export function medirTiempos(
       r = { segundos: s, estado: s <= meta ? 'cumplida' : 'excedida' };
     } else if (inicio !== undefined && !terminado) {
       const s = Math.max(0, Math.round((ahora - inicio) / 1000));
-      r = { segundos: s, estado: s > meta ? 'excedida' : s > meta * 0.75 ? 'en_riesgo' : 'en_curso' };
+      r = { segundos: s, estado: s > meta ? 'excedida' : s > meta * 0.75 ? 'en_riesgo' : 'en_curso', abierta: true };
     } else {
       r = { segundos: null, estado: terminado ? 'omitida' : 'pendiente' };
     }
@@ -109,7 +111,7 @@ export function medirTiempos(
     total = { segundos: s, metaSegundos: metaLlegada, estado: s <= metaLlegada ? 'cumplida' : 'excedida' };
   } else if (!terminado) {
     const s = Math.round((ahora - inicioReporte) / 1000);
-    total = { segundos: s, metaSegundos: metaLlegada, estado: s > metaLlegada ? 'excedida' : s > metaLlegada * 0.75 ? 'en_riesgo' : 'en_curso' };
+    total = { segundos: s, metaSegundos: metaLlegada, estado: s > metaLlegada ? 'excedida' : s > metaLlegada * 0.75 ? 'en_riesgo' : 'en_curso', abierta: true };
   } else {
     total = { segundos: null, metaSegundos: metaLlegada, estado: 'omitida' };
   }
@@ -138,9 +140,10 @@ export function resumirTiempos(mediciones: TiemposReporte[]): ResumenEtapa[] {
   for (const m of mediciones) {
     m.etapas.forEach((e, i) => {
       if (e.simultanea) filas[i].sinMedir++;
-      else if (e.segundos !== null && (e.estado === 'cumplida' || e.estado === 'excedida')) filas[i].valores.push({ s: e.segundos, ok: e.estado === 'cumplida' });
+      // Solo etapas terminadas: una abierta cambiaría con el reloj (y el reporte no sería reproducible).
+      else if (!e.abierta && e.segundos !== null && (e.estado === 'cumplida' || e.estado === 'excedida')) filas[i].valores.push({ s: e.segundos, ok: e.estado === 'cumplida' });
     });
-    if (m.llegada.segundos !== null && (m.llegada.estado === 'cumplida' || m.llegada.estado === 'excedida')) filas[ETAPAS.length].valores.push({ s: m.llegada.segundos, ok: m.llegada.estado === 'cumplida' });
+    if (!m.llegada.abierta && m.llegada.segundos !== null && (m.llegada.estado === 'cumplida' || m.llegada.estado === 'excedida')) filas[ETAPAS.length].valores.push({ s: m.llegada.segundos, ok: m.llegada.estado === 'cumplida' });
   }
   return filas.map(({ id, nombre, valores, sinMedir }) => {
     if (!valores.length) return { id, nombre, n: 0, promedioSegundos: null, medianaSegundos: null, enMeta: null, sinMedir };

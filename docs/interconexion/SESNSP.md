@@ -1,4 +1,4 @@
-# Reporte mensual al SESNSP (CNI) y al C5
+# Reporte mensual al SESNSP (CNI) y al CQ CIAS
 
 Consola → pestaña **SESNSP mensual** (solo supervisión), o:
 
@@ -17,7 +17,19 @@ cnie_incidente, cnie_incidente_nombre, total_reportes, procedentes, improcedente
 mediana_recepcion_s, mediana_asignacion_s, mediana_salida_s, mediana_traslado_s, mediana_llegada_s`
 
 Procedente: el folio se atendió o se atiende. Improcedente o cancelado: estado `improcedente` o
-`cancelado`. Las medianas se calculan con el historial de estados, en hora de Querétaro.
+`cancelado`. Las medianas se calculan con el historial de estados, en hora de Querétaro, y solo con
+etapas terminadas: una etapa en curso no cuenta (antes se medía hasta «ahora» y la mediana del borrador
+subía sola con el reloj).
+
+## Borrador y cierre
+
+Mientras el mes no se cierra, la vista dice «Borrador: el mes sigue en curso» y los archivos se llaman
+`sesnsp-AAAA-MM-borrador.csv|xlsx`. Ya cerrado dice «Cerrado el …» y se llaman
+`sesnsp-AAAA-MM-cerrado.csv|xlsx`. Dos descargas de un mes cerrado son idénticas byte a byte.
+
+En la demo hay un botón «Probar el cierre (solo demo)» que cierra el mes en curso para poder verlo
+(la demo solo guarda reportes recientes); el cierre queda marcado como de prueba. El API real solo
+cierra meses terminados.
 
 ## Cierre congelado
 
@@ -30,4 +42,4 @@ Si después un folio de un mes cerrado cambia (estado, CNIE o municipio), la dif
 ## Pendiente
 
 El acomodo de columnas sigue lo pedido en el Mensaje 9. **El formato oficial de captura del CNI
-debe confirmarse con el C5 antes del primer envío.**
+debe confirmarse con el CQ CIAS antes del primer envío.**

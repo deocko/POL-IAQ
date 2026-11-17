@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: |
     API pública de POL-IAQ para la App Ciudadano (Android, iOS y Web) y API de
-    integración con los CAD municipales (Querétaro, Corregidora, El Marqués) y el C5.
+    integración con los CAD municipales (Querétaro, Corregidora, El Marqués) y el CQ CIAS.
 
     Convenciones:
     - JSON en UTF-8; fechas en ISO 8601 UTC; coordenadas WGS84 (lat, lng).
@@ -159,8 +159,8 @@ paths:
       summary: Crea un reporte de emergencia
       operationId: crearReporte
       description: |
-        Asigna el folio unificado y enruta por geocerca al CAD del municipio o al C5.
-        Si el CAD no acusa recibo en 30 s, el reporte se escala al C5 conservando el folio.
+        Asigna el folio unificado y enruta por geocerca al CAD del municipio o al CQ CIAS.
+        Si el CAD no acusa recibo en 30 s, el reporte se escala al CQ CIAS conservando el folio.
         Límite: 5 reportes por ciudadano por hora (configurable).
       security: [{ ciudadano: [] }]
       requestBody:
@@ -435,7 +435,7 @@ paths:
       operationId: bandejaOperador
       security: [{ operador: [] }]
       parameters: [{ name: todos, in: query, schema: { type: string, enum: ['1'] } }]
-      responses: { '200': { description: '`{ reportes: VistaOperador[] }` con reportante, transcripción, canalización, evidencias firmadas, `operable`, `transiciones` y `escalaAlC5En`' } }
+      responses: { '200': { description: '`{ reportes: VistaOperador[] }` con reportante, transcripción, canalización, evidencias firmadas, `operable`, `transiciones`, `escalaAlC5En` (nombre interno), `ruta` (cadOrigen, motivo, detalle, canal) y `respaldo` (texto «Atiende CQ CIAS — …» o null)' } }
   /v1/operador/reportes/{folio}:
     get:
       tags: [Consola de operador]
@@ -497,7 +497,7 @@ paths:
   /v1/admin/cads:
     get:
       tags: [Municipios]
-      summary: Los 19 CAD (18 municipios y C5) con modo, estado, conexión y casos de prueba. Solo supervisión.
+      summary: Los 19 CAD (18 municipios y CQ CIAS) con modo, estado, conexión y casos de prueba. Solo supervisión.
       operationId: listaCads
       security: [{ operador: [] }]
       responses: { '200': { description: OK } }
@@ -581,9 +581,34 @@ paths:
     get:
       tags: [Reportes por municipio]
       summary: Un renglón por folio, sin datos personales (mismos filtros)
+      description: >
+        Columnas folio, fecha_local, municipio_clave, municipio, cad_origen, cad_responsable_actual
+        (tras escalamiento o transferencia), motivo_respaldo, canal (911 o 089), estado, prioridad_operativa,
+        cnie_*, corporacion, unidad, tiempos por etapa (solo etapas terminadas), llegada_meta_s,
+        llegada_en_meta y queja.
       operationId: foliosCsv
       security: [{ operador: [] }]
       responses: { '200': { description: text/csv } }
+  /v1/operador/cads/{cadId}/disponibilidad:
+    post:
+      tags: [Municipios]
+      summary: Marca un CAD sin operador disponible (o de nuevo disponible). Mientras esté sin capacidad, los folios nuevos los atiende el CQ CIAS.
+      operationId: disponibilidad
+      security: [{ operador: [] }]
+      parameters: [{ name: cadId, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sinOperador]
+              properties:
+                sinOperador: { type: boolean }
+                nota: { type: string, maxLength: 200 }
+      responses:
+        '200': { description: 'Disponibilidad guardada (queda en la auditoría como cad_sin_operador o cad_con_operador)' }
+        '403': { description: 'cad_ajeno: el operador no ve ese CAD' }
   /v1/operador/sesnsp:
     get:
       tags: [Reportes por municipio]

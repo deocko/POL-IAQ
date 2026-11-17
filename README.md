@@ -1,6 +1,6 @@
 # POL-IAQ
 
-Plataforma ciudadana para reportar emergencias a las policías municipales de Querétaro, con seguimiento en tiempo real bajo un **folio unificado** e integración por API con los CAD municipales y el C5 estatal.
+Plataforma ciudadana para reportar emergencias a las policías municipales de Querétaro, con seguimiento en tiempo real bajo un **folio unificado** e integración por API con los CAD municipales y el CQ CIAS.
 
 **Municipios piloto:** Querétaro (014), Corregidora (006) y El Marqués (011).
 
@@ -14,9 +14,9 @@ Plataforma ciudadana para reportar emergencias a las policías municipales de Qu
 | API (`services/api`) | **No está publicado** | Simulado en el navegador con la misma lógica de `@pol-iaq/shared` |
 | CAD simulado (`services/cad-simulator`) | **No está publicado** | Simulado en el navegador: recibe, asigna la unidad más cercana, la mueve por GPS simulado hasta el lugar y cierra (con reloj ×1 o ×10) |
 
-Recorrido: abre `/demo/`, regístrate con cualquier teléfono de 10 dígitos (código `000000`, no se envía ningún SMS), toca lo que pasa y luego **Enviar reporte** (2 toques). Recibes un folio como `QRO-014-2026-000001` y ves llegar la unidad en el mapa. En **Perfil** eliges quién atiende: "Un operador en la consola" (como en el servicio real: abre `/consola/` en otra pestaña del **mismo navegador** con `operador`/`operador`, recibe el reporte y ciérralo con "Cerrar como atendido") o "Demo automática", que además cierra sola el reporte para acelerar el recorrido y lo indica en pantalla. Si nadie recibe un reporte en 90 s, se escala al C5 con el mismo folio. Las ubicaciones de prueba cubren los tres municipios piloto y una fuera del piloto (San Juan del Río → folio `QRO-000-…` del C5).
+Recorrido: abre `/demo/`, regístrate con cualquier teléfono de 10 dígitos (código `000000`, no se envía ningún SMS), toca lo que pasa y luego **Enviar reporte** (2 toques). Recibes un folio como `QRO-014-2026-000001` y ves llegar la unidad en el mapa. En **Perfil** eliges quién atiende: "Un operador en la consola" (como en el servicio real: abre `/consola/` en otra pestaña del **mismo navegador** con `operador`/`operador`, recibe el reporte y ciérralo con "Cerrar como atendido") o "Demo automática", que además cierra sola el reporte para acelerar el recorrido y lo indica en pantalla. Si nadie recibe un reporte en 90 s, se escala al CQ CIAS con el mismo folio. Las ubicaciones de prueba cubren los tres municipios piloto y una fuera del piloto (San Juan del Río → folio `QRO-000-…` del CQ CIAS).
 
-Por qué así: la demo se publica en GitHub Pages (gratis, en el mismo repo, sin cuentas ni llaves de terceros). Pages solo sirve archivos estáticos, así que el API NestJS y el CAD simulado no pueden correr ahí: con `NEXT_PUBLIC_DEMO=1`, `apps/web/lib/demo/motor.ts` hace en el navegador lo mismo que ellos (folio, geocercas, máquina de estados, cuestionario, canalización, escalamiento al C5). Los datos viven en el `localStorage` de quien abre la demo, se comparten entre pestañas de ese navegador y se borran con "Borrar datos de la demo". **Solo datos de prueba: nada sale del navegador ni llega a ningún CAD o policía.** Para probar los servicios reales, usa el arranque rápido de abajo.
+Por qué así: la demo se publica en GitHub Pages (gratis, en el mismo repo, sin cuentas ni llaves de terceros). Pages solo sirve archivos estáticos, así que el API NestJS y el CAD simulado no pueden correr ahí: con `NEXT_PUBLIC_DEMO=1`, `apps/web/lib/demo/motor.ts` hace en el navegador lo mismo que ellos (folio, geocercas, máquina de estados, cuestionario, canalización, escalamiento al CQ CIAS). Los datos viven en el `localStorage` de quien abre la demo, se comparten entre pestañas de ese navegador y se borran con "Borrar datos de la demo". **Solo datos de prueba: nada sale del navegador ni llega a ningún CAD o policía.** Para probar los servicios reales, usa el arranque rápido de abajo.
 
 Publicación: el flujo `.github/workflows/demo-pages.yml` construye `pnpm --filter @pol-iaq/web build:demo` en cada push a `main` y publica `apps/web/out` en la rama `gh-pages`. Para la vista local idéntica: `pnpm --filter @pol-iaq/web build:demo` y sirve `apps/web/out` bajo `/POL-IAQ/`.
 
@@ -25,7 +25,7 @@ Publicación: el flujo `.github/workflows/demo-pages.yml` construye `pnpm --filt
 | Carpeta | Qué es | Estado |
 | --- | --- | --- |
 | `packages/shared` | Tipos, catálogo semilla, folio, máquina de estados, geocercas, contrato de eventos CAD y firma HMAC | Con pruebas |
-| `services/api` | API NestJS: registro con OTP por SMS y aceptación legal, reportes, evidencia con hash, webhooks CAD, escalamiento al C5, seguimiento por WebSocket, avisos por SMS | Con pruebas de punta a punta en memoria y en PostgreSQL |
+| `services/api` | API NestJS: registro con OTP por SMS y aceptación legal, reportes, evidencia con hash, webhooks CAD, escalamiento al CQ CIAS, seguimiento por WebSocket, avisos por SMS | Con pruebas de punta a punta en memoria y en PostgreSQL |
 | `services/cad-simulator` | CAD simulado: acusa, asigna unidad, la mueve y cierra el reporte (contrato v1 o formato nativo de referencia) | Listo para demos |
 | `services/cad-adaptador` | Adaptador de referencia POL-IAQ ⇄ CAD municipal (Modo A), alojado o instalado en el municipio, y la suite de los 8 casos de certificación | Con prueba de punta a punta |
 | `apps/ciudadano` | App Expo (Android/iOS/Web): registro, botón de asistencia directa, despachadora 911 virtual (voz/texto), lugares guardados con accesos rápidos, catálogo, foto con hash, seguimiento con mapa de la unidad en vivo y chat | Scaffold; compila Android y web |
@@ -85,7 +85,7 @@ TEST_DATABASE_URL=postgres://poliaq:poliaq-dev@localhost:5432/poliaq_test pnpm t
 
 ## Catálogo Nacional de Incidentes de Emergencia (CNIE V 3.0)
 
-Cada reporte lleva su código oficial del CNIE V 3.0 (junio 2024): tipo, subtipo e incidente con su prioridad. Los datos se generan del PDF oficial (`docs/cnie/CNIE_V_3.0_Oficial_junio_24.pdf`) y están versionados en `packages/shared/src/cnie-v3.ts`: 7 tipos, 26 subtipos (25 vigentes; el 502 está de baja en el PDF y sus casos pasaron al 312), 361 incidentes vigentes y 12 códigos retirados aparte. La despachadora hace a lo más una pregunta para afinar el código, el API rechaza códigos inexistentes o retirados, el CAD y el C5 reciben la clasificación, y el operador puede corregirla con auditoría. Mapeo, reglas de anonimato y cómo regenerar en [`docs/cnie`](docs/cnie/README.md).
+Cada reporte lleva su código oficial del CNIE V 3.0 (junio 2024): tipo, subtipo e incidente con su prioridad. Los datos se generan del PDF oficial (`docs/cnie/CNIE_V_3.0_Oficial_junio_24.pdf`) y están versionados en `packages/shared/src/cnie-v3.ts`: 7 tipos, 26 subtipos (25 vigentes; el 502 está de baja en el PDF y sus casos pasaron al 312), 361 incidentes vigentes y 12 códigos retirados aparte. La despachadora hace a lo más una pregunta para afinar el código, el API rechaza códigos inexistentes o retirados, el CAD y el CQ CIAS reciben la clasificación, y el operador puede corregirla con auditoría. Mapeo, reglas de anonimato y cómo regenerar en [`docs/cnie`](docs/cnie/README.md).
 
 ## Confianza y tiempo de respuesta
 
@@ -94,13 +94,13 @@ Cada reporte lleva su código oficial del CNIE V 3.0 (junio 2024): tipo, subtipo
 - **Asignación automática por cercanía**: al recibir un reporte se asigna la unidad libre más cercana por ruta (`AUTO_ASSIGN=off` lo apaga). La consola ofrece "Asignar la más cercana" y la lista de unidades ordenada por distancia y minutos. El operador ya no escribe la ETA.
 - **Ruta y ETA**: con `ROUTING_OSRM_URL` (un servidor OSRM propio) la ETA sale de la ruta real; sin él, de una estimación (línea recta × 1.4 a 35 km/h), marcada como estimada.
 - **GPS de las unidades (AVL)**: `POST /v1/cad/{cadId}/avl`, firmado igual que los demás eventos del CAD, recibe posiciones por lote; también `unidad.posicion`. La consola muestra el mapa de unidades libres y ocupadas, y el ciudadano ve su unidad moverse en el mapa.
-- **Tablero de tiempos** (`GET /v1/operador/tiempos`): mide recibido → validado → asignado → en camino → en sitio contra metas en minutos por prioridad. **Las metas actuales son provisionales** (`METAS_PROVISIONALES` en `packages/shared/src/tiempos.ts`, versión `2026.11-provisional.1`) y deben acordarse con los municipios y el C5. El ciudadano ve cuánto falta y el operador si se cumple la meta.
+- **Tablero de tiempos** (`GET /v1/operador/tiempos`): mide recibido → validado → asignado → en camino → en sitio contra metas en minutos por prioridad. **Las metas actuales son provisionales** (`METAS_PROVISIONALES` en `packages/shared/src/tiempos.ts`, versión `2026.11-provisional.1`) y deben acordarse con los municipios y el CQ CIAS. El ciudadano ve cuánto falta y el operador si se cumple la meta.
 - **Sin conexión**: la app guarda el reporte en una cola y lo envía sola al volver la red; si después de 60 s no se ha podido enviar, ofrece llamar al 911 (`packages/shared/src/cola.ts`).
 - **Modo claro y oscuro**: la web sigue el tema del sistema y permite elegir Claro, Oscuro o Auto.
-- **Hora**: la app y la consola muestran siempre la hora de Querétaro (`America/Mexico_City`, `apps/web/lib/hora.ts`), sin importar la zona del navegador. En la demo, «Acelerada ×10» solo acelera al CAD simulado y el avance de las unidades; las horas del historial son las reales y el acuse antes de escalar al C5 se cuenta en segundos reales. Los reportes de prueba se borran solos a las 6 h. La consola lleva un reloj con la hora actual de Querétaro en el encabezado.
+- **Hora**: la app y la consola muestran siempre la hora de Querétaro (`America/Mexico_City`, `apps/web/lib/hora.ts`), sin importar la zona del navegador. En la demo, «Acelerada ×10» solo acelera al CAD simulado y el avance de las unidades; las horas del historial son las reales y el acuse antes de escalar al CQ CIAS se cuenta en segundos reales. Los reportes de prueba se borran solos a las 6 h. La consola lleva un reloj con la hora actual de Querétaro en el encabezado.
 - **Tiempos**: una etapa que empieza y termina en el mismo paso (p. ej. «Recibir» asigna sola la unidad más cercana) no cuenta como 0 s: se marca «Mismo paso que la anterior» y no entra en el promedio ni la mediana de ninguna etapa. La bandeja escribe «Fuera de meta» en la tarjeta cuando la llegada pasó la meta.
 - **Versión de la demo**: cada build lleva su versión (commit y hora), visible en Perfil y en la barra de la consola, y publicada en `/version.json`. Si el navegador o la CDN sirven una página de un build anterior, la página se recarga una vez con la versión nueva (`apps/web/lib/version-script.ts`).
-- **Escalado al C5**: el C5 coordina a todo el estado, así que al recibir un reporte escalado asigna la unidad libre más cercana de cualquier CAD (`puedeDespachar`). Si la llegada estimada supera la meta, la consola lo advierte.
+- **Escalado al CQ CIAS**: el CQ CIAS coordina a todo el estado, así que al recibir un reporte escalado asigna la unidad libre más cercana de cualquier CAD (`puedeDespachar`). Si la llegada estimada supera la meta, la consola lo advierte.
 - **Un solo nombre por incidente**: `nombreCorto` del catálogo compartido es el mismo en la app ciudadana, la consola y el CAD.
 
 ## Identidad visual y experiencia
@@ -115,13 +115,13 @@ Cada reporte lleva su código oficial del CNIE V 3.0 (junio 2024): tipo, subtipo
 
 - Los CAD en `CONSOLA_CADS` (p. ej. `CONSOLA_CADS=cad-el-marques`) no reciben webhook: el operador ve su bandeja en tiempo real (namespace `/operacion`), con la transcripción de la despachadora virtual, la canalización, las alertas y los datos del reportante, y despacha desde ahí: recibir, asignar unidad (la más cercana por ruta, con ETA calculada), en camino, en sitio, cerrar, improcedente, transferir a otro CAD y chatear con el ciudadano. Cada acción pasa por el mismo flujo que los eventos de un CAD (`EventosCadService`): auditoría, SMS y seguimiento en la app.
 - Los CAD con sistema propio (webhook) se ven en **solo lectura**.
-- Si nadie recibe el reporte en `CAD_ACK_TIMEOUT_SEC`, se escala al C5 igual que con un CAD integrado (la consola muestra la cuenta regresiva).
+- Si nadie recibe el reporte en `CAD_ACK_TIMEOUT_SEC`, se escala al CQ CIAS igual que con un CAD integrado (la consola muestra la cuenta regresiva).
 - Operadores en `OPERADORES_JSON` (clave con `pnpm --filter @pol-iaq/api hash-clave '<clave>'`), cada uno limitado a sus `cadIds` (`*` = supervisión). Fuera de producción existe `operador` / `operador`. Unidades en `UNIDADES_JSON` (en desarrollo hay unidades de ejemplo por CAD).
 - La web apunta al API con `NEXT_PUBLIC_API_URL` (por defecto `http://localhost:3000`).
 
 ## Municipios: interconexión, Modo A y Modo B
 
-Los 18 municipios de Querétaro tienen su `cadId` y su clave INEGI de 5 dígitos (22001–22018), que va en `municipioClave` y en todo reporte y exportación; el folio conserva su formato (`QRO-016-2026-000001`). Un reporte se enruta por geocerca: si el municipio no está conectado lo atiende el C5 con la clave del municipio.
+Los 18 municipios de Querétaro tienen su `cadId` y su clave INEGI de 5 dígitos (22001–22018), que va en `municipioClave` y en todo reporte y exportación; el folio conserva su formato (`QRO-016-2026-000001`). Un reporte se enruta por geocerca: si el municipio no está conectado lo atiende el CQ CIAS (Centro de Información y Análisis para la Seguridad de Querétaro, que opera el 911 y el 089) con la clave del municipio. También lo atiende cuando el municipio está sin capacidad (sin unidades en servicio o sin operador disponible) y cuando el reporte es anónimo (089). El motivo se ve en la consola, en el historial y en el CSV. El actor 19, el Estado (accidentes y tramos estatales), aparece en Municipios sin clave ni enrutado hasta que se decida.
 
 - **Modo A (CAD propio):** el municipio se conecta con el contrato v1, directo o con el adaptador de referencia ([`ADAPTADOR.md`](docs/interconexion/ADAPTADOR.md)). Antes de producción pasa los 8 casos en el ambiente de pruebas ([`ALTA-MUNICIPIO.md`](docs/interconexion/ALTA-MUNICIPIO.md)).
 - **Modo B (consola):** despacha desde la consola web con sus unidades registradas. Puede migrar a Modo A sin perder folios.
@@ -134,14 +134,14 @@ Los 18 municipios de Querétaro tienen su `cadId` y su clave INEGI de 5 dígitos
 
 ## Pendientes antes del piloto
 
-- Sustituir el protocolo provisional de la despachadora virtual por el Protocolo Nacional de Atención de Llamadas de Emergencia 9-1-1 vigente, validado con el C5 (`docs/protocolos`).
+- Sustituir el protocolo provisional de la despachadora virtual por el Protocolo Nacional de Atención de Llamadas de Emergencia 9-1-1 vigente, validado con el CQ CIAS (`docs/protocolos`).
 - Consola: cambiar los usuarios en configuración por SSO (OIDC) con segundo factor, y cargar el padrón real de unidades de cada municipio.
 - Decidir si "Persona sospechosa" (CNIE 30904, subtipo 309) puede seguir siendo anónima ([`docs/cnie`](docs/cnie/README.md)).
-- Validar con el C5 o con cada municipio los polígonos de INEGI 2022 (sobre todo en los límites) y confirmar el formato oficial del reporte mensual al SESNSP.
+- Validar con el CQ CIAS o con cada municipio los polígonos de INEGI 2022 (sobre todo en los límites) y confirmar el formato oficial del reporte mensual al SESNSP.
 - Trabajador de colas para la bandeja de salida y los temporizadores de acuse; Redis para WebSocket con varias instancias.
 - Contratar el proveedor de SMS (cuenta, remitente y registro de plantillas), Keycloak/OIDC, almacén de objetos con WORM y URLs prefirmadas (hoy la evidencia va en PostgreSQL).
-- Configurar el proxy de mTLS y las listas de IPs de cada CAD; conectores reales (sobre el adaptador de referencia) para los CAD de cada municipio y el C5.
+- Configurar el proxy de mTLS y las listas de IPs de cada CAD; conectores reales (sobre el adaptador de referencia) para los CAD de cada municipio y el CQ CIAS.
 - Revisión jurídica de `docs/legal` y convenios con cada municipio. La lista cerrada de lo que debe entregar jurídico (22 datos y 7 decisiones, con dónde va cada uno y en qué formato) está en [`docs/legal/PENDIENTES-JURIDICO.md`](docs/legal/PENDIENTES-JURIDICO.md); mientras tanto las páginas publicadas omiten cada dato faltante o lo sustituyen por una frase general (sin huecos ni datos inventados), con el aviso "Versión preliminar en revisión jurídica".
-- Acordar las metas de tiempo con los municipios y el C5; servidor de rutas (OSRM o proveedor) y fuente real de GPS de las unidades (CAD, proveedor de AVL o app de la unidad).
+- Acordar las metas de tiempo con los municipios y el CQ CIAS; servidor de rutas (OSRM o proveedor) y fuente real de GPS de las unidades (CAD, proveedor de AVL o app de la unidad).
 - Llevar a la app móvil la cola sin conexión, la identidad (seudónimo/anónimo) y la calificación, que hoy están en el API y en la demo web.
 - Llave de Google Maps para Android, proveedor de teselas para web y consola de operador.

@@ -5,8 +5,9 @@
  * alta de municipios (Modo A con CAD / Modo B con la consola), registro de unidades,
  * reportes por municipio y periodo (CSV y PDF) y el reporte mensual al SESNSP.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CORPORACIONES, MUNICIPIOS_QRO, TIPOS_UNIDAD, duracionTexto, type Grupo, type TipoUnidad } from '@pol-iaq/shared/movil';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { imprimirReporte } from './imprimir';
+import { ACTOR_ESTADO, CAD_ESTATAL_ID, CORPORACIONES, MUNICIPIOS_QRO, NOMBRE_RESPALDO_ESTATAL, NOMBRE_RESPALDO_ESTATAL_LARGO, TIPOS_UNIDAD, duracionTexto, type Grupo, type TipoUnidad } from '@pol-iaq/shared/movil';
 import { CORPORACION, DEMO, ErrorApi, ERRORES, api, guardarArchivo, type EstadisticaVista, type FiltroReportes, type ListaSesnsp, type MesSesnsp, type UnidadDisponible, type VistaCad, type Yo } from './consola';
 
 const mensajeDe = (e: unknown) => (e instanceof ErrorApi ? ERRORES[e.codigo] ?? e.mensaje ?? `Error (${e.codigo})` : 'Sin conexión con el API.');
@@ -54,28 +55,46 @@ export function VistaMunicipios({ token, alCambio }: { token: string; alCambio: 
     } catch (err) { setAviso(mensajeDe(err)); }
   }
 
+  async function disponibilidad(c: VistaCad, sinOperador: boolean) {
+    setAviso(''); setOk('');
+    try {
+      await api.disponibilidad(token, c.cadId, sinOperador);
+      setOk(sinOperador ? `${c.nombre}: sin operador disponible. Sus reportes nuevos van al ${NOMBRE_RESPALDO_ESTATAL}.` : `${c.nombre}: con operador disponible.`);
+      cargar();
+      alCambio();
+    } catch (err) { setAviso(mensajeDe(err)); }
+  }
+
   if (error) return <section className="c-panel"><Error texto={error} alReintentar={cargar} /></section>;
   if (!cads) return <section className="c-panel"><Cargando texto="Cargando municipios…" /></section>;
-  const conectados = cads.filter((c) => c.conectado && c.clave).length;
+  const municipios = cads.filter((c) => c.cadId !== CAD_ESTATAL_ID);
+  const conectados = municipios.filter((c) => c.conectado).length;
   return (
     <section className="c-panel" aria-label="Municipios y CAD">
       <div className="c-fila">
         <h2>Municipios de Querétaro</h2>
         <span className="c-chip">{`${conectados} de 18 conectados`}</span>
       </div>
-      <p className="suave c-pequeno">{'Un municipio sin conectar sigue mandando sus reportes al C5, con su clave INEGI en el folio. Modo A: su CAD por API (adaptador de referencia). Modo B: despacha desde esta consola.'}</p>
+      <div className="c-tarjeta c-respaldo-estatal" data-testid="respaldo-estatal">
+        <strong>{`Respaldo estatal: ${NOMBRE_RESPALDO_ESTATAL}`}</strong>
+        <p className="c-pequeno">{`${NOMBRE_RESPALDO_ESTATAL_LARGO}. Opera el 911 y el 089 en todo el estado. Los reportes de municipios sin CAD los atiende el ${NOMBRE_RESPALDO_ESTATAL}, igual que los de un municipio sin capacidad (sin unidades en servicio o sin operador), los anónimos (089) y los que un CAD no acusa a tiempo. El folio conserva la clave INEGI del municipio.`}</p>
+      </div>
+      <p className="suave c-pequeno">{'Modo A: el municipio conecta su CAD por API (adaptador de referencia). Modo B: despacha desde esta consola. Abajo, los 18 municipios y el Estado (actor 19).'}</p>
       {aviso && <div className="c-aviso" role="alert"><span>{aviso}</span><button className="c-enlace" onClick={() => setAviso('')}>Cerrar</button></div>}
       {ok && <div className="c-nota" role="status">{ok}</div>}
       {alta && <FormAlta token={token} cad={cads.find((c) => c.cadId === alta)!} alCancelar={() => setAlta(null)} alGuardar={(v) => { setCads((l) => l?.map((x) => (x.cadId === v.cadId ? v : x)) ?? null); setAlta(null); setOk(`Alta guardada: ${v.nombre} (${ESTADO_CAD[v.estado ?? ''] ?? ''}).`); alCambio(); }} />}
       <div className="c-tabla-desliza">
         <table className="c-tiempos c-municipios" data-testid="tabla-municipios">
-          <thead><tr><th scope="col">Clave INEGI</th><th scope="col">CAD</th><th scope="col">Modo</th><th scope="col">Estado</th><th scope="col">Unidades</th><th scope="col">Pruebas</th><th scope="col"><span className="solo-lector">Acciones</span></th></tr></thead>
+          <thead><tr><th scope="col">Clave INEGI</th><th scope="col">Actor</th><th scope="col">Modo</th><th scope="col">Estado</th><th scope="col">Unidades</th><th scope="col">Pruebas</th><th scope="col"><span className="solo-lector">Acciones</span></th></tr></thead>
           <tbody>
-            {cads.map((c) => (
+            {municipios.map((c) => (
               <tr key={c.cadId} data-cad={c.cadId}>
                 <td className="c-mono">{c.clave ?? '—'}</td>
                 <th scope="row">{c.nombre}{c.piloto && <span className="c-chip c-chip-neutro">Piloto</span>}</th>
-                <td className="c-pequeno">{c.modo ? MODO[c.modo] : <span className="suave">Sin conectar · va al C5</span>}</td>
+                <td className="c-pequeno">
+                  {c.modo ? MODO[c.modo] : <span className="suave">{`Sin conectar · va al ${NOMBRE_RESPALDO_ESTATAL}`}</span>}
+                  {c.sinCapacidad && <div className="c-respaldo" data-testid="sin-capacidad">{`Sin capacidad (${c.sinCapacidad}) · va al ${NOMBRE_RESPALDO_ESTATAL}`}</div>}
+                </td>
                 <td>{c.estado ? <span className={`c-chip ${c.estado === 'activo' ? 'c-chip-ok' : c.estado === 'pruebas' ? 'c-chip-aviso' : 'c-chip-alerta'}`}>{ESTADO_CAD[c.estado]}</span> : '—'}</td>
                 <td>{c.unidades}</td>
                 <td className="c-pequeno">{c.modo === 'webhook' ? `${8 - c.casosPendientes.length} de 8` : c.modo === 'consola' ? 'No aplica' : '—'}</td>
@@ -84,9 +103,18 @@ export function VistaMunicipios({ token, alCambio }: { token: string; alCambio: 
                   {c.registrado && c.estado === 'pruebas' && <button className="c-boton" onClick={() => void estado(c.cadId, 'activo')}>Activar</button>}
                   {c.registrado && c.estado === 'activo' && !c.piloto && <button className="c-boton-sec c-peligro" onClick={() => void estado(c.cadId, 'suspendido')}>Suspender</button>}
                   {c.registrado && c.estado === 'suspendido' && <button className="c-boton-sec" onClick={() => void estado(c.cadId, 'activo')}>Reactivar</button>}
+                  {c.conectado && (c.sinOperador
+                    ? <button className="c-boton-sec" onClick={() => void disponibilidad(c, false)}>Operador disponible</button>
+                    : <button className="c-boton-sec" onClick={() => void disponibilidad(c, true)}>Sin operador</button>)}
                 </td>
               </tr>
             ))}
+            <tr data-cad={ACTOR_ESTADO.id} data-testid="actor-estado">
+              <td className="suave c-pequeno">Pendiente</td>
+              <th scope="row">{ACTOR_ESTADO.nombre}<span className="c-chip c-chip-neutro">Actor 19</span><div className="c-pequeno" data-testid="ambito-estado">{`Ámbito: ${ACTOR_ESTADO.ambito}`}</div></th>
+              <td className="c-pequeno suave" colSpan={4}>{ACTOR_ESTADO.pendiente}</td>
+              <td />
+            </tr>
           </tbody>
         </table>
       </div>
@@ -227,17 +255,18 @@ export const tipoDeUnidad = (t: string) => TIPO[t] ?? t;
 // Reportes por municipio y periodo
 // ─────────────────────────────────────────────────────────────────────────────
 
-function TablaGrupos({ titulo, grupos, clave = true, testId }: { titulo: string; grupos: Grupo[]; clave?: boolean; testId?: string }) {
+function TablaGrupos({ titulo, grupos, clave = true, testId, deOtroCad = false }: { titulo: string; grupos: Grupo[]; clave?: boolean; testId?: string; deOtroCad?: boolean }) {
   if (!grupos.length) return null;
   return (
     <div className="c-tabla-desliza">
       <table className="c-tiempos" aria-label={titulo} data-testid={testId}>
-        <thead><tr><th scope="col">{titulo}</th><th scope="col">Reportes</th><th scope="col">Quejas</th><th scope="col">Llegada (mediana)</th><th scope="col">En meta</th></tr></thead>
+        <thead><tr><th scope="col">{titulo}</th><th scope="col">Reportes</th>{deOtroCad && <th scope="col" title="Folios que se crearon para otro CAD y llegaron aquí por escalamiento (sin acuse a tiempo) o transferencia">Llegaron de otro CAD</th>}<th scope="col">Quejas</th><th scope="col">Llegada (mediana)</th><th scope="col">En meta</th></tr></thead>
         <tbody>
           {grupos.map((g) => (
             <tr key={g.clave}>
               <th scope="row">{clave && g.clave !== 'sin' && g.clave !== '000' ? <><span className="c-mono">{g.clave}</span>{` ${g.nombre}`}</> : g.nombre}</th>
               <td>{g.reportes}</td>
+              {deOtroCad && <td>{g.deOtroCad ?? 0}</td>}
               <td>{g.quejas ? <span className="c-chip c-chip-alerta">{g.quejas}</span> : 0}</td>
               <td>{g.llegada.medianaSegundos == null ? '—' : duracionTexto(g.llegada.medianaSegundos)}</td>
               <td>{chipMeta(g.llegada.enMeta)}</td>
@@ -266,19 +295,25 @@ export function VistaReportes({ token, yo, ahora }: { token: string; yo: Yo; aho
   async function csv() {
     try { guardarArchivo(await api.foliosCsv(token, filtro)); } catch (x) { setError(mensajeDe(x)); }
   }
+  const seccion = useRef<HTMLElement>(null);
+  const [enlaceImpresion, setEnlaceImpresion] = useState('');
+  function imprimir() {
+    if (seccion.current) setEnlaceImpresion(imprimirReporte(seccion.current, `POL-IAQ · ${titulo}`));
+  }
 
   return (
-    <section className="c-panel c-imprimible" aria-label="Reportes por municipio">
+    <section className="c-panel c-imprimible" aria-label="Reportes por municipio" ref={seccion}>
       <div className="c-fila c-no-imprimir">
         <h2>Reportes por municipio</h2>
         <div className="c-botones">
           <button className="c-boton-sec" onClick={() => void csv()} disabled={!e}>Exportar CSV</button>
-          <button className="c-boton-sec" onClick={() => window.print()} disabled={!e}>Imprimir o guardar PDF</button>
+          <button className="c-boton-sec" onClick={imprimir} disabled={!e}>Imprimir o guardar PDF</button>
         </div>
       </div>
+      {enlaceImpresion && <p className="suave c-pequeno c-no-imprimir" role="status" data-testid="aviso-impresion">{'El reporte se abrió en otra pestaña con el diálogo de impresión; la consola sigue funcionando. '}<a href={enlaceImpresion} target="_blank" rel="noopener noreferrer">Abrir de nuevo la versión para imprimir</a></p>}
       <div className="c-form c-filtros c-no-imprimir" role="group" aria-label="Filtros">
         <label className="c-campo">Municipio<select value={municipio} onChange={(x) => setMunicipio(x.target.value)}><option value="">Todos</option>{MUNICIPIOS_QRO.map((m) => <option key={m.clave} value={m.clave}>{`${m.clave} · ${m.nombre}`}</option>)}</select></label>
-        <label className="c-campo">Quién atendió<select value={cadId} onChange={(x) => setCadId(x.target.value)}><option value="">Todos</option>{yo.cads.filter((c) => c.mio).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
+        <label className="c-campo">Responsable actual<select value={cadId} onChange={(x) => setCadId(x.target.value)}><option value="">Todos</option>{yo.cads.filter((c) => c.mio).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
         <label className="c-campo">Periodo<select value={periodo} onChange={(x) => setPeriodo(x.target.value as typeof periodo)}><option value="diario">Diario</option><option value="semanal">Semanal (lunes a domingo)</option><option value="mensual">Mensual</option></select></label>
         <label className="c-campo">Fecha<input type="date" value={fecha} onChange={(x) => setFecha(x.target.value || hoyLocal())} /></label>
       </div>
@@ -311,7 +346,13 @@ export function VistaReportes({ token, yo, ahora }: { token: string; yo: Yo; aho
             </div>
           </div>
           <div className="c-tarjeta"><h3>Por municipio (clave INEGI)</h3><TablaGrupos titulo="Municipio" grupos={e.porMunicipio} testId="por-municipio" /></div>
-          <div className="c-tarjeta"><h3>Por quién atendió</h3><TablaGrupos titulo="CAD" grupos={e.porCad} clave={false} /></div>
+          <div className="c-tarjeta">
+            <h3>Por responsable actual (tras escalamiento)</h3>
+            <p className="suave c-pequeno" data-testid="criterio-responsable">{`Cada folio cuenta en el CAD que lo tiene hoy. Si un CAD municipal no acusa a tiempo o lo transfiere, el folio pasa al ${NOMBRE_RESPALDO_ESTATAL} (u otro CAD) y aquí cuenta para ese CAD. El CSV trae las dos columnas: cad_origen (a quién se mandó al crearlo) y cad_responsable_actual.`}</p>
+            <TablaGrupos titulo="Responsable actual" grupos={e.porCad} clave={false} testId="por-responsable" deOtroCad />
+            <h3>Por CAD de origen (al crear el folio)</h3>
+            <TablaGrupos titulo="CAD de origen" grupos={e.porCadOrigen} clave={false} testId="por-cad-origen" />
+          </div>
           <div className="c-tarjeta"><h3>Por clasificación CNIE</h3>
             <TablaGrupos titulo="Tipo" grupos={e.porTipo} />
             <TablaGrupos titulo="Subtipo" grupos={e.porSubtipo} />
@@ -335,6 +376,13 @@ export function VistaReportes({ token, yo, ahora }: { token: string; yo: Yo; aho
 const mesAnterior = (mes: string) => { const [a, m] = mes.split('-').map(Number); return m === 1 ? `${a - 1}-12` : `${a}-${String(m - 1).padStart(2, '0')}`; };
 const seg = (x: number | null) => (x == null ? '—' : duracionTexto(x));
 
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+/** "2026-11" → "diciembre de 2026". */
+function mesSiguienteTexto(mes: string) {
+  const [a, m] = mes.split('-').map(Number);
+  return m === 12 ? `enero de ${a + 1}` : `${MESES[m]} de ${a}`;
+}
+
 export function VistaSesnsp({ token }: { token: string }) {
   const [lista, setLista] = useState<ListaSesnsp | null>(null);
   const [mes, setMes] = useState('');
@@ -349,7 +397,7 @@ export function VistaSesnsp({ token }: { token: string }) {
 
   async function cerrar() {
     setAviso(''); setConfirmar(false);
-    try { setD(await api.cerrarMes(token, mes)); cargarLista(); } catch (x) { setAviso(mensajeDe(x)); }
+    try { setD(await api.cerrarMes(token, mes, mes >= (lista?.mesActual ?? ''))); cargarLista(); } catch (x) { setAviso(mensajeDe(x)); }
   }
   async function bajar(a: 'reporte.csv' | 'ajustes.csv' | 'reporte.xlsx') {
     try { guardarArchivo(await api.archivoSesnsp(token, mes, a)); } catch (x) { setAviso(mensajeDe(x)); }
@@ -360,7 +408,7 @@ export function VistaSesnsp({ token }: { token: string }) {
   const meses = [...new Set([lista.mesActual, mesAnterior(lista.mesActual), mesAnterior(mesAnterior(lista.mesActual)), ...lista.cierres.map((c) => c.mes)])].sort().reverse();
   const enCurso = mes >= lista.mesActual;
   return (
-    <section className="c-panel" aria-label="Reporte mensual al SESNSP">
+    <section className="c-panel c-panel-ancho" aria-label="Reporte mensual al SESNSP">
       <div className="c-fila">
         <h2>Reporte mensual al SESNSP</h2>
         <label className="c-campo c-campo-linea">Mes<select value={mes} onChange={(x) => setMes(x.target.value)}>{meses.map((m) => <option key={m} value={m}>{`${m}${lista.cierres.some((c) => c.mes === m) ? ' · cerrado' : ''}`}</option>)}</select></label>
@@ -370,17 +418,25 @@ export function VistaSesnsp({ token }: { token: string }) {
       {!d && <Cargando texto="Cargando mes…" />}
       {d && <>
         <div className="c-fila">
-          <span className={`c-chip ${d.estado === 'cerrado' ? 'c-chip-ok' : 'c-chip-aviso'}`} data-testid="estado-sesnsp">{d.estado === 'cerrado' ? `Cerrado el ${new Date(d.cerradoEn!).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}: no se reescribe` : enCurso ? 'Borrador: el mes sigue en curso' : 'Borrador: listo para cerrar'}</span>
+          <span className={`c-chip ${d.estado === 'cerrado' ? 'c-chip-ok' : 'c-chip-aviso'}`} data-testid="estado-sesnsp">{d.estado === 'cerrado' ? `Cerrado el ${new Date(d.cerradoEn!).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}: valores congelados${d.prueba ? ' (cierre de prueba de la demo)' : ''}` : enCurso ? 'Borrador: el mes sigue en curso' : 'Borrador: listo para cerrar'}</span>
           <div className="c-botones">
             <button className="c-boton-sec" onClick={() => void bajar('reporte.csv')}>CSV</button>
             <button className="c-boton-sec" onClick={() => void bajar('reporte.xlsx')}>Excel</button>
             {d.ajustes.length > 0 && <button className="c-boton-sec" onClick={() => void bajar('ajustes.csv')}>Ajustes (CSV)</button>}
             {d.estado === 'borrador' && !enCurso && !confirmar && <button className="c-boton" onClick={() => setConfirmar(true)}>Cerrar el mes</button>}
+            {d.estado === 'borrador' && enCurso && lista.cierreDePrueba && !confirmar && <button className="c-boton-sec" onClick={() => setConfirmar(true)}>Probar el cierre (solo demo)</button>}
           </div>
         </div>
+        <p className="suave c-pequeno" data-testid="explica-sesnsp">{d.estado === 'cerrado'
+          ? `Corte congelado: total, procedentes, improcedentes y medianas ya no cambian. Dos exportaciones de este mes dan el mismo archivo. Un cambio posterior a un folio de ${mes} sale como ajuste en el mes siguiente. Los archivos se llaman sesnsp-${mes}-cerrado.`
+          : enCurso
+            ? `Mientras el mes sigue en curso, los valores pueden cambiar cuando los folios avanzan o se corrigen (las medianas solo cuentan etapas terminadas). Se cierra a partir del 1 de ${mesSiguienteTexto(mes)}. Los archivos se llaman sesnsp-${mes}-borrador.`
+            : `El mes ya terminó: al cerrarlo, sus valores quedan congelados. Los archivos se llaman sesnsp-${mes}-borrador hasta el cierre.`}</p>
         {confirmar && (
           <div className="c-aviso" role="alertdialog" aria-label="Confirmar cierre">
-            <span>{`Al cerrar ${mes} el reporte queda congelado. Una corrección posterior sale como ajuste en el mes siguiente, con nota.`}</span>
+            <span>{enCurso
+              ? `Solo en la demo: se cierra ${mes} aunque siga en curso, para probar el corte congelado. En el servicio real solo se cierran meses terminados.`
+              : `Al cerrar ${mes} el reporte queda congelado. Una corrección posterior sale como ajuste en el mes siguiente, con nota.`}</span>
             <span className="c-aviso-acciones"><button className="c-boton" onClick={() => void cerrar()}>Cerrar {mes}</button><button className="c-enlace" onClick={() => setConfirmar(false)}>Cancelar</button></span>
           </div>
         )}
@@ -389,7 +445,10 @@ export function VistaSesnsp({ token }: { token: string }) {
         ) : (
           <div className="c-tabla-desliza">
             <table className="c-tiempos c-sesnsp" data-testid="tabla-sesnsp">
-              <thead><tr><th scope="col">Clave</th><th scope="col">Municipio</th><th scope="col">CNIE</th><th scope="col">Total</th><th scope="col">Procedentes</th><th scope="col">Improcedentes o cancelados</th><th scope="col">Recepción</th><th scope="col">Asignación</th><th scope="col">Salida</th><th scope="col">Traslado</th><th scope="col">Llegada</th></tr></thead>
+              <thead>
+                <tr><th scope="col" rowSpan={2}>Clave</th><th scope="col" rowSpan={2}>Municipio</th><th scope="col" rowSpan={2}>CNIE</th><th scope="col" rowSpan={2}>Total</th><th scope="col" rowSpan={2}>Proce&shy;dentes</th><th scope="col" rowSpan={2}>Improce&shy;dentes o cancelados</th><th scope="colgroup" colSpan={5} className="c-grupo-col">Mediana por etapa</th></tr>
+                <tr><th scope="col">Recepción</th><th scope="col">Asignación</th><th scope="col">Salida</th><th scope="col">Traslado</th><th scope="col">Llegada</th></tr>
+              </thead>
               <tbody>
                 {d.filas.map((f) => (
                   <tr key={`${f.claveMunicipio}-${f.incidente || f.subtipo}`}>
@@ -410,7 +469,7 @@ export function VistaSesnsp({ token }: { token: string }) {
             <ul className="c-lista-plana">{d.ajustes.map((a, i) => <li key={i}><strong>{`${a.mesOrigen} · ${a.claveMunicipio} · CNIE ${a.cnie}: `}</strong>{`total ${a.deltaTotal >= 0 ? '+' : ''}${a.deltaTotal}, procedentes ${a.deltaProcedentes >= 0 ? '+' : ''}${a.deltaProcedentes}, improcedentes o cancelados ${a.deltaImprocedentesCancelados >= 0 ? '+' : ''}${a.deltaImprocedentesCancelados}`}<div className="suave c-pequeno">{a.nota}</div></li>)}</ul>
           </div>
         )}
-        <p className="suave c-pequeno">{'Medianas por etapa en hora de Querétaro, con metas provisionales. Columnas para el CNI/SESNSP y el C5; el formato oficial está por confirmar con el C5.'}</p>
+        <p className="suave c-pequeno">{`Medianas por etapa en hora de Querétaro, con metas provisionales. Columnas para el CNI/SESNSP y el ${NOMBRE_RESPALDO_ESTATAL}; el formato oficial está por confirmar con el ${NOMBRE_RESPALDO_ESTATAL}.`}</p>
       </>}
     </section>
   );

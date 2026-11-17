@@ -26,7 +26,7 @@ export default function Inicio() {
           </ol>
         </section>
       )}
-      <p className="suave">Municipios del piloto: Querétaro, Corregidora y El Marqués. Los demás municipios se conectan con su CAD o con la consola; mientras tanto, sus reportes los atiende el C5.</p>
+      <p className="suave">Municipios del piloto: Querétaro, Corregidora y El Marqués. Los demás municipios se conectan con su CAD o con la consola; mientras tanto, los reportes de municipios sin CAD los atiende el CQ CIAS (Centro de Información y Análisis para la Seguridad de Querétaro), que opera el 911 y el 089.</p>
       <p><Link href="/tiempos/">Tiempos de respuesta públicos</Link></p>
       <blockquote>POL-IAQ no sustituye al 911. Si no puedes usar la app, llama al <a href="tel:911">911</a>.</blockquote>
       <ul className="enlaces-legales">
