@@ -186,3 +186,6 @@
 .d-linea, .d-subtitulo, .d-hito { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .3em; }
 .d-vera { display: grid; gap: .15em; }
 .d-enlace-bloque { display: block; margin-top: var(--e1, 4px); }
+/* Lugar de prueba con su destino actual (CAD local o CQ CIAS). */
+.d-chip-lugar { flex-direction: column; align-items: flex-start; gap: 0; padding-top: 6px; padding-bottom: 6px; border-radius: var(--r-m, 12px); line-height: 1.25; text-align: left; }
+.d-chip-destino { font-size: .75rem; font-weight: 500; opacity: .85; }

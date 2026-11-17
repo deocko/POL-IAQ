@@ -642,12 +642,17 @@ describe.each(ALMACENES)('API con almacén en %s', (_nombre, nuevoAlmacen) => {
       const seud = (await reportar(token, { incidenteId: 'disparos', identidad: 'seudonimo', alias: 'Vecino del 4' })).body.folio as string;
       const eva = await op();
       const ver = async (folio: string) => (await httpC.get(`/v1/operador/reportes/${folio}`).set(eva)).body.reportante;
-      expect(await ver(anon)).toMatchObject({ nombre: 'Anónimo', telefono: '', identidad: 'anonimo' });
+      // Anónimo: va por el 089 al CQ CIAS (no a El Marqués), sin nombre ni teléfono.
+      const altaAnon = appC.get(DespachadorCadService).bandeja.find((e) => e.evento.folio === anon && e.evento.tipo === 'incidente.creado');
+      expect(altaAnon?.cadId).toBe('c5-queretaro');
+      expect(altaAnon?.evento.tipo === 'incidente.creado' && altaAnon.evento.datos.reportante).toMatchObject({ nombre: 'Anónimo', telefono: '' });
+      expect(await ver(anon)).toBeUndefined();
       expect(await ver(seud)).toMatchObject({ nombre: 'Vecino del 4', telefono: '••••••1001', identidad: 'seudonimo' });
 
       // Un CAD con sistema propio recibe lo mismo en el alta.
       const corr = (await httpC.post('/v1/reportes').set({ authorization: `Bearer ${token}` }).send({ incidenteId: 'inundacion', identidad: 'anonimo', ubicacion: { lat: 20.539, lng: -100.442 } })).body.folio;
       const alta = appC.get(DespachadorCadService).bandeja.find((e) => e.evento.folio === corr);
+      expect(alta?.cadId).toBe('c5-queretaro');
       expect(alta?.evento.tipo === 'incidente.creado' && alta.evento.datos.reportante).toMatchObject({ nombre: 'Anónimo', telefono: '' });
     });
 

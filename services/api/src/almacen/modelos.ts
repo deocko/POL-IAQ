@@ -1,4 +1,5 @@
-import type { ClasificacionCnie, Identidad, OpinionGuardada } from '@pol-iaq/shared';
+import type { ClasificacionCnie, Identidad, OpinionGuardada, RutaFolio } from '@pol-iaq/shared';
+import type { CasoPruebaCad, ContactoTecnico, EstadoCad, ModoCad, ResultadoCaso, TipoUnidad } from '@pol-iaq/shared';
 import type { Canalizacion, Corporacion, Cuestionario, EstadoIncidente, EventoHaciaCad, Prioridad, Ubicacion } from '@pol-iaq/shared';
 
 export interface Ciudadano {
@@ -58,6 +59,7 @@ export interface Reporte {
   prioridad: Prioridad;
   corporacionSugerida: Corporacion;
   ubicacion: Ubicacion;
+  /** Clave INEGI de 5 dígitos del municipio (22001–22018); null fuera de Querétaro. */
   municipioClave: string | null;
   cadId: string;
   folioCad?: string;
@@ -82,6 +84,8 @@ export interface Reporte {
   historial: { estado: EstadoIncidente; en: string; nota?: string }[];
   creadoEn: string;
   actualizadoEn: string;
+  /** Cómo se enrutó al crearse: CAD de origen, motivo del respaldo (CQ CIAS) y canal (911/089). */
+  ruta?: RutaFolio;
   /** Secuencia del último evento enviado al CAD. */
   secuenciaSalida: number;
   /** Secuencia del último evento aceptado desde el CAD. */
@@ -124,4 +128,52 @@ export interface Envio {
   intentos: number;
   /** `consola`: el CAD despacha desde la consola web de POL-IAQ y no recibe webhook. */
   estado: 'pendiente' | 'entregado' | 'fallido' | 'sin_configuracion' | 'consola';
+}
+
+/**
+ * Alta de un CAD municipal (o del C5) en POL-IAQ. El secreto se guarda cifrado (AES-256-GCM)
+ * y nunca se devuelve. Ver docs/interconexion/ALTA-MUNICIPIO.md.
+ */
+export interface RegistroCad {
+  cadId: string;
+  nombre: string;
+  /** Clave INEGI de 5 dígitos; null para el C5. */
+  clave: string | null;
+  modo: ModoCad;
+  estado: EstadoCad;
+  /** Polígono de jurisdicción propio; sin él se usa el de INEGI 2022. */
+  poligono?: [number, number][];
+  webhookUrl?: string;
+  /** `v1:<iv>:<tag>:<cifrado>` en base64. */
+  secretoCifrado?: string;
+  certificadoSha256?: string;
+  ipsPermitidas: string[];
+  contactoTecnico: ContactoTecnico;
+  casosPrueba: Partial<Record<CasoPruebaCad, ResultadoCaso>>;
+  creadoEn: string;
+  actualizadoEn: string;
+  /** Si pasó de Modo B (consola) a Modo A (webhook), cuándo y cuántos folios se reenviaron. */
+  migracion?: { en: string; por: string; foliosReenviados: number };
+}
+
+/** Si el municipio puede contestar ahora: sin operador disponible, sus reportes van al CQ CIAS. */
+export interface DisponibilidadCad {
+  cadId: string;
+  sinOperador: boolean;
+  nota: string | null;
+  en: string;
+  por: string;
+}
+
+/** Unidad registrada desde la consola (Modo B) o reportada por el CAD (Modo A). */
+export interface UnidadRegistrada {
+  unidadId: string;
+  cadId: string;
+  tipo: TipoUnidad;
+  corporacion: string;
+  etiqueta: string;
+  activa: boolean;
+  base?: { lat: number; lng: number };
+  registradaEn: string;
+  registradaPor: string;
 }

@@ -1,0 +1,23 @@
+{
+  "name": "@pol-iaq/cad-adaptador",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Adaptador de referencia (Modo A): conecta el CAD de un municipio con POL-IAQ por el contrato v1.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "dev": "tsx --env-file-if-exists=.env src/main.ts",
+    "start": "node --env-file-if-exists=.env dist/main.js",
+    "certificar": "tsx --env-file-if-exists=.env src/certificar-cli.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@pol-iaq/shared": "workspace:*",
+    "zod": "4.1.13"
+  },
+  "devDependencies": {
+    "@pol-iaq/api": "workspace:*",
+    "@pol-iaq/cad-simulator": "workspace:*"
+  }
+}

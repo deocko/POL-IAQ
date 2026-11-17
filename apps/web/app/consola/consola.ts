@@ -3,7 +3,7 @@
 import { io } from 'socket.io-client';
 import * as demo from '../../lib/demo/motor';
 import { horaLocal } from '../../lib/hora';
-import type { ClasificacionCnie, GrupoCnie, MetasTiempo, OpinionGuardada, ResumenEtapa, TiemposReporte } from '@pol-iaq/shared/movil';
+import type { ClasificacionCnie, Estadistica, FilaSesnsp, AjusteSesnsp, GrupoCnie, MetasTiempo, OpinionGuardada, Periodo, ResumenEtapa, TiemposReporte, TipoUnidad, RutaFolio } from '@pol-iaq/shared/movil';
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 /** Demo pública: sin servidor, el API y el CAD simulado corren en el navegador. */
@@ -14,7 +14,7 @@ export type Estado = 'recibido' | 'validado' | 'asignado' | 'en_camino' | 'en_si
 
 export interface Yo {
   operador: { usuario: string; nombre: string; cads: string[] };
-  cads: { id: string; nombre: string; modo: 'consola' | 'webhook'; mio: boolean }[];
+  cads: { id: string; nombre: string; clave: string | null; piloto: boolean; modo: 'consola' | 'webhook'; mio: boolean; conectado: boolean; estado: 'pruebas' | 'activo' | 'suspendido' | null; sinCapacidad?: string | null; sinOperador?: boolean }[];
   protocolo: { version: string; estado: 'provisional' | 'vigente' | 'retirado' };
 }
 
@@ -22,6 +22,8 @@ export interface Reporte {
   folio: string;
   folioCad: string | null;
   cadId: string;
+  /** Clave INEGI de 5 dígitos (22001–22018). */
+  municipioClave: string | null;
   incidenteId: string;
   incidente: string;
   categoria: string | null;
@@ -52,6 +54,10 @@ export interface Reporte {
   creadoEn: string;
   actualizadoEn: string;
   escalaAlC5En: string | null;
+  /** Cómo se enrutó al crearse: CAD de origen, motivo por el que lo atiende el CQ CIAS y canal (911 / 089). */
+  ruta?: RutaFolio;
+  /** "Atiende CQ CIAS — municipio sin capacidad (…)", o null si lo atiende el municipio. */
+  respaldo?: string | null;
   operable: boolean;
   transiciones: Estado[];
   /** Solo demo: lo despacha la demo automática (el operador puede tomar el control). */
@@ -64,6 +70,9 @@ export interface UnidadDisponible {
   cadId: string;
   corporacion: string;
   etiqueta: string;
+  tipo: TipoUnidad;
+  activa: boolean;
+  origen: 'configuracion' | 'registro';
   ocupadaEn: string | null;
   /** Última posición GPS (AVL). */
   posicion: { lat: number; lng: number; rumbo?: number; en: string } | null;
@@ -78,6 +87,24 @@ export interface Tablero {
   /** Reportes, quejas y llegada por tipo y subtipo del CNIE. */
   porCnie: { tipos: GrupoCnie[]; subtipos: GrupoCnie[] };
 }
+
+export interface VistaCad {
+  cadId: string; nombre: string; clave: string | null; claveFolio: string | null; municipio: string | null; piloto: boolean; registrado: boolean;
+  modo: 'webhook' | 'consola' | null; estado: 'pruebas' | 'activo' | 'suspendido' | null; conectado: boolean; sinCapacidad: string | null; sinOperador: boolean; webhookUrl: string | null; tieneSecreto: boolean;
+  certificadoSha256: string | null; ipsPermitidas: string[]; poligonoPropio: boolean; contactoTecnico: { nombre: string; correo: string } | null;
+  casosPrueba: { id: string; nombre: string; resultado: { ok: boolean; en: string; detalle?: string } | null }[]; casosPendientes: string[]; unidades: number;
+  migracion: { en: string; por: string; foliosReenviados: number } | null; actualizadoEn: string | null;
+}
+export interface AltaCad {
+  cadId: string; nombre: string; clave: string | null; modo: 'webhook' | 'consola'; webhookUrl?: string; secreto?: string; certificadoSha256?: string; ipsPermitidas?: string[];
+  contactoTecnico: { nombre: string; correo: string };
+}
+export interface UnidadNueva { unidadId: string; cadId: string; tipo: TipoUnidad; corporacion: string; etiqueta: string; activa: boolean }
+export interface FiltroReportes { cadId?: string; municipio?: string; periodo?: Periodo; fecha?: string }
+export type EstadisticaVista = Estadistica & { periodo: { desde?: string; hasta?: string; etiqueta: string; periodo: string }; metas: MetasTiempo };
+export interface ListaSesnsp { mesActual: string; cierres: { mes: string; cerradoEn: string; cerradoPor: string; filas: number; total: number; ajustes: number; prueba?: boolean }[]; nota: string; cierreDePrueba?: boolean }
+export interface MesSesnsp { estado: 'cerrado' | 'borrador'; mes: string; cerradoEn: string | null; cerradoPor: string | null; filas: FilaSesnsp[]; ajustes: AjusteSesnsp[]; prueba?: boolean }
+export interface Archivo { nombre: string; tipo: string; datos: string | Uint8Array }
 
 export type Accion =
   | { accion: 'recibir' }
@@ -121,7 +148,34 @@ const apiDemo = {
   unidades: (t: string) => enDemo<{ unidades: UnidadDisponible[] }>(() => demo.operador.unidades(t)),
   accion: (t: string, folio: string, a: Accion) => enDemo<Reporte>(() => demo.operador.accion(t, folio, a)),
   tiempos: (t: string) => enDemo<Tablero>(() => demo.operador.tiempos(t)),
+  cads: (t: string) => enDemo<{ cads: VistaCad[]; ambiente: string }>(() => demo.admin.cads(t)),
+  guardarCad: (t: string, a: AltaCad) => enDemo<VistaCad>(() => demo.admin.guardar(t, a)),
+  estadoCad: (t: string, cadId: string, estado: 'pruebas' | 'activo' | 'suspendido') => enDemo<VistaCad>(() => demo.admin.estado(t, cadId, estado)),
+  guardarUnidad: (t: string, u: UnidadNueva) => enDemo<{ unidad: unknown }>(() => demo.guardarUnidad(t, u)),
+  estadistica: (t: string, f: FiltroReportes) => enDemo<EstadisticaVista>(() => demo.reportes.estadistica(t, f)),
+  foliosCsv: (t: string, f: FiltroReportes) => enDemo<Archivo>(() => demo.reportes.foliosCsv(t, f)),
+  sesnsp: (t: string) => enDemo<ListaSesnsp>(() => demo.sesnsp.lista(t)),
+  sesnspMes: (t: string, mes: string) => enDemo<MesSesnsp>(() => demo.sesnsp.mes(t, mes)),
+  cerrarMes: (t: string, mes: string, prueba = false) => enDemo<MesSesnsp>(() => demo.sesnsp.cerrar(t, mes, prueba)),
+  disponibilidad: (t: string, cadId: string, sinOperador: boolean) => enDemo<unknown>(() => demo.marcarDisponibilidad(t, cadId, sinOperador)),
+  archivoSesnsp: (t: string, mes: string, a: 'reporte.csv' | 'ajustes.csv' | 'reporte.xlsx') => enDemo<Archivo>(() => demo.sesnsp.archivo(t, mes, a)),
 };
+
+const consulta = (f: FiltroReportes) => {
+  const q = new URLSearchParams(Object.entries(f).filter(([, v]) => v) as [string, string][]).toString();
+  return q ? `?${q}` : '';
+};
+
+/** Descarga con la sesión del operador (CSV, Excel). */
+async function bajar(ruta: string, token: string, nombre: string): Promise<Archivo> {
+  const resp = await fetch(`${API}${ruta}`, { headers: { authorization: `Bearer ${token}` } });
+  if (!resp.ok) {
+    const c = await resp.json().catch(() => ({}));
+    throw new ErrorApi(resp.status, c.codigo ?? `http_${resp.status}`, c.mensaje);
+  }
+  const disp = resp.headers.get('content-disposition') ?? '';
+  return { nombre: /filename="([^"]+)"/.exec(disp)?.[1] ?? nombre, tipo: resp.headers.get('content-type') ?? 'application/octet-stream', datos: new Uint8Array(await resp.arrayBuffer()) };
+}
 
 const apiReal = {
   sesion: (usuario: string, clave: string) => llamar<Yo & { token: string }>('/v1/operador/sesion', null, { method: 'POST', body: JSON.stringify({ usuario, clave }) }),
@@ -130,7 +184,35 @@ const apiReal = {
   unidades: (t: string) => llamar<{ unidades: UnidadDisponible[] }>('/v1/operador/unidades', t),
   accion: (t: string, folio: string, a: Accion) => llamar<Reporte>(`/v1/operador/reportes/${encodeURIComponent(folio)}/acciones`, t, { method: 'POST', body: JSON.stringify(a) }),
   tiempos: (t: string) => llamar<Tablero>('/v1/operador/tiempos', t),
+  cads: (t: string) => llamar<{ cads: VistaCad[]; ambiente: string }>('/v1/admin/cads', t),
+  guardarCad: (t: string, a: AltaCad) => llamar<VistaCad>(`/v1/admin/cads/${a.cadId}`, t, { method: 'PUT', body: JSON.stringify((({ cadId: _c, ...x }) => x)(a)) }),
+  estadoCad: (t: string, cadId: string, estado: 'pruebas' | 'activo' | 'suspendido') => llamar<VistaCad>(`/v1/admin/cads/${cadId}/estado`, t, { method: 'POST', body: JSON.stringify({ estado }) }),
+  guardarUnidad: (t: string, u: UnidadNueva) => llamar<{ unidad: unknown }>('/v1/operador/unidades', t, { method: 'POST', body: JSON.stringify(u) }),
+  estadistica: (t: string, f: FiltroReportes) => llamar<EstadisticaVista>(`/v1/operador/estadistica${consulta(f)}`, t),
+  foliosCsv: (t: string, f: FiltroReportes) => bajar(`/v1/operador/estadistica/folios.csv${consulta(f)}`, t, 'poliaq-folios.csv'),
+  sesnsp: (t: string) => llamar<ListaSesnsp>('/v1/operador/sesnsp', t),
+  sesnspMes: (t: string, mes: string) => llamar<MesSesnsp>(`/v1/operador/sesnsp/${mes}`, t),
+  cerrarMes: (t: string, mes: string, _prueba = false) => llamar<MesSesnsp>(`/v1/operador/sesnsp/${mes}/cerrar`, t, { method: 'POST' }),
+  disponibilidad: (t: string, cadId: string, sinOperador: boolean) => llamar<unknown>(`/v1/operador/cads/${cadId}/disponibilidad`, t, { method: 'POST', body: JSON.stringify({ sinOperador }) }),
+  archivoSesnsp: (t: string, mes: string, a: 'reporte.csv' | 'ajustes.csv' | 'reporte.xlsx') => bajar(`/v1/operador/sesnsp/${mes}/${a}`, t, `sesnsp-${mes}-${a}`),
 };
+
+/** Guarda un archivo generado (CSV o Excel) en el equipo del operador. */
+export function guardarArchivo(a: Archivo) {
+  const blob = new Blob([a.datos as BlobPart], { type: a.tipo });
+  const url = URL.createObjectURL(blob);
+  const enlace = document.createElement('a');
+  enlace.href = url;
+  enlace.download = a.nombre;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Versión pública (sin sesión). */
+export const tiemposPublicos = (periodo: Periodo, fecha: string) =>
+  DEMO ? Promise.resolve(demo.tiemposPublicos(periodo, fecha)) : llamar<ReturnType<typeof demo.tiemposPublicos>>(`/v1/publico/tiempos?periodo=${periodo}&fecha=${fecha}`, null);
 
 /** Hora actual: en la demo, el reloj (quizá acelerado) del motor. */
 export const ahoraMs = () => (DEMO ? demo.ahora() : Date.now());
@@ -190,6 +272,17 @@ export const ERRORES: Record<string, string> = {
   folio_de_otra_jurisdiccion: 'El reporte cambió de CAD. Actualiza la bandeja.',
   folio_no_encontrado: 'El reporte ya no está en tu bandeja.',
   sin_unidades_disponibles: 'No hay unidades libres con GPS en este CAD. Asigna una a mano o transfiere.',
+  cad_destino_no_conectado: 'Ese municipio aún no está conectado a POL-IAQ; transfiere al CQ CIAS.',
+  casos_pendientes: 'Faltan casos de prueba aprobados para pasar a producción.',
+  sin_unidades: 'Registra al menos una unidad antes de activar el despacho desde la consola.',
+  falta_secreto: 'El Modo A requiere el secreto HMAC compartido (mínimo 32 caracteres).',
+  usar_migracion: 'Para pasar un municipio activo de la consola a su CAD usa la migración (conserva folios e historial).',
+  unidad_de_otro_cad: 'Esa clave de unidad ya es de otro CAD.',
+  unidad_ocupada: 'La unidad atiende un reporte; libérala antes de darla de baja.',
+  solo_supervision: 'Solo supervisión puede hacer esto.',
+  mes_en_curso: 'Solo se cierran meses terminados.',
+  mes_ya_cerrado: 'Ese mes ya está cerrado: no se reescribe. Las correcciones salen en el mes siguiente.',
+  municipio_desconocido: 'Usa la clave INEGI de 5 dígitos (22001 a 22018).',
 };
 
 const PESO: Record<Prioridad, number> = { alta: 0, media: 1, baja: 2 };

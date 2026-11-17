@@ -51,7 +51,7 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
   }
 
   /** Encola `incidente.creado`. Incrementa `r.secuenciaSalida`: quien llama guarda el reporte. */
-  async enviarCreado(r: Reporte, ciudadano: Ciudadano, escenario?: { id: string; titulo: string }) {
+  async enviarCreado(r: Reporte, ciudadano: Ciudadano, escenario?: { id: string; titulo: string }, opciones: { conEstadoActual?: boolean } = {}) {
     const evento: EventoHaciaCad = {
       tipo: 'incidente.creado',
       eventoId: randomUUID(),
@@ -74,10 +74,18 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
         canalizacion: r.canalizacion,
         reportante: reportanteVisible(r, ciudadano),
         evidencias: r.evidencias.filter((e) => e.estado === 'verificada').map((e) => this.enlaceEvidencia(r, e)),
+        ...(opciones.conEstadoActual && {
+          estadoActual: {
+            estado: r.estado,
+            folioCad: r.folioCad ?? null,
+            unidad: r.unidad ? { unidadId: r.unidad.unidadId, corporacion: r.unidad.corporacion, etiqueta: r.unidad.etiqueta } : null,
+            historial: r.historial,
+          },
+        }),
       },
     };
     await this.encolar(r.cadId, evento);
-    if (r.cadId !== CAD_ESTATAL_ID) this.vigilarAcuse(r.folio, r.cadId, ciudadano, escenario);
+    if (r.cadId !== CAD_ESTATAL_ID && !opciones.conEstadoActual) this.vigilarAcuse(r.folio, r.cadId, ciudadano, escenario);
   }
 
   /** Envía el cuestionario completo y la canalización recalculada tras nuevas respuestas. */
@@ -88,6 +96,14 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
   /** Encola `incidente.actualizado`. Incrementa `r.secuenciaSalida`: quien llama guarda el reporte. */
   async enviarActualizado(r: Reporte, datos: Extract<EventoHaciaCad, { tipo: 'incidente.actualizado' }>['datos']) {
     await this.encolar(r.cadId, { tipo: 'incidente.actualizado', eventoId: randomUUID(), folio: r.folio, secuencia: ++r.secuenciaSalida, ocurridoEn: new Date().toISOString(), datos });
+  }
+
+  /** Vuelve a entregar un evento ya enviado con el mismo `eventoId` (caso de prueba «evento duplicado»). */
+  async reentregar(envio: Envio) {
+    const e: Envio = { ...envio, intentos: 0, estado: 'pendiente' };
+    this.bandeja.push(e);
+    await this.almacen.guardarEnvio(e);
+    if (this.config.despachoActivo) this.lanzar(e);
   }
 
   /** Enlace firmado y con caducidad para que el CAD descargue la evidencia. */
@@ -112,7 +128,7 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
     this.almacen.aparte(() => {
       const t = setTimeout(() => {
         this.temporizadores.delete(t);
-        void this.escalarSiNoAcuso(folio, cadId, ciudadano, escenario).catch((err) => this.log.error(`${folio}: no se pudo escalar al C5: ${(err as Error).message}`));
+        void this.escalarSiNoAcuso(folio, cadId, ciudadano, escenario).catch((err) => this.log.error(`${folio}: no se pudo escalar al CQ CIAS: ${(err as Error).message}`));
       }, this.config.esperaAcuseSeg * 1000);
       t.unref();
       this.temporizadores.add(t);
@@ -124,7 +140,7 @@ export class DespachadorCadService implements OnApplicationBootstrap, OnModuleDe
     await this.almacen.conReporte(folio, async () => {
       const r = await this.almacen.reporte(folio);
       if (!r || r.folioCad || r.cadId !== cadId || r.estado !== 'recibido') return;
-      this.log.warn(`${folio}: ${cadId} no acusó en ${this.config.esperaAcuseSeg}s, se escala al C5`);
+      this.log.warn(`${folio}: ${cadId} no acusó en ${this.config.esperaAcuseSeg}s, se escala al CQ CIAS`);
       await this.almacen.auditar({ actor: 'sistema', accion: 'escalado_c5_sin_acuse', folio, detalle: { cadId } });
       r.cadId = CAD_ESTATAL_ID;
       await this.enviarCreado(r, ciudadano, escenario);

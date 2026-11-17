@@ -1,16 +1,16 @@
 import { type OnModuleInit, ConflictException, ForbiddenException, HttpException, HttpStatus, Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import {
-  canalizar, clasificacionDe, clasificarCnie, enrutarPorUbicacion, esQueja, permiteAnonimo, generarFolio, incidentePorId, puedeTransicionar, resolverEntradas, respuestasDe,
-  validarCodigoCnie, CAD_ESTATAL_ID, ESTADOS_FINALES, MUNICIPIOS_PILOTO, type ClasificacionCnie,
-  type CrearReporte, type EntradaGuardada, type EstadoIncidente, type IncidenteCatalogo, type Opinion, type Prioridad, type ResponderCuestionario, type SolicitarEvidencia,
-} from '@pol-iaq/shared';
+  canalizar, clasificacionDe, clasificarCnie, esQueja, permiteAnonimo, generarFolio, incidentePorId, puedeTransicionar, resolverEntradas, respuestasDe,
+  validarCodigoCnie, ESTADOS_FINALES, type ClasificacionCnie,
+  type CrearReporte, type EntradaGuardada, type EstadoIncidente, type IncidenteCatalogo, type Opinion, type Prioridad, type ResponderCuestionario, type SolicitarEvidencia, rutaDe, textoRespaldo } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
 import type { Ciudadano, Evidencia, Reporte } from '../almacen/modelos';
 import { BusService } from '../comun/bus.service';
 import { CONFIG, type Config } from '../config';
 import { DespachadorCadService } from '../cad/despachador.service';
 import { ProtocolosService } from '../protocolos/protocolos.service';
+import { RegistroCadService } from '../municipios/registro-cad.service';
 
 const ORDEN: Record<Prioridad, number> = { baja: 0, media: 1, alta: 2 };
 
@@ -32,6 +32,7 @@ export class ReportesService implements OnModuleInit {
     @Inject(BusService) private readonly bus: BusService,
     @Inject(DespachadorCadService) private readonly despachador: DespachadorCadService,
     @Inject(ProtocolosService) private readonly protocolos: ProtocolosService,
+    @Inject(RegistroCadService) private readonly registro: RegistroCadService,
   ) {}
 
   async onModuleInit() {
@@ -44,9 +45,8 @@ export class ReportesService implements OnModuleInit {
    * queda sin clasificar para que la asigne el operador. Cada cambio queda en la auditoría.
    */
   async clasificarSinCnie(): Promise<number> {
-    const cads = [...new Set([...MUNICIPIOS_PILOTO.map((m) => m.cadId), CAD_ESTATAL_ID])];
     let n = 0;
-    for (const r of await this.almacen.reportesPorCad(cads, false)) {
+    for (const r of await this.almacen.reportesEntre(['*'], null, null)) {
       if (r.cnie) continue;
       const cnie = clasificarCnie(r.incidenteId, { ...respuestasDe(r.cuestionario.entradas), ...r.respuestas });
       if (!cnie) continue;
@@ -100,10 +100,14 @@ export class ReportesService implements OnModuleInit {
     const cnie = clasificarCnie(incidente.id, todas, datos.codigoCnie);
     const canalizacion = canalizar(protocolo, incidente, respuestas, { asistenciaDirecta: datos.asistenciaDirecta });
 
-    const ruta = enrutarPorUbicacion(datos.ubicacion.lat, datos.ubicacion.lng);
+    // Anónimo: va por el 089 al CQ CIAS. Sin CAD municipal conectado o sin capacidad, también al CQ CIAS.
+    const ruta = this.registro.enrutar(datos.ubicacion.lat, datos.ubicacion.lng, { anonimo: datos.identidad === 'anonimo' });
+    const notaRuta = textoRespaldo(ruta) ?? undefined;
     const ahora = new Date();
-    const clave = ruta.municipio?.claveInegi ?? null;
-    const folio = generarFolio(clave, ahora.getUTCFullYear(), await this.almacen.siguienteConsecutivo(clave ?? '000', ahora.getUTCFullYear()));
+    // El folio lleva la parte municipal (014); municipioClave, la clave INEGI completa (22014).
+    const claveFolio = ruta.municipio?.claveFolio ?? null;
+    const clave = ruta.municipio?.clave ?? null;
+    const folio = generarFolio(claveFolio, ahora.getUTCFullYear(), await this.almacen.siguienteConsecutivo(claveFolio ?? '000', ahora.getUTCFullYear()));
     const iso = ahora.toISOString();
 
     const reporte: Reporte = {
@@ -129,14 +133,15 @@ export class ReportesService implements OnModuleInit {
       estado: 'recibido',
       evidencias: [],
       mensajes: [],
-      historial: [{ estado: 'recibido', en: iso }],
+      historial: [{ estado: 'recibido', en: iso, ...(notaRuta && { nota: notaRuta }) }],
+      ruta: rutaDe(ruta),
       creadoEn: iso,
       actualizadoEn: iso,
       secuenciaSalida: 0,
       secuenciaEntrada: 0,
     };
     await this.almacen.guardarReporte(reporte);
-    await this.almacen.auditar({ actor: `ciudadano:${ciudadano.id}`, accion: 'reporte_creado', folio, detalle: { cadId: ruta.cadId, escenarioId: escenario?.id, protocolo: protocolo.version, cnie: cnie?.incidente?.codigo ?? cnie?.subtipo.codigo ?? null } });
+    await this.almacen.auditar({ actor: `ciudadano:${ciudadano.id}`, accion: 'reporte_creado', folio, detalle: { cadId: ruta.cadId, motivo: ruta.motivo, canal: ruta.canal, escenarioId: escenario?.id, protocolo: protocolo.version, cnie: cnie?.incidente?.codigo ?? cnie?.subtipo.codigo ?? null } });
     // El envío al CAD modifica la secuencia de salida: va con el reporte bloqueado.
     return this.almacen.conReporte(folio, async () => {
       const r = (await this.almacen.reporte(folio))!;

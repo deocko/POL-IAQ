@@ -11,7 +11,7 @@ un **protocolo versionado** que es un archivo JSON validado por `ProtocoloSchema
 > Atención de Llamadas de Emergencia 9-1-1* ni del *Catálogo Nacional de
 > Incidentes de Emergencia* (SESNSP / Centro Nacional de Información). Antes del
 > piloto debe sustituirse pregunta por pregunta por el contenido vigente,
-> validado con el C5 de Querétaro, y publicarse con `"estado": "vigente"`.
+> validado con el CQ CIAS, y publicarse con `"estado": "vigente"`.
 > Referencia de consulta: [Norma Técnica CALLE (gob.mx)](https://www.gob.mx/cms/uploads/attachment/file/895276/NT_CALLE_2023_II-2024_final.pdf).
 
 ## Qué contiene un protocolo
@@ -74,4 +74,4 @@ altera los folios anteriores.
    `escenarios por lugar guardado` lo verifica para la semilla.
 
 TODO(fase 2): guardar las versiones en base de datos con un panel de
-administración para el C5, en lugar de un archivo.
+administración para el CQ CIAS, en lugar de un archivo.

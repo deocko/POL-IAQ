@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     Contrato de eventos entre POL-IAQ y los CAD municipales (Querétaro, Corregidora,
-    El Marqués) y el C5 del Estado de Querétaro.
+    El Marqués) y el CQ CIAS (Centro de Información y Análisis para la Seguridad de Querétaro).
 
     Transporte en el piloto: webhooks HTTPS en ambos sentidos.
     - POL-IAQ -> CAD: POST al `webhookUrl` del adaptador del CAD.
@@ -17,12 +17,12 @@ info:
     - Idempotencia: `eventoId` (UUID) único; el receptor ignora repetidos. También va en `idempotency-key`.
     - Orden: `secuencia` crece por folio y por emisor; se descartan eventos con secuencia vieja.
     - Entrega: el emisor reintenta con espera exponencial (0, 1, 2, 4, 8, 16 s) hasta recibir 2xx.
-    - Acuse: el CAD debe enviar `incidente.recibido` en menos de 30 s; si no, POL-IAQ escala al C5.
+    - Acuse: el CAD debe enviar `incidente.recibido` en menos de 30 s; si no, POL-IAQ escala al CQ CIAS.
     - Evidencia: nunca va embebida; se envían enlaces firmados con vigencia de 15 minutos y su SHA-256.
     - Clasificación: cada folio lleva el Catálogo Nacional de Incidentes de Emergencia (CNIE) V 3.0,
       junio 2024 (`cnie`: tipo, subtipo, incidente con nombres y prioridad del catálogo). Solo se aceptan
       incidentes vigentes; un código inexistente o retirado en un evento del CAD da 400 y no se aplica.
-      La misma clasificación viaja al C5 cuando el reporte se escala o se transfiere.
+      La misma clasificación viaja al CQ CIAS cuando el reporte se escala o se transfiere.
 channels:
   haciaCad:
     address: '{webhookUrl}'
@@ -35,7 +35,7 @@ channels:
   desdeCad:
     address: /v1/cad/{cadId}/eventos
     parameters:
-      cadId: { enum: [cad-queretaro, cad-corregidora, cad-el-marques, c5-queretaro] }
+      cadId: { enum: [cad-amealco-de-bonfil, cad-pinal-de-amoles, cad-arroyo-seco, cad-cadereyta-de-montes, cad-colon, cad-corregidora, cad-ezequiel-montes, cad-huimilpan, cad-jalpan-de-serra, cad-landa-de-matamoros, cad-el-marques, cad-pedro-escobedo, cad-penamiller, cad-queretaro, cad-san-joaquin, cad-san-juan-del-rio, cad-tequisquiapan, cad-toliman, c5-queretaro] }
     messages:
       incidenteRecibido: { $ref: '#/components/messages/incidenteRecibido' }
       unidadAsignada: { $ref: '#/components/messages/unidadAsignada' }
@@ -165,7 +165,7 @@ components:
                 prioridad: { type: string, enum: [alta, media, baja] }
                 corporacionSugerida: { type: string }
                 ubicacion: { $ref: '#/components/schemas/Ubicacion' }
-                municipioClave: { type: [string, 'null'] }
+                municipioClave: { type: [string, 'null'], pattern: '^22\d{3}$', example: '22016', description: 'Clave INEGI de 5 dígitos (22001–22018).' }
                 descripcion: { type: string }
                 respuestas: { type: object }
                 asistenciaDirecta: { type: boolean, description: 'Botón de asistencia directa (antes "botón de pánico")' }
@@ -180,6 +180,14 @@ components:
                     confiabilidad: { type: number, minimum: 0, maximum: 1 }
                     identidad: { type: string, enum: [completa, seudonimo, anonimo], description: 'Con seudónimo, `nombre` es el seudónimo y `telefono` llega enmascarado; anónimo, nombre "Anónimo" y teléfono vacío. Se contesta por el chat del folio.' }
                 evidencias: { type: array, items: { $ref: '#/components/schemas/EnlaceEvidencia' } }
+                estadoActual:
+                  description: 'Opcional (compatible con v1). Solo cuando se reenvía un folio en curso, p. ej. al migrar un municipio de Modo B a Modo A. El CAD no debe mandar el acuse de nuevo como si fuera nuevo.'
+                  type: object
+                  properties:
+                    estado: { type: string }
+                    folioCad: { type: [string, 'null'] }
+                    unidad: { oneOf: [{ type: object, properties: { unidadId: { type: string }, corporacion: { type: string }, etiqueta: { type: string } } }, { type: 'null' }] }
+                    historial: { type: array, items: { type: object, properties: { estado: { type: string }, en: { type: string, format: date-time } } } }
     IncidenteActualizado:
       allOf:
         - $ref: '#/components/schemas/Base'

@@ -645,7 +645,7 @@ function Confirmar({
     navigator.geolocation.getCurrentPosition(
       (p) => {
         alGps({ lat: p.coords.latitude, lng: p.coords.longitude, precisionMetros: p.coords.accuracy, referencia: 'Ubicación del navegador' });
-        setGpsEstado(`Listo (±${Math.round(p.coords.accuracy)} m). Fuera de los municipios piloto el reporte va al C5.`);
+        setGpsEstado(`Listo (±${Math.round(p.coords.accuracy)} m). Si tu municipio aún no se da de alta, el reporte va al ${demo.NOMBRE_RESPALDO}.`);
       },
       () => sinGps('No pudimos obtener tu ubicación: no diste permiso o no hay señal de GPS.'),
       { enableHighAccuracy: true, timeout: 10000 },
@@ -681,7 +681,7 @@ function Confirmar({
     ? `Tu nombre y tu teléfono ${telefonoLegible(ciudadanoTel)}. Te pueden llamar.`
     : identidad === 'seudonimo'
       ? (alias.trim() ? `“${alias.trim()}” y que tu teléfono termina en ${ciudadanoTel.slice(-4)}. Te escriben por el chat.` : `Que tu teléfono termina en ${ciudadanoTel.slice(-4)}. Escribe un seudónimo para enviar.`)
-      : 'Solo “Anónimo”. Ni tu nombre ni tu teléfono.';
+      : `Solo “Anónimo”. Ni tu nombre ni tu teléfono. Tu reporte va por el 089 al ${demo.NOMBRE_RESPALDO}.`;
 
   return (
     <form className="d-pantalla d-confirmar" onSubmit={crear} noValidate>
@@ -693,12 +693,21 @@ function Confirmar({
       <fieldset className="d-bloque">
         <legend>¿Dónde?</legend>
         <div className="d-chips" role="radiogroup" aria-label="Lugar del reporte">
-          {demo.LUGARES_DEMO.map((l) => (
-            <button key={l.id} type="button" role="radio" aria-checked={lugarId === l.id} className={`d-chip ${lugarId === l.id ? 'sel' : ''}`} onClick={() => alLugar(l.id)}>{l.nombre}</button>
+          {demo.LUGARES_DEMO.filter((l) => l.destacado).map((l) => (
+            <button key={l.id} type="button" role="radio" aria-checked={lugarId === l.id} className={`d-chip d-chip-lugar ${lugarId === l.id ? 'sel' : ''}`} onClick={() => alLugar(l.id)} data-lugar={l.id}>
+              <span>{l.nombre}</span><small className="d-chip-destino">{demo.etiquetaDestino(l.id)}</small>
+            </button>
           ))}
           <button type="button" role="radio" aria-checked={lugarId === 'gps'} className={`d-chip ${lugarId === 'gps' ? 'sel' : ''}`} onClick={usarGps}><Icono d={ICONO.ubicacion} tam={18} /> Mi ubicación</button>
         </div>
+        <label className="d-campo">Otro municipio de Querétaro
+          <select value={demo.LUGARES_DEMO.some((l) => l.id === lugarId && !l.destacado) ? lugarId : ''} onChange={(e) => { if (e.target.value) alLugar(e.target.value); }} data-testid="otro-municipio">
+            <option value="">Elige un municipio…</option>
+            {demo.LUGARES_DEMO.filter((l) => !l.destacado).map((l) => <option key={l.id} value={l.id}>{`${l.nombre} · ${demo.etiquetaDestino(l.id)}`}</option>)}
+          </select>
+        </label>
         <p className="suave d-nota" role="status">{lugarId === 'gps' ? gpsEstado || (gps ? 'Usando tu ubicación.' : '') : 'Lugar de prueba de la demo.'}</p>
+        {lugarId !== 'gps' && <p className="d-nota" data-testid="destino-lugar">{identidad === 'anonimo' ? `${demo.TEXTO_ANONIMA_089}: lo atiende el ${demo.NOMBRE_RESPALDO}.` : `${demo.destinoDeLugar(lugarId).texto}.`}</p>}
         {gpsError && (
           <div className="d-error-gps" role="alert" data-testid="error-gps">
             <p>{gpsError}</p>
@@ -893,7 +902,7 @@ function Seguimiento({ r, alNuevo }: { r: ReporteDemo; alNuevo: () => void }) {
           </div>
         )}
         {escalaEn !== null && (
-          <p className="suave d-nota">{`Esperando que un operador lo reciba en la consola. Si nadie lo recibe en ${escalaEn} s, pasa al C5 con el mismo folio. `}<Link href="/consola/" target="_blank" className="d-enlace-bloque">Abrir la consola</Link></p>
+          <p className="suave d-nota">{`Esperando que un operador lo reciba en la consola. Si nadie lo recibe en ${escalaEn} s, pasa al ${demo.NOMBRE_RESPALDO} con el mismo folio. `}<Link href="/consola/" target="_blank" className="d-enlace-bloque">Abrir la consola</Link></p>
         )}
 
         <Mapa
@@ -907,7 +916,8 @@ function Seguimiento({ r, alNuevo }: { r: ReporteDemo; alNuevo: () => void }) {
         <div className="d-folio-caja">
           <span className="suave c-pequeno">Tu folio</span>
           <span className="d-folio" data-testid="folio">{r.folio}</span>
-          <span className="suave c-pequeno">{`Atiende ${demo.nombreCad(r.cadId)} · ${r.identidad === 'completa' ? 'con tu nombre' : r.identidad === 'seudonimo' ? `como “${r.alias}”` : 'anónimo'}`}</span>
+          <span className="suave c-pequeno" data-testid="atiende">{`Atiende ${demo.nombreCad(r.cadId)} · ${r.identidad === 'completa' ? 'con tu nombre' : r.identidad === 'seudonimo' ? `como “${r.alias}”` : demo.TEXTO_ANONIMA_089}`}</span>
+          {r.ruta?.motivo && r.ruta.motivo !== 'anonimo_089' && <span className="suave c-pequeno" data-testid="motivo-respaldo">{`Motivo: ${demo.TEXTO_RESPALDO[r.ruta.motivo]}${r.ruta.detalle ? ` (${r.ruta.detalle})` : ''}`}</span>}
         </div>
 
         {r.cadSimulado && <p className="d-nota-demo">Demo automática: la recepción, la unidad y el cierre se simulan para acelerar el recorrido. En el servicio real, el operador cierra el reporte.</p>}

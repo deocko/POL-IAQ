@@ -21,6 +21,9 @@ import { ReportesController } from './reportes/reportes.controller';
 import { ReportesService } from './reportes/reportes.service';
 import { SeguimientoGateway } from './seguimiento/seguimiento.gateway';
 import { AvisosSmsService } from './sms/avisos-sms.service';
+import { AdminCadController } from './municipios/admin-cad.controller';
+import { EstadisticaController, PublicoController } from './municipios/estadistica.controller';
+import { RegistroCadService } from './municipios/registro-cad.service';
 import { ProveedorSms, crearProveedorSms } from './sms/sms';
 
 /** PostgreSQL si hay `DATABASE_URL`; si no, memoria (solo fuera de producción, lo valida la config). */
@@ -29,9 +32,11 @@ export async function crearAlmacen(config: Config): Promise<Almacen> {
   return AlmacenPostgres.conectar(config.databaseUrl, { migrar: config.migrarAlIniciar });
 }
 
-export function crearAppModule(config: Config = cargarConfig(), opciones: { almacen?: Almacen; sms?: ProveedorSms } = {}) {
+export function crearAppModule(configEntrada: Config = cargarConfig(), opciones: { almacen?: Almacen; sms?: ProveedorSms } = {}) {
+  // Copia propia: el registro de CAD suma sus altas a `cads` y `unidades` de esta instancia.
+  const config: Config = { ...configEntrada, cads: structuredClone(configEntrada.cads), unidades: structuredClone(configEntrada.unidades) };
   @Module({
-    controllers: [AuthController, CatalogoController, ReportesController, PerfilController, CadController, OperadorController],
+    controllers: [AuthController, CatalogoController, ReportesController, PerfilController, CadController, OperadorController, AdminCadController, EstadisticaController, PublicoController],
     providers: [
       { provide: CONFIG, useValue: config },
       opciones.almacen ? { provide: Almacen, useValue: opciones.almacen } : { provide: Almacen, useFactory: () => crearAlmacen(config) },
@@ -40,6 +45,7 @@ export function crearAppModule(config: Config = cargarConfig(), opciones: { alma
       OtpService,
       BusService,
       DespachadorCadService,
+      RegistroCadService,
       ProtocolosService,
       ReportesService,
       EventosCadService,

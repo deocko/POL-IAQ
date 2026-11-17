@@ -93,7 +93,7 @@ si sigue ocurriendo). Pueden diferir; la consola muestra las dos con esas etique
 
 - API: `GET /v1/catalogo` (entradas con sus códigos) y `GET /v1/cnie` (catálogo completo); `codigoCnie` en
   `POST /v1/reportes` solo para "Otro".
-- CAD y C5: `cnie` en `incidente.creado` / `incidente.actualizado`; el CAD puede corregir con
+- CAD y CQ CIAS: `cnie` en `incidente.creado` / `incidente.actualizado`; el CAD puede corregir con
   `incidente.reclasificado` o enviando otro `codigoCnie` en `incidente.recibido` ([`docs/api/asyncapi.yaml`](../api/asyncapi.yaml)).
 - Consola: etiqueta "CNIE 30202 · Seguridad / Armas y explosivos / Detonación por arma de fuego · ALTA",
   corrección con búsqueda y auditoría, tablero por tipo y subtipo.

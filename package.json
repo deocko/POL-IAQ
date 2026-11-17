@@ -7,11 +7,12 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm -r --filter @pol-iaq/shared --filter @pol-iaq/api --filter @pol-iaq/cad-simulator build",
-    "typecheck": "pnpm -r --filter @pol-iaq/shared --filter @pol-iaq/api --filter @pol-iaq/cad-simulator typecheck",
-    "test": "pnpm -r --filter @pol-iaq/shared --filter @pol-iaq/api --filter @pol-iaq/cad-simulator --filter @pol-iaq/web test",
+    "build": "pnpm -r --filter @pol-iaq/shared --filter @pol-iaq/api --filter @pol-iaq/cad-simulator --filter @pol-iaq/cad-adaptador build",
+    "typecheck": "pnpm -r --filter @pol-iaq/shared --filter @pol-iaq/api --filter @pol-iaq/cad-simulator --filter @pol-iaq/cad-adaptador typecheck",
+    "test": "pnpm -r --filter @pol-iaq/shared --filter @pol-iaq/api --filter @pol-iaq/cad-simulator --filter @pol-iaq/cad-adaptador --filter @pol-iaq/web test",
     "dev:api": "pnpm --filter @pol-iaq/api dev",
     "dev:cad": "pnpm --filter @pol-iaq/cad-simulator dev",
+    "dev:adaptador": "pnpm --filter @pol-iaq/cad-adaptador dev",
     "dev:web": "pnpm --filter @pol-iaq/web dev",
     "dev:ciudadano": "pnpm --filter @pol-iaq/ciudadano start"
   },

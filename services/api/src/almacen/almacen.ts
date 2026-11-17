@@ -1,5 +1,5 @@
-import type { Perfil } from '@pol-iaq/shared';
-import type { Auditoria, Ciudadano, Envio, Evidencia, Otp, Reporte } from './modelos';
+import type { CierreMensual, Perfil } from '@pol-iaq/shared';
+import type { Auditoria, Ciudadano, Envio, Evidencia, Otp, DisponibilidadCad, RegistroCad, Reporte, UnidadRegistrada } from './modelos';
 
 /**
  * Persistencia del API. Hay dos implementaciones:
@@ -30,6 +30,11 @@ export abstract class Almacen {
    * `cadIds` vacío o con `*` = todos. `soloActivos` excluye cerrados, improcedentes y cancelados.
    */
   abstract reportesPorCad(cadIds: string[], soloActivos: boolean): Promise<Reporte[]>;
+  /**
+   * Todos los reportes levantados en [desdeIso, hastaIso) de esos CAD, sin límite (estadística,
+   * exportaciones y cierre mensual). `cadIds` vacío o con `*` = todos.
+   */
+  abstract reportesEntre(cadIds: string[], desdeIso: string | null, hastaIso: string | null): Promise<Reporte[]>;
   abstract contarReportesDesde(ciudadanoId: string, desdeIso: string): Promise<number>;
   abstract evidencia(evidenciaId: string): Promise<{ folio: string; evidencia: Evidencia } | undefined>;
 
@@ -54,8 +59,25 @@ export abstract class Almacen {
   abstract contarOtpsDesde(telefono: string, desdeIso: string): Promise<number>;
   abstract actualizarOtp(id: string, cambios: Pick<Otp, 'intentos' | 'usado'>): Promise<void>;
 
+  /** Registro de CAD (alta de municipios). */
+  abstract registrosCad(): Promise<RegistroCad[]>;
+  abstract guardarRegistroCad(r: RegistroCad): Promise<void>;
+  abstract disponibilidades(): Promise<DisponibilidadCad[]>;
+  abstract guardarDisponibilidad(d: DisponibilidadCad): Promise<void>;
+
+  /** Unidades dadas de alta desde la consola o el CAD (se suman a las de configuración). */
+  abstract unidadesRegistradas(): Promise<UnidadRegistrada[]>;
+  abstract guardarUnidad(u: UnidadRegistrada): Promise<void>;
+
+  /** Cierres mensuales del reporte al SESNSP. Un cierre no se reescribe: guardar uno existente falla. */
+  abstract cierresSesnsp(): Promise<CierreMensual[]>;
+  /** Devuelve false si el mes ya estaba cerrado (no lo toca). */
+  abstract guardarCierreSesnsp(c: CierreMensual): Promise<boolean>;
+
   abstract guardarEnvio(e: Envio): Promise<void>;
   abstract enviosPendientes(): Promise<Envio[]>;
+  /** Envíos de un folio a los CAD, en orden (diagnóstico y casos de prueba). */
+  abstract enviosDe(folio: string): Promise<Envio[]>;
 
   /**
    * Lanza `fn` fuera de la transacción actual. Úsalo para trabajo en segundo

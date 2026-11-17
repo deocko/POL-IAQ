@@ -11,6 +11,8 @@ export async function crearApp(config: Config = cargarConfig(), opciones: { alma
   const app = await NestFactory.create<NestExpressApplication>(crearAppModule(config, opciones), { rawBody: true, logger: process.env.VITEST ? false : config.produccion ? ['log', 'warn', 'error'] : ['log', 'warn', 'error', 'debug'] });
   // Contenido binario de evidencias (en producción se sube directo al almacén de objetos).
   app.use('/v1/reportes/:folio/evidencias/:id/contenido', raw({ type: () => true, limit: '200mb' }));
+  // Detrás del proxy que termina TLS/mTLS: la IP real del CAD llega en X-Forwarded-For.
+  if (config.confiarProxy) app.set('trust proxy', /^\d+$/.test(config.confiarProxy) ? Number(config.confiarProxy) : config.confiarProxy);
   app.enableCors({ origin: true });
   app.enableShutdownHooks();
   return app;

@@ -15,11 +15,14 @@
  * Reloj: todas las horas (historial, mensajes, folios) son la hora real del
  * navegador, mostrada en la zona de Querétaro (America/Mexico_City). La opción
  * ×10 solo acelera la simulación (pasos del CAD simulado y avance de las
- * unidades); no adelanta el reloj. El acuse antes de escalar al C5 se cuenta
+ * unidades); no adelanta el reloj. El acuse antes de escalar al CQ CIAS se cuenta
  * siempre en segundos reales, para que el operador alcance a recibirlo.
  */
 import {
-  CAD_ESTATAL_ID, CATALOGO_SEMILLA, ESTADOS, ESTADOS_FINALES, ETIQUETAS_CIUDADANO, FACTOR_CALLES, METAS_PROVISIONALES, MUNICIPIOS_PILOTO,
+  CAD_ESTATAL_ID, CAD_IDS, CASOS_PRUEBA_CAD, CATALOGO_SEMILLA, CORPORACIONES, ESTADOS, ESTADOS_FINALES, ETIQUETAS_CIUDADANO, FACTOR_CALLES, METAS_PROVISIONALES, TIPOS_UNIDAD,
+  AltaCadSchema, casosPendientes, cerrarMes, csvAjustesSesnsp, csvFolios, csvSesnsp, enRango, estadistica, estadisticaPublica, mesLocal, municipioPorCad, municipioPorClave, claveCompleta,
+  nombreDeCad, puntoInterior, rangoPeriodo, tipoUnidadDe, xlsxSesnsp, MUNICIPIOS_QRO, NOMBRE_RESPALDO_ESTATAL, TEXTO_RESPALDO, ACTOR_ESTADO, rutaDe, textoRespaldo, type RutaFolio,
+  type CierreMensual, type FilaEstadistica, type Periodo, type TipoUnidad,
   PROTOCOLO_PROVISIONAL, UNIDADES_EJEMPLO, VELOCIDAD_EMERGENCIA_KMH,
   agruparPorCnie, aplica, candidatasPorCercania, canalizar, puedeDespachar, clasificacionDe, clasificarCnie, distanciaMetros, etiquetaCnie, subtipoCnie, validarCodigoCnie, enrutarPorUbicacion, esQueja, estimarRuta, generarFolio, incidentePorId, medirTiempos,
   minutosDe, permiteAnonimo, preguntasPara as preguntasProtocolo, preguntasPendientes, protocoloDe, puedeTransicionar, reportanteVisible, resolverEntradas,
@@ -30,7 +33,7 @@ import {
 
 export const PROTOCOLO = PROTOCOLO_PROVISIONAL;
 export const METAS = METAS_PROVISIONALES;
-/** Segundos sin acuse antes de escalar al C5 (en producción son 30 s; en la demo hay más margen). */
+/** Segundos sin acuse antes de escalar al CQ CIAS (en producción son 30 s; en la demo hay más margen). */
 export const ESPERA_ACUSE_SEG = 90;
 /** Credenciales de la consola en la demo. */
 export const OPERADOR_DEMO = { usuario: 'operador', clave: 'operador', nombre: 'Operador de demostración' };
@@ -38,21 +41,54 @@ const TOKEN_DEMO = 'demo-operador';
 const CLAVE = 'poliaq.demo.v2';
 const CANAL = 'poliaq-demo';
 
-export const CADS_DEMO = [
-  ...MUNICIPIOS_PILOTO.map((m) => ({ id: m.cadId, nombre: `CAD ${m.nombre}` })),
-  { id: CAD_ESTATAL_ID, nombre: 'C5 Querétaro (estatal)' },
-];
+/** Los 18 municipios (clave INEGI de 5 dígitos) y el respaldo estatal (CQ CIAS). */
+export const CADS_DEMO = CAD_IDS.map((id) => ({
+  id,
+  nombre: nombreDeCad(id),
+  clave: municipioPorCad(id)?.clave ?? null,
+  piloto: municipioPorCad(id)?.piloto ?? false,
+}));
 
 /** Unidades ficticias (las mismas de ejemplo del API en desarrollo). */
 export const UNIDADES_DEMO = UNIDADES_EJEMPLO;
 
-/** Lugares de prueba: uno por municipio piloto y uno fuera (va al C5). */
-export const LUGARES_DEMO = [
-  { id: 'qro', nombre: 'Centro de Querétaro', lat: 20.5888, lng: -100.3899, referencia: 'Jardín Zenea (ubicación de prueba)' },
-  { id: 'corr', nombre: 'El Pueblito, Corregidora', lat: 20.539, lng: -100.442, referencia: 'Plaza principal (ubicación de prueba)' },
-  { id: 'marq', nombre: 'La Cañada, El Marqués', lat: 20.61, lng: -100.32, referencia: 'Jardín principal (ubicación de prueba)' },
-  { id: 'sjr', nombre: 'San Juan del Río (fuera del piloto)', lat: 20.389, lng: -99.996, referencia: 'Centro (ubicación de prueba)' },
+/**
+ * Lugares de prueba: uno por municipio piloto, San Juan del Río (para probar el alta) y un punto dentro
+ * de cada uno de los otros 14 municipios (calculado de su polígono de INEGI 2022).
+ */
+const LUGARES_FIJOS = [
+  { id: 'qro', nombre: 'Centro de Querétaro', lat: 20.5888, lng: -100.3899, referencia: 'Jardín Zenea (ubicación de prueba)', clave: '22014' },
+  { id: 'corr', nombre: 'El Pueblito, Corregidora', lat: 20.539, lng: -100.442, referencia: 'Plaza principal (ubicación de prueba)', clave: '22006' },
+  { id: 'marq', nombre: 'La Cañada, El Marqués', lat: 20.61, lng: -100.32, referencia: 'Jardín principal (ubicación de prueba)', clave: '22011' },
+  { id: 'sjr', nombre: 'San Juan del Río', lat: 20.389, lng: -99.996, referencia: 'Centro (ubicación de prueba)', clave: '22016' },
 ];
+export const LUGARES_DEMO: { id: string; nombre: string; lat: number; lng: number; referencia: string; clave: string; destacado: boolean }[] = [
+  ...LUGARES_FIJOS.map((l) => ({ ...l, destacado: true })),
+  ...MUNICIPIOS_QRO.filter((m) => !LUGARES_FIJOS.some((l) => l.clave === m.clave)).flatMap((m) => {
+    const p = puntoInterior(m.geocerca);
+    return p ? [{ id: `m${m.clave}`, nombre: m.nombre, lat: p.lat, lng: p.lng, referencia: `Punto de prueba dentro de ${m.nombre}`, clave: m.clave, destacado: false }] : [];
+  }),
+];
+
+/** Etiqueta corta del destino para el formulario: «va a su CAD local» o «va al CQ CIAS: municipio sin CAD conectado». */
+export function etiquetaDestino(lugarId: string): string {
+  const d = destinoDeLugar(lugarId);
+  return d.respaldo ? d.texto.replace(/^Lo atiende el /, 'va al ') : 'va a su CAD local';
+}
+
+/**
+ * A quién llega hoy un reporte en ese lugar, según el estado de la demo (alta, capacidad):
+ * «Lo atiende CAD San Juan del Río» o «Lo atiende el CQ CIAS: municipio sin CAD conectado».
+ */
+export function destinoDeLugar(lugarId: string, anonimo = false): { cadId: string; texto: string; respaldo: boolean } {
+  const l = LUGARES_DEMO.find((x) => x.id === lugarId);
+  if (!l) return { cadId: CAD_ESTATAL_ID, texto: `Lo atiende el ${NOMBRE_RESPALDO_ESTATAL}`, respaldo: true };
+  const e = leer();
+  const r = enrutarPorUbicacion(l.lat, l.lng, (cadId) => cadConectado(e, cadId), undefined, { capacidad: (cadId) => capacidad(e, cadId), anonimo });
+  return r.motivo
+    ? { cadId: r.cadId, texto: `Lo atiende el ${NOMBRE_RESPALDO_ESTATAL}: ${TEXTO_RESPALDO[r.motivo]}${r.detalle ? ` (${r.detalle})` : ''}`, respaldo: true }
+    : { cadId: r.cadId, texto: `Lo atiende ${nombreDeCad(r.cadId)}`, respaldo: false };
+}
 
 export interface Unidad { unidadId: string; corporacion: string; etiqueta: string; etaMinutos?: number; lat?: number; lng?: number; rumbo?: number; distanciaMetros?: number }
 export interface Mensaje { id: string; autor: 'ciudadano' | 'operador' | 'unidad'; nombreAutor?: string; texto: string; en: string }
@@ -90,11 +126,31 @@ export interface ReporteDemo {
   cadSimulado: { inicio: number; paso: number; enSitioEn?: number } | null;
   /** Lo cerró la demo automática, no un operador. */
   cerradoPorDemo?: boolean;
+  /** Cómo se enrutó al crearse (CAD de origen, motivo del respaldo y canal). */
+  ruta?: RutaFolio;
 }
 
 export interface CorreccionCnie { en: string; actor: string; de: string | null; a: string; secundario: string | null; motivo: string | null }
 
 interface PosicionAvl { lat: number; lng: number; rumbo?: number; en: string }
+
+/** Alta de un municipio en la demo (sin secretos reales: la demo no guarda ninguno). */
+export interface RegistroDemo {
+  cadId: string;
+  nombre: string;
+  clave: string | null;
+  modo: 'webhook' | 'consola';
+  estado: 'pruebas' | 'activo' | 'suspendido';
+  webhookUrl: string | null;
+  contactoTecnico: { nombre: string; correo: string };
+  casosPrueba: Record<string, { ok: boolean; en: string; detalle?: string }>;
+  actualizadoEn: string;
+}
+
+export interface UnidadRegistradaDemo {
+  unidadId: string; cadId: string; tipo: TipoUnidad; corporacion: string; etiqueta: string; activa: boolean;
+  base: { lat: number; lng: number }; registradaEn: string;
+}
 
 interface Estado {
   version: 3;
@@ -106,6 +162,13 @@ interface Estado {
   reloj: { baseReal: number; baseVirtual: number; factor: number };
   /** Último avance del GPS simulado (compartido entre pestañas para no mover doble). */
   ultimoTic?: number;
+  /** Alta de municipios hecha en la demo. */
+  registros?: Record<string, RegistroDemo>;
+  unidadesRegistradas?: UnidadRegistradaDemo[];
+  /** Cierres mensuales SESNSP (congelados). `prueba`: cierre del mes en curso hecho solo para probar en la demo. */
+  cierres?: (CierreMensual & { prueba?: boolean })[];
+  /** CAD marcados «sin operador disponible»: sus reportes nuevos van al CQ CIAS. */
+  sinOperador?: Record<string, { en: string; nota: string | null }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -297,13 +360,17 @@ export function crearReporte(d: NuevoReporte): ReporteDemo {
   if (identidad === 'seudonimo' && !d.alias?.trim()) throw new ErrorDemo(400, 'falta_seudonimo');
   const cnie = clasificarCnie(incidente.id, respuestasDadas, d.codigoCnie);
   return cambiar((e) => {
-    const ruta = enrutarPorUbicacion(lugar.lat, lugar.lng);
+    // Anónimo: por el 089 al CQ CIAS. Sin CAD conectado o sin capacidad, también al CQ CIAS.
+    const ruta = enrutarPorUbicacion(lugar.lat, lugar.lng, (cadId) => cadConectado(e, cadId), undefined, { capacidad: (cadId) => capacidad(e, cadId), anonimo: identidad === 'anonimo' });
+    const notaRuta = textoRespaldo(ruta);
     const iso = ahoraIso();
     const anio = new Date(iso).getUTCFullYear();
-    const clave = ruta.municipio?.claveInegi ?? null;
-    const k = `${clave ?? '000'}-${anio}`;
+    // El folio lleva la parte municipal (014); municipioClave, la clave INEGI completa (22014).
+    const claveFolio = ruta.municipio?.claveFolio ?? null;
+    const clave = ruta.municipio?.clave ?? null;
+    const k = `${claveFolio ?? '000'}-${anio}`;
     e.consecutivos[k] = (e.consecutivos[k] ?? 0) + 1;
-    const folio = generarFolio(clave, anio, e.consecutivos[k]);
+    const folio = generarFolio(claveFolio, anio, e.consecutivos[k]);
     const { validas } = resolverEntradas(PROTOCOLO, incidente.id, d.respuestas, 'formulario', iso);
     const canalizacion = canalizar(PROTOCOLO, incidente, respuestasDe(validas), { asistenciaDirecta: d.asistenciaDirecta });
     const r: ReporteDemo = {
@@ -319,7 +386,8 @@ export function crearReporte(d: NuevoReporte): ReporteDemo {
       asistenciaDirecta: !!d.asistenciaDirecta,
       ubicacion: { lat: lugar.lat, lng: lugar.lng, precisionMetros: ('precisionMetros' in lugar && lugar.precisionMetros) || 12, referencia: lugar.referencia },
       descripcion: d.descripcion?.trim() || null,
-      ciudadano: { nombre: d.nombre.trim() || 'Ciudadano de prueba', telefono: d.telefono, confiabilidad: 1 },
+      // Anónimo (089): el folio no guarda nombre ni teléfono.
+      ciudadano: identidad === 'anonimo' ? { nombre: 'Anónimo', telefono: '', confiabilidad: 1 } : { nombre: d.nombre.trim() || 'Ciudadano de prueba', telefono: d.telefono, confiabilidad: 1 },
       identidad,
       alias: identidad === 'seudonimo' ? d.alias!.trim() : null,
       cuestionario: { protocoloVersion: PROTOCOLO.version, protocoloEstado: PROTOCOLO.estado, entradas: validas },
@@ -327,11 +395,13 @@ export function crearReporte(d: NuevoReporte): ReporteDemo {
       unidad: null,
       evidencias: (d.fotos ?? []).map((f) => ({ ...f, id: id() })),
       mensajes: [],
-      historial: [{ estado: 'recibido', en: iso }],
+      historial: [{ estado: 'recibido', en: iso, ...(notaRuta && { nota: notaRuta }) }],
+      ruta: rutaDe(ruta),
       opinion: null,
       creadoEn: iso,
       actualizadoEn: iso,
-      cadSimulado: d.cadSimulado ? { inicio: virtual(e.reloj), paso: 0 } : null,
+      // Un municipio dado de alta en Modo A (su propio CAD) lo despacha el CAD simulado de la demo.
+      cadSimulado: d.cadSimulado || !operaEnConsola(e, ruta.cadId) ? { inicio: virtual(e.reloj), paso: 0 } : null,
     };
     e.reportes.push(r);
     return { resultado: r, folios: [folio] };
@@ -392,6 +462,8 @@ export function opinar(folio: string, o: Opinion) {
 }
 
 export const etiquetaCiudadano = (e: EstadoIncidente) => ETIQUETAS_CIUDADANO[e];
+export const NOMBRE_RESPALDO = NOMBRE_RESPALDO_ESTATAL;
+export { TEXTO_ANONIMA_089, TEXTO_RESPALDO } from '@pol-iaq/shared/movil';
 export const nombreCad = (cadId: string) => CADS_DEMO.find((c) => c.id === cadId)?.nombre ?? cadId;
 export const tiemposDe = (r: Pick<ReporteDemo, 'historial' | 'prioridad'>) => medirTiempos(r.historial, r.prioridad, ahora());
 
@@ -401,15 +473,55 @@ export const tiemposDe = (r: Pick<ReporteDemo, 'historial' | 'prioridad'>) => me
 
 const activos = (e: Estado) => e.reportes.filter((r) => !ESTADOS_FINALES.includes(r.estado));
 
+
+/**
+ * ¿El CAD recibe reportes? Como el API fuera de producción: el C5 siempre, los pilotos salvo
+ * suspendidos, y los demás municipios cuando tienen alta (en pruebas o activa).
+ */
+export function cadConectado(e: Estado, cadId: string): boolean {
+  if (cadId === CAD_ESTATAL_ID) return true;
+  const r = e.registros?.[cadId];
+  if (r?.estado === 'suspendido') return false;
+  if (municipioPorCad(cadId)?.piloto) return true;
+  return !!r;
+}
+
+/** En la demo todo CAD conectado despacha desde la consola, salvo el que se dio de alta en Modo A. */
+const operaEnConsola = (e: Estado, cadId: string) => e.registros?.[cadId]?.modo !== 'webhook';
+
+/**
+ * ¿El municipio puede contestar? Como el API: null = sí; si no, el motivo. En consola, sin unidades en
+ * servicio; en cualquier modo, marcado «sin operador disponible».
+ */
+function capacidad(e: Estado, cadId: string): string | null {
+  if (cadId === CAD_ESTATAL_ID) return null;
+  const motivos: string[] = [];
+  if (operaEnConsola(e, cadId) && !unidadesActivas(e).some((u) => u.cadId === cadId)) motivos.push('sin unidades en servicio');
+  if (e.sinOperador?.[cadId]) motivos.push('sin operador disponible');
+  return motivos.length ? motivos.join(' y ') : null;
+}
+
+interface UnidadDemo { unidadId: string; cadId: string; corporacion: string; etiqueta: string; tipo: TipoUnidad; base: { lat: number; lng: number }; activa: boolean; origen: 'configuracion' | 'registro' }
+
+function unidadesTodas(e: Estado): UnidadDemo[] {
+  const reg = e.unidadesRegistradas ?? [];
+  const ids = new Set(reg.map((u) => u.unidadId));
+  return [
+    ...UNIDADES_DEMO.filter((u) => !ids.has(u.unidadId)).map((u) => ({ ...u, tipo: tipoUnidadDe(u), activa: true, origen: 'configuracion' as const })),
+    ...reg.map((u) => ({ ...u, origen: 'registro' as const })),
+  ];
+}
+const unidadesActivas = (e: Estado) => unidadesTodas(e).filter((u) => u.activa);
+
 function unidadesAvl(e: Estado, cadId: string): UnidadAvl[] {
   const ocupadas = new Set(activos(e).filter((r) => r.unidad).map((r) => r.unidad!.unidadId));
-  return UNIDADES_DEMO.filter((u) => puedeDespachar(cadId, u.cadId)).map((u) => ({
+  return unidadesActivas(e).filter((u) => puedeDespachar(cadId, u.cadId)).map((u) => ({
     unidadId: u.unidadId, corporacion: u.corporacion, etiqueta: u.etiqueta, disponible: !ocupadas.has(u.unidadId), posicion: e.avl[u.unidadId],
   }));
 }
 
 function asignar(e: Estado, r: ReporteDemo, unidadId: string) {
-  const u = UNIDADES_DEMO.find((x) => x.unidadId === unidadId && puedeDespachar(r.cadId, x.cadId));
+  const u = unidadesActivas(e).find((x) => x.unidadId === unidadId && puedeDespachar(r.cadId, x.cadId));
   if (!u) throw new ErrorDemo(400, 'unidad_desconocida');
   const p = e.avl[u.unidadId] ?? u.base;
   const ruta = estimarRuta(p, r.ubicacion);
@@ -460,10 +572,11 @@ export type AccionDemo =
   | { accion: 'reclasificar'; codigoCnie: string; codigoCnieSecundario?: string | null; motivo?: string };
 
 function yo() {
+  const e = leer();
   return {
     operador: { usuario: OPERADOR_DEMO.usuario, nombre: OPERADOR_DEMO.nombre, cads: ['*'] },
-    // En la demo todos los CAD están en modo consola para poder despachar desde aquí.
-    cads: CADS_DEMO.map((c) => ({ ...c, modo: 'consola' as const, mio: true })),
+    // En la demo los CAD conectados despachan desde la consola (salvo un alta en Modo A).
+    cads: CADS_DEMO.map((c) => ({ ...c, modo: operaEnConsola(e, c.id) ? 'consola' as const : 'webhook' as const, mio: true, conectado: cadConectado(e, c.id), estado: e.registros?.[c.id]?.estado ?? (cadConectado(e, c.id) ? 'activo' as const : null), sinCapacidad: cadConectado(e, c.id) ? capacidad(e, c.id) : null, sinOperador: !!e.sinOperador?.[c.id] })),
     protocolo: { version: PROTOCOLO.version, estado: PROTOCOLO.estado },
   };
 }
@@ -482,6 +595,7 @@ export function vistaOperador(r: ReporteDemo) {
     folio: r.folio,
     folioCad: r.folioCad,
     cadId: r.cadId,
+    municipioClave: claveCompleta(r.municipioClave),
     incidenteId: r.incidenteId,
     incidente: incidente?.nombreCorto ?? r.incidenteId,
     categoria: incidente?.categoria ?? null,
@@ -510,8 +624,10 @@ export function vistaOperador(r: ReporteDemo) {
     creadoEn: r.creadoEn,
     actualizadoEn: r.actualizadoEn,
     escalaAlC5En,
-    operable: true,
-    transiciones: ESTADOS.filter((x) => puedeTransicionar(r.estado, x)),
+    ruta: r.ruta ?? { cadOrigen: r.cadId, motivo: null, canal: '911' as const },
+    respaldo: textoRespaldo(r.ruta),
+    operable: operaEnConsola(leer(), r.cadId),
+    transiciones: operaEnConsola(leer(), r.cadId) ? ESTADOS.filter((x) => puedeTransicionar(r.estado, x)) : [],
   };
 }
 
@@ -534,7 +650,7 @@ export const operador = {
     const e = leer();
     const ocupadas = new Map(activos(e).filter((r) => r.unidad).map((r) => [r.unidad!.unidadId, r.folio]));
     return {
-      unidades: UNIDADES_DEMO.map(({ base: _base, ...u }) => ({ ...u, ocupadaEn: ocupadas.get(u.unidadId) ?? null, posicion: e.avl[u.unidadId] ?? null })),
+      unidades: unidadesTodas(e).map(({ base: _base, ...u }) => ({ ...u, ocupadaEn: ocupadas.get(u.unidadId) ?? null, posicion: u.activa ? e.avl[u.unidadId] ?? null : null })),
     };
   },
   tiempos(token: string | null) {
@@ -558,6 +674,7 @@ export const operador = {
     exigirToken(token);
     return cambiar((e) => {
       const r = delFolio(e, folio);
+      if (!operaEnConsola(e, r.cadId)) throw new ErrorDemo(409, 'cad_con_sistema_propio');
       // La clasificación se puede corregir aun cerrado el reporte (sirve a la estadística).
       if (ESTADOS_FINALES.includes(r.estado) && a.accion !== 'reclasificar') throw new ErrorDemo(409, 'reporte_cerrado');
       // Si alguien despacha a mano, el CAD simulado deja de mover ese reporte (corregir el código no cuenta).
@@ -605,6 +722,7 @@ function aplicar(e: Estado, r: ReporteDemo, a: AccionDemo, autor: string) {
     }
     case 'transferir':
       if (a.cadDestinoId === r.cadId || !CADS_DEMO.some((c) => c.id === a.cadDestinoId)) throw new ErrorDemo(400, 'cad_destino_invalido');
+      if (!cadConectado(e, a.cadDestinoId)) throw new ErrorDemo(400, 'cad_destino_no_conectado', 'Ese municipio aún no está conectado a POL-IAQ; transfiere al CQ CIAS.');
       transicionar(r, 'transferido', a.motivo ?? `Transferido a ${nombreCad(a.cadDestinoId)}`);
       r.cadId = a.cadDestinoId;
       r.unidad = null;
@@ -631,10 +749,10 @@ function tic() {
     for (const r of e.reportes) {
       if (ESTADOS_FINALES.includes(r.estado)) continue;
       let cambio = false;
-      // Sin acuse a tiempo, el reporte pasa al C5 con el mismo folio.
+      // Sin acuse a tiempo, el reporte pasa al CQ CIAS con el mismo folio.
       if (!r.cadSimulado && r.estado === 'recibido' && !r.folioCad && r.cadId !== CAD_ESTATAL_ID
         && real - new Date(r.creadoEn).getTime() > ESPERA_ACUSE_SEG * 1000) {
-        r.historial.push({ estado: 'recibido', en: ahoraIso(), nota: `${nombreCad(r.cadId)} no acusó en ${ESPERA_ACUSE_SEG} s; se escaló al C5` });
+        r.historial.push({ estado: 'recibido', en: ahoraIso(), nota: `${nombreCad(r.cadId)} no acusó en ${ESPERA_ACUSE_SEG} s; se escaló al ${NOMBRE_RESPALDO_ESTATAL}` });
         r.cadId = CAD_ESTATAL_ID;
         cambio = true;
       }
@@ -657,9 +775,10 @@ function tic() {
     // Una unidad que terminó vuelve a su zona de patrullaje: si se quedara en el lugar del último
     // reporte, el siguiente reporte en el mismo sitio mediría un traslado de 0 s.
     const ocupadas = new Set(activos(e).filter((r) => r.unidad).map((r) => r.unidad!.unidadId));
-    for (const u of UNIDADES_DEMO) {
+    for (const u of unidadesActivas(e)) {
       const p = e.avl[u.unidadId];
-      if (!ocupadas.has(u.unidadId) && p && distanciaMetros(p, u.base) > 15) {
+      if (!p) { e.avl[u.unidadId] = { ...u.base, en: ahoraIso() }; if (!folios.length) folios.push('*'); continue; }
+      if (!ocupadas.has(u.unidadId) && distanciaMetros(p, u.base) > 15) {
         e.avl[u.unidadId] = { ...u.base, en: ahoraIso() };
         if (!folios.length) folios.push('*');
       }
@@ -697,4 +816,241 @@ function avanzarSimulador(e: Estado, r: ReporteDemo, t: number): boolean {
     cambio = true;
   }
   return cambio;
+}
+
+// ---------------------------------------------------------------------------
+// Alta de municipios, unidades, reportes, SESNSP y versión pública
+// (lo que hacen /v1/admin, /v1/operador/unidades, /v1/operador/estadistica,
+// /v1/operador/sesnsp y /v1/publico)
+// ---------------------------------------------------------------------------
+
+export interface AltaDemo {
+  cadId: string;
+  nombre: string;
+  clave: string | null;
+  modo: 'webhook' | 'consola';
+  webhookUrl?: string;
+  secreto?: string;
+  certificadoSha256?: string;
+  ipsPermitidas?: string[];
+  contactoTecnico: { nombre: string; correo: string };
+}
+
+function vistaCad(e: Estado, cadId: string) {
+  const m = municipioPorCad(cadId);
+  const r = e.registros?.[cadId];
+  const conectado = cadConectado(e, cadId);
+  return {
+    cadId,
+    nombre: r?.nombre ?? nombreDeCad(cadId),
+    clave: m?.clave ?? null,
+    claveFolio: m?.claveFolio ?? null,
+    municipio: m?.nombre ?? null,
+    piloto: m?.piloto ?? false,
+    registrado: !!r,
+    modo: r?.modo ?? (conectado ? 'consola' : null),
+    estado: r?.estado ?? (conectado ? 'activo' : null),
+    conectado,
+    sinCapacidad: conectado ? capacidad(e, cadId) : null,
+    sinOperador: !!e.sinOperador?.[cadId],
+    webhookUrl: r?.webhookUrl ?? null,
+    tieneSecreto: false,
+    certificadoSha256: null,
+    ipsPermitidas: [] as string[],
+    poligonoPropio: false,
+    contactoTecnico: r?.contactoTecnico ?? null,
+    casosPrueba: CASOS_PRUEBA_CAD.map((c) => ({ ...c, resultado: r?.casosPrueba[c.id] ?? null })),
+    casosPendientes: casosPendientes(r?.casosPrueba as Parameters<typeof casosPendientes>[0]),
+    unidades: unidadesActivas(e).filter((u) => u.cadId === cadId).length,
+    migracion: null,
+    actualizadoEn: r?.actualizadoEn ?? null,
+  };
+}
+export type VistaCad = ReturnType<typeof vistaCad>;
+
+export const admin = {
+  cads(token: string | null) {
+    exigirToken(token);
+    const e = leer();
+    return { cads: CAD_IDS.map((id) => vistaCad(e, id)), casos: CASOS_PRUEBA_CAD, ambiente: 'pruebas' as const };
+  },
+  guardar(token: string | null, datos: AltaDemo) {
+    exigirToken(token);
+    const p = AltaCadSchema.safeParse({ ...datos, ipsPermitidas: datos.ipsPermitidas ?? [] });
+    if (!p.success) throw new ErrorDemo(400, 'alta_invalida', p.error.issues.map((i) => i.message).join('; '));
+    // La demo no guarda secretos: solo pide que venga uno en Modo A, como el API.
+    if (p.data.modo === 'webhook' && !p.data.secreto) throw new ErrorDemo(400, 'falta_secreto', 'El Modo A (webhook) requiere el secreto HMAC compartido.');
+    return cambiar((e) => {
+      const previo = e.registros?.[p.data.cadId];
+      const yaConectado = !!municipioPorCad(p.data.cadId)?.piloto || p.data.cadId === CAD_ESTATAL_ID;
+      if (previo?.modo === 'consola' && p.data.modo === 'webhook' && previo.estado === 'activo') throw new ErrorDemo(409, 'usar_migracion');
+      (e.registros ??= {})[p.data.cadId] = {
+        cadId: p.data.cadId, nombre: p.data.nombre, clave: p.data.clave, modo: p.data.modo,
+        estado: previo?.estado ?? (yaConectado ? 'activo' : 'pruebas'),
+        webhookUrl: p.data.modo === 'webhook' ? p.data.webhookUrl ?? null : null,
+        contactoTecnico: { nombre: p.data.contactoTecnico.nombre, correo: p.data.contactoTecnico.correo },
+        casosPrueba: previo && previo.modo === p.data.modo ? previo.casosPrueba : {},
+        actualizadoEn: ahoraIso(),
+      };
+      return { resultado: vistaCad(e, p.data.cadId), folios: ['*'] };
+    });
+  },
+  estado(token: string | null, cadId: string, estado: 'pruebas' | 'activo' | 'suspendido') {
+    exigirToken(token);
+    return cambiar((e) => {
+      const r = e.registros?.[cadId];
+      if (!r) throw new ErrorDemo(404, 'cad_sin_alta');
+      if (estado === 'activo') {
+        if (r.modo === 'webhook' && casosPendientes(r.casosPrueba as Parameters<typeof casosPendientes>[0]).length) {
+          throw new ErrorDemo(409, 'casos_pendientes', 'Faltan los 8 casos de prueba. En el servicio real los corre la suite de certificación contra el ambiente de pruebas.');
+        }
+        if (r.modo === 'consola' && !unidadesActivas(e).some((u) => u.cadId === cadId)) throw new ErrorDemo(409, 'sin_unidades', 'Registra al menos una unidad antes de activar el despacho desde la consola.');
+      }
+      r.estado = estado;
+      r.actualizadoEn = ahoraIso();
+      return { resultado: vistaCad(e, cadId), folios: ['*'] };
+    });
+  },
+};
+
+export interface UnidadNueva { unidadId: string; cadId: string; tipo: TipoUnidad; corporacion: string; etiqueta: string; activa: boolean }
+
+export function guardarUnidad(token: string | null, u: UnidadNueva) {
+  exigirToken(token);
+  if (!/^[A-Za-z0-9-]{1,30}$/.test(u.unidadId.trim())) throw new ErrorDemo(400, 'datos_invalidos', 'Clave de unidad: letras, números y guiones.');
+  if (!TIPOS_UNIDAD.some((t) => t.id === u.tipo) || !CORPORACIONES.some((c) => c.id === u.corporacion)) throw new ErrorDemo(400, 'datos_invalidos');
+  if (u.etiqueta.trim().length < 2) throw new ErrorDemo(400, 'datos_invalidos', 'Escribe el nombre de la unidad.');
+  if (!CAD_IDS.includes(u.cadId)) throw new ErrorDemo(400, 'cad_desconocido');
+  return cambiar((e) => {
+    const unidadId = u.unidadId.trim().toUpperCase();
+    if (unidadesTodas(e).some((x) => x.unidadId === unidadId && x.cadId !== u.cadId)) throw new ErrorDemo(409, 'unidad_de_otro_cad', `La clave ${unidadId} ya es de otro CAD.`);
+    if (!u.activa && activos(e).some((r) => r.unidad?.unidadId === unidadId)) throw new ErrorDemo(409, 'unidad_ocupada');
+    const lista = (e.unidadesRegistradas ??= []);
+    const previa = lista.find((x) => x.unidadId === unidadId);
+    const m = municipioPorCad(u.cadId);
+    // Base ficticia dentro de la geocerca del municipio (la posición real llega por GPS).
+    const centro = previa?.base ?? (m ? puntoInterior(m.geocerca) : null) ?? { lat: 20.47, lng: -100.2 };
+    const n = lista.filter((x) => x.cadId === u.cadId).length;
+    const base = previa?.base ?? { lat: +(centro.lat + 0.004 * ((n % 3) - 1)).toFixed(5), lng: +(centro.lng + 0.004 * ((Math.floor(n / 3) % 3) - 1)).toFixed(5) };
+    const nueva: UnidadRegistradaDemo = { unidadId, cadId: u.cadId, tipo: u.tipo, corporacion: u.corporacion, etiqueta: u.etiqueta.trim(), activa: u.activa, base, registradaEn: previa?.registradaEn ?? ahoraIso() };
+    if (previa) Object.assign(previa, nueva); else lista.push(nueva);
+    if (u.activa) e.avl[unidadId] ??= { ...base, en: ahoraIso() };
+    return { resultado: { unidad: nueva }, folios: ['*'] };
+  });
+}
+
+export interface FiltroReportes { cadId?: string; municipio?: string; periodo?: Periodo; fecha?: string }
+
+function filaDe(r: ReporteDemo): FilaEstadistica {
+  return {
+    folio: r.folio, cadId: r.cadId, municipioClave: claveCompleta(r.municipioClave), creadoEn: r.creadoEn, prioridad: r.prioridad, estado: r.estado,
+    cnie: r.cnie ?? null, unidad: r.unidad ? { unidadId: r.unidad.unidadId, etiqueta: r.unidad.etiqueta, corporacion: r.unidad.corporacion } : null,
+    tiempos: tiemposDe(r), queja: !!r.opinion?.queja, calificacion: r.opinion?.calificacion ?? null,
+    cadOrigen: r.ruta?.cadOrigen ?? r.cadId, respaldo: r.ruta?.motivo ?? null, canal: r.ruta?.canal ?? '911',
+  };
+}
+
+const hoyLocal = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+
+function filasFiltradas(f: FiltroReportes) {
+  const rango = f.periodo ? { ...rangoPeriodo(f.periodo, f.fecha || hoyLocal()), periodo: f.periodo } : { desde: undefined, hasta: undefined, etiqueta: 'Todo', periodo: 'todo' as const };
+  if (f.municipio && !municipioPorClave(f.municipio)) throw new ErrorDemo(400, 'municipio_desconocido', 'Usa la clave INEGI de 5 dígitos (22001 a 22018).');
+  const clave = f.municipio ? claveCompleta(f.municipio) : null;
+  const filas = leer().reportes.map(filaDe).filter((x) => (!f.cadId || x.cadId === f.cadId) && (!clave || x.municipioClave === clave) && enRango(x.creadoEn, rango.desde, rango.hasta));
+  return { rango, filas };
+}
+
+export const reportes = {
+  estadistica(token: string | null, f: FiltroReportes) {
+    exigirToken(token);
+    const { rango, filas } = filasFiltradas(f);
+    return { periodo: rango, filtros: { cadId: f.cadId ?? null, municipio: f.municipio ?? null }, metas: METAS, ...estadistica(filas) };
+  },
+  foliosCsv(token: string | null, f: FiltroReportes) {
+    exigirToken(token);
+    const { rango, filas } = filasFiltradas(f);
+    return { nombre: `poliaq-folios-${f.municipio ?? f.cadId ?? 'todos'}-${rango.desde ?? 'inicio'}_${rango.hasta ?? 'hoy'}.csv`, tipo: 'text/csv;charset=utf-8', datos: csvFolios(filas) as string | Uint8Array };
+  },
+};
+
+function delMes(e: Estado, mes: string) {
+  return e.reportes.map(filaDe).filter((f) => mesLocal(f.creadoEn) === mes);
+}
+function borrador(e: Estado, mes: string) {
+  const cierres = e.cierres ?? [];
+  const porFolio = new Map(e.reportes.map((r) => [r.folio, r]));
+  return cerrarMes(mes, delMes(e, mes), cierres, (f) => { const r = porFolio.get(f); return r && filaDe(r); }, OPERADOR_DEMO.usuario);
+}
+const sinFoto = ({ foto: _f, ...c }: CierreMensual) => c;
+
+export const sesnsp = {
+  lista(token: string | null) {
+    exigirToken(token);
+    const cierres = leer().cierres ?? [];
+    return {
+      mesActual: mesLocal(new Date().toISOString()),
+      cierres: cierres.map((c) => ({ mes: c.mes, cerradoEn: c.cerradoEn, cerradoPor: c.cerradoPor, filas: c.filas.length, total: c.filas.reduce((n, f) => n + f.total, 0), ajustes: c.ajustes.length, prueba: !!c.prueba })),
+      /** Solo en la demo: se puede cerrar el mes en curso para probar el corte (en producción, solo meses terminados). */
+      cierreDePrueba: true,
+      nota: 'Columnas según lo pedido por POL-IAQ; el formato oficial del CNI/SESNSP está por confirmar con el CQ CIAS.',
+    };
+  },
+  mes(token: string | null, mes: string) {
+    exigirToken(token);
+    if (!/^\d{4}-\d{2}$/.test(mes)) throw new ErrorDemo(400, 'mes_invalido');
+    const e = leer();
+    const c = (e.cierres ?? []).find((x) => x.mes === mes);
+    if (c) return { estado: 'cerrado' as const, ...sinFoto(c) };
+    return { estado: 'borrador' as const, ...sinFoto(borrador(e, mes)), cerradoEn: null as string | null, cerradoPor: null as string | null };
+  },
+  /**
+   * Cierra un mes terminado. `prueba` (solo en la demo) permite cerrar el mes en curso para probar el
+   * corte congelado; queda marcado como cierre de prueba. En producción el API solo cierra meses terminados.
+   */
+  cerrar(token: string | null, mes: string, prueba = false) {
+    exigirToken(token);
+    const enCurso = mes >= mesLocal(new Date().toISOString());
+    if (enCurso && !prueba) throw new ErrorDemo(409, 'mes_en_curso', 'Solo se cierran meses terminados.');
+    if (mes > mesLocal(new Date().toISOString())) throw new ErrorDemo(409, 'mes_en_curso', 'Ese mes aún no empieza.');
+    return cambiar((e) => {
+      if ((e.cierres ?? []).some((x) => x.mes === mes)) throw new ErrorDemo(409, 'mes_ya_cerrado');
+      const c = { ...borrador(e, mes), ...(enCurso && { prueba: true }) };
+      (e.cierres ??= []).push(c);
+      return { resultado: { estado: 'cerrado' as const, ...sinFoto(c) }, folios: ['*'] };
+    });
+  },
+  archivo(token: string | null, mes: string, archivo: 'reporte.csv' | 'ajustes.csv' | 'reporte.xlsx') {
+    exigirToken(token);
+    const e = leer();
+    const cerrado = (e.cierres ?? []).find((x) => x.mes === mes);
+    const c = cerrado ?? borrador(e, mes);
+    const suf = cerrado ? '-cerrado' : '-borrador';
+    if (archivo === 'reporte.csv') return { nombre: `sesnsp-${mes}${suf}.csv`, tipo: 'text/csv;charset=utf-8', datos: csvSesnsp(c) as string | Uint8Array };
+    if (archivo === 'ajustes.csv') return { nombre: `sesnsp-${mes}-ajustes${suf}.csv`, tipo: 'text/csv;charset=utf-8', datos: csvAjustesSesnsp(c) as string | Uint8Array };
+    return { nombre: `sesnsp-${mes}${suf}.xlsx`, tipo: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', datos: xlsxSesnsp(c) as string | Uint8Array };
+  },
+};
+
+/**
+ * Marca o quita «sin operador disponible» en un CAD municipal. Mientras esté marcado, los reportes
+ * nuevos de ese municipio van al CQ CIAS con ese motivo.
+ */
+export function marcarDisponibilidad(token: string | null, cadId: string, sinOperador: boolean) {
+  exigirToken(token);
+  if (cadId === CAD_ESTATAL_ID || !CAD_IDS.includes(cadId)) throw new ErrorDemo(400, 'cad_invalido');
+  return cambiar((e) => {
+    e.sinOperador ??= {};
+    if (sinOperador) e.sinOperador[cadId] = { en: ahoraIso(), nota: null }; else delete e.sinOperador[cadId];
+    return { resultado: { cadId, sinOperador, sinCapacidad: capacidad(e, cadId) }, folios: ['*'] };
+  });
+}
+
+/** El actor 19 (Estado): solo su ámbito; clave, tipo y regla de enrutado están pendientes de decisión. */
+export const actorEstado = () => ACTOR_ESTADO;
+
+/** Versión pública agregada (sin folios, ubicaciones, unidades ni datos personales). */
+export function tiemposPublicos(periodo: Periodo = 'mensual', fecha = hoyLocal()) {
+  const rango = rangoPeriodo(periodo, fecha);
+  const filas = leer().reportes.map(filaDe).filter((f) => enRango(f.creadoEn, rango.desde, rango.hasta));
+  return estadisticaPublica(filas, rango);
 }

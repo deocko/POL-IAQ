@@ -6,6 +6,7 @@ import './consola.css';
 import {
   buscarCnie, duracionTexto, estimarRuta, etiquetaCnie, incidenteCnie, nombreLegible, subtipoPermiteAnonimo, type GrupoCnie, type IncidenteCnie, type TiempoEtapa,
   puedeDespachar, etaSuperaMeta,
+  municipioPorClave, NOMBRE_RESPALDO_ESTATAL, TEXTO_ANONIMA_089,
 } from '@pol-iaq/shared/movil';
 import { Mapa } from '../../lib/mapa/Mapa';
 import { SelectorTema } from '../../lib/tema';
@@ -17,6 +18,7 @@ import {
   CORPORACION, DEMO, ERRORES, IDENTIDAD, LLEGO, ahoraMs, conectarOperacion, distanciaTexto, ESTADO, ErrorApi, api, esFinal, hace, hora, ordenar,
   type Accion, type Reporte, type Tablero, type UnidadDisponible, type Yo,
 } from './consola';
+import { FormUnidad, VistaMunicipios, VistaReportes, VistaSesnsp, tipoDeUnidad } from './municipios';
 
 const CLAVE_SESION = 'poliaq.consola.token';
 
@@ -94,7 +96,8 @@ function Entrar({ alEntrar }: { alEntrar: (token: string, yo: Yo) => void }) {
   );
 }
 
-function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => void }) {
+function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSalir: () => void }) {
+  const [yo, setYo] = useState(yoInicial);
   const [reportes, setReportes] = useState<Map<string, Reporte>>(new Map());
   const [unidades, setUnidades] = useState<UnidadDisponible[]>([]);
   const [todos, setTodos] = useState(false);
@@ -102,13 +105,14 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
   const [enLinea, setEnLinea] = useState(false);
   const [aviso, setAviso] = useState('');
   const [ahora, setAhora] = useState(() => ahoraMs());
-  const [vista, setVista] = useState<'bandeja' | 'unidades' | 'tiempos'>('bandeja');
+  const [vista, setVista] = useState<'bandeja' | 'unidades' | 'tiempos' | 'reportes' | 'sesnsp' | 'municipios'>('bandeja');
   const supervision = yo.operador.cads.includes('*');
   const nombreCad = useCallback((id: string) => yo.cads.find((c) => c.id === id)?.nombre ?? id, [yo.cads]);
 
   const cargar = useCallback(async () => {
     try {
-      const [r, u] = await Promise.all([api.reportes(token, todos), api.unidades(token)]);
+      const [r, u, y] = await Promise.all([api.reportes(token, todos), api.unidades(token), api.yo(token)]);
+      setYo(y);
       setReportes(new Map(r.reportes.map((x) => [x.folio, x])));
       setUnidades(u.unidades);
       setCargado(true);
@@ -183,7 +187,7 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
       </div>
       {DEMO && <div className="c-demo c-demo-barra c-linea"><span>{'Demo: el API, el CAD y el GPS de las unidades corren simulados en tu navegador. Nada aquí es una emergencia real.'}</span><Link href="/demo/">Abrir la app ciudadana</Link><Velocidad /><span className="suave" data-testid="version">{etiquetaVersion()}</span></div>}
       <nav className="c-pestanas" aria-label="Vistas de la consola">
-        {([['bandeja', 'Bandeja'], ['unidades', 'Unidades (GPS)'], ['tiempos', 'Tiempos y quejas']] as const).map(([v, t]) => (
+        {([['bandeja', 'Bandeja'], ['unidades', 'Unidades (GPS)'], ['tiempos', 'Tiempos y quejas'], ['reportes', 'Reportes por municipio'], ...(supervision ? [['sesnsp', 'SESNSP mensual'], ['municipios', 'Municipios']] as const : [])] as const).map(([v, t]) => (
           <button key={v} className={vista === v ? 'activa' : ''} aria-pressed={vista === v} onClick={() => setVista(v)}>{t}</button>
         ))}
       </nav>
@@ -197,7 +201,10 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
         </div>
       )}
 
-      {vista === 'unidades' && <VistaUnidades unidades={unidades} reportes={lista} nombreCad={nombreCad} />}
+      {vista === 'unidades' && <VistaUnidades unidades={unidades} reportes={lista} nombreCad={nombreCad} form={<FormUnidad token={token} yo={yo} unidades={unidades} alGuardar={() => void cargar()} />} />}
+      {vista === 'reportes' && <VistaReportes token={token} yo={yo} ahora={ahora} />}
+      {vista === 'sesnsp' && supervision && <VistaSesnsp token={token} />}
+      {vista === 'municipios' && supervision && <VistaMunicipios token={token} alCambio={() => void cargar()} />}
       {vista === 'tiempos' && <VistaTiempos token={token} ahora={ahora} nombreCad={nombreCad} alAbrir={(f) => { setSel(f); setVista('bandeja'); setTodos(true); }} />}
       {vista === 'bandeja' && <div className={`c-columnas ${actual ? 'con-detalle' : ''}`}>
         <section className="c-bandeja" aria-label="Bandeja de reportes">
@@ -230,6 +237,7 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
                 {!esFinal(r.estado) && <ChipLlegada t={r.tiempos.llegada} />}
               </div>
               <div className="suave c-pequeno">{`${r.folio} · ${nombreCad(r.cadId)}`}</div>
+              {r.ruta?.canal === '089' ? <div className="c-pequeno c-respaldo">{TEXTO_ANONIMA_089}</div> : r.respaldo && <div className="c-pequeno c-respaldo">{r.respaldo}</div>}
               {r.escalaAlC5En && <Cuenta hasta={r.escalaAlC5En} ahora={ahora} />}
             </button>
           ))}
@@ -247,7 +255,7 @@ function Mesa({ token, yo, alSalir }: { token: string; yo: Yo; alSalir: () => vo
 
 function Cuenta({ hasta, ahora }: { hasta: string; ahora: number }) {
   const s = Math.round((new Date(hasta).getTime() - ahora) / 1000);
-  return <div className="c-cuenta">{s > 0 ? `Sin acuse: se escala al C5 en ${s} s` : 'Escalando al C5…'}</div>;
+  return <div className="c-cuenta">{s > 0 ? `Sin acuse: se escala al ${NOMBRE_RESPALDO_ESTATAL} en ${s} s` : `Escalando al ${NOMBRE_RESPALDO_ESTATAL}…`}</div>;
 }
 
 function Detalle({
@@ -306,9 +314,13 @@ function Detalle({
         <div className="c-etiquetas">
           {r.asistenciaDirecta && <span className="c-chip c-chip-alerta">Botón de asistencia directa</span>}
           {r.escenarioId && <span className="c-chip">Acceso rápido de lugar guardado</span>}
+          <span className="c-chip" data-testid="municipio-clave" title="Clave INEGI del municipio donde ocurre">{r.municipioClave ? `Municipio ${r.municipioClave} · ${municipioPorClave(r.municipioClave)?.nombre ?? ''}` : 'Fuera de Querétaro'}</span>
           <span className="c-chip" data-testid="prioridad-operativa">{`Prioridad operativa (respuesta): ${r.prioridad}`}</span>
+          {r.ruta?.canal === '089' && <span className="c-chip c-chip-aviso" data-testid="canal">{TEXTO_ANONIMA_089}</span>}
           {r.automatico && <span className="c-chip c-chip-neutro">Demo automática</span>}
         </div>
+        {r.respaldo && <p className="c-respaldo" data-testid="respaldo">{r.respaldo}</p>}
+        {r.ruta && r.ruta.cadOrigen !== r.cadId && <p className="suave c-pequeno" data-testid="cad-origen">{`Se creó para ${nombreCad(r.ruta.cadOrigen)}; hoy lo atiende ${nombreCad(r.cadId)}.`}</p>}
         {r.cerradoPorDemo && <p className="c-nota c-pequeno">Lo cerró la demo automática para acelerar el recorrido. En el servicio real, el reporte lo cierra el operador con “Cerrar como atendido”.</p>}
         {r.escalaAlC5En && <Cuenta hasta={r.escalaAlC5En} ahora={ahora} />}
       </div>
@@ -328,7 +340,7 @@ function Detalle({
           <h3>Reportante</h3>
           {r.reportante ? (
             <>
-              <div className="c-linea"><span>{r.reportante.nombre}</span>{r.reportante.identidad && r.reportante.identidad !== 'completa' && <span className="c-chip">{IDENTIDAD[r.reportante.identidad]}</span>}</div>
+              <div className="c-linea"><span>{r.reportante.identidad === 'anonimo' ? TEXTO_ANONIMA_089 : r.reportante.nombre}</span>{r.reportante.identidad && r.reportante.identidad !== 'completa' && <span className="c-chip">{IDENTIDAD[r.reportante.identidad]}</span>}</div>
               {r.reportante.identidad === 'completa' || !r.reportante.identidad
                 ? <a href={`tel:${r.reportante.telefono}`}>{r.reportante.telefono}</a>
                 : <div className="suave c-pequeno" data-testid="telefono-oculto">{`${r.reportante.telefono ? `Teléfono oculto, termina en ${r.reportante.telefono.slice(-4)}` : 'Sin teléfono'}. Contesta por el chat del folio.`}</div>}
@@ -406,7 +418,7 @@ function Detalle({
             <div className="c-form">
               <select value={destino} onChange={(e) => setDestino(e.target.value)} aria-label="CAD destino">
                 <option value="">Transferir a…</option>
-                {yo.cads.filter((c) => c.id !== r.cadId).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                {yo.cads.filter((c) => c.id !== r.cadId && c.conectado).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
               <input placeholder="Motivo (opcional)" value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={500} />
               <button className="c-boton-sec" disabled={ocupado || !destino} onClick={() => hacer({ accion: 'transferir', cadDestinoId: destino, ...(motivo && { motivo }) })}>Transferir</button>
@@ -646,9 +658,9 @@ function Tiempos({ t }: { t: Reporte['tiempos'] }) {
 }
 
 /** Todas las unidades con su GPS (AVL) en el mapa. */
-function VistaUnidades({ unidades, reportes, nombreCad }: { unidades: UnidadDisponible[]; reportes: Reporte[]; nombreCad: (id: string) => string }) {
+function VistaUnidades({ unidades, reportes, nombreCad, form }: { unidades: UnidadDisponible[]; reportes: Reporte[]; nombreCad: (id: string) => string; form?: React.ReactNode }) {
   const [cad, setCad] = useState('');
-  const visibles = unidades.filter((u) => !cad || u.cadId === cad);
+  const visibles = unidades.filter((u) => (!cad || u.cadId === cad) && u.activa !== false);
   const cads = [...new Set(unidades.map((u) => u.cadId))];
   const activos = reportes.filter((r) => !esFinal(r.estado) && (!cad || r.cadId === cad));
   return (
@@ -660,6 +672,7 @@ function VistaUnidades({ unidades, reportes, nombreCad }: { unidades: UnidadDisp
           {cads.map((c) => <option key={c} value={c}>{nombreCad(c)}</option>)}
         </select>
       </div>
+      {form}
       <Mapa
         reporte={activos[0]?.ubicacion ?? null}
         etiquetaReporte={activos[0] ? `${activos[0].incidente} (${activos[0].folio})` : undefined}
@@ -672,7 +685,7 @@ function VistaUnidades({ unidades, reportes, nombreCad }: { unidades: UnidadDisp
         <tbody>
           {visibles.map((u) => (
             <tr key={u.unidadId}>
-              <th scope="row">{u.etiqueta}<div className="suave c-pequeno">{CORPORACION[u.corporacion] ?? u.corporacion}</div></th>
+              <th scope="row">{u.etiqueta}<div className="suave c-pequeno">{`${tipoDeUnidad(u.tipo)} · ${CORPORACION[u.corporacion] ?? u.corporacion}`}</div></th>
               <td>{nombreCad(u.cadId)}</td>
               <td>{u.ocupadaEn ? <span className="c-chip">{`Atiende ${u.ocupadaEn}`}</span> : <span className="c-chip c-chip-ok">Libre</span>}</td>
               <td className="c-pequeno">{u.posicion ? `${u.posicion.lat.toFixed(4)}, ${u.posicion.lng.toFixed(4)}` : 'Sin señal'}</td>

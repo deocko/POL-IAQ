@@ -14,6 +14,17 @@ export interface CadConfig {
   webhookUrl?: string;
   /** Secreto compartido para firmar en ambos sentidos (HMAC-SHA256). */
   secreto?: string;
+  /**
+   * `pruebas`, `activo` o `suspendido` (alta de municipios). Sin estado (CAD de `CADS_JSON`)
+   * cuenta como activo, igual que antes.
+   */
+  estado?: 'pruebas' | 'activo' | 'suspendido';
+  /** IPs o rangos CIDR desde los que el CAD puede llamar al API. Vacío = cualquiera. */
+  ipsPermitidas?: string[];
+  /** Huella SHA-256 del certificado de cliente (mTLS) que debe presentar el CAD. */
+  certificadoSha256?: string;
+  /** Polígono de jurisdicción propio [[lng, lat], ...]; sin él, el de INEGI 2022. */
+  poligono?: [number, number][];
 }
 
 /** Operador de la consola web. TODO(fase 1): SSO (OIDC) con segundo factor. */
@@ -34,6 +45,8 @@ export interface UnidadConfig {
   etiqueta: string;
   /** Posición inicial mientras no llega GPS (AVL). Opcional. */
   base?: { lat: number; lng: number };
+  /** patrulla, motopatrulla, ambulancia o bomberos. Sin él se deduce de la etiqueta. */
+  tipo?: string;
 }
 
 export interface SmsConfig {
@@ -71,6 +84,15 @@ export interface Config {
   asignacionAutomatica: boolean;
   /** Servicio de rutas OSRM (propio) para el tiempo de llegada por ruta real. Sin él se estima por calles. */
   rutasOsrmUrl?: string;
+  /**
+   * Cabecera con el certificado de cliente que pone el proxy que termina mTLS (PEM en URL,
+   * como `X-Forwarded-Client-Cert` de Envoy o `ssl-client-cert` de NGINX). Ver docs/interconexion.
+   */
+  cabeceraCertificado: string;
+  /** Exigir certificado de cliente a todo CAD con huella registrada (en producción, sí). */
+  exigirMtls: boolean;
+  /** Valor de `trust proxy` de Express (p. ej. `1` o `10.0.0.0/8`) para tomar la IP real del CAD. */
+  confiarProxy?: string;
 }
 
 /** Hash de una clave de operador (scrypt). */
@@ -131,6 +153,9 @@ export function cargarConfig(env: NodeJS.ProcessEnv = process.env): Config {
     unidades: env.UNIDADES_JSON ? (JSON.parse(env.UNIDADES_JSON) as UnidadConfig[]) : produccion ? [] : UNIDADES_DESARROLLO,
     asignacionAutomatica: env.AUTO_ASSIGN !== 'off',
     rutasOsrmUrl: env.ROUTING_OSRM_URL || undefined,
+    cabeceraCertificado: (env.MTLS_CERT_HEADER ?? 'x-client-cert').toLowerCase(),
+    exigirMtls: env.MTLS_REQUIRED ? env.MTLS_REQUIRED !== 'off' : produccion,
+    confiarProxy: env.TRUST_PROXY || undefined,
   };
 }
 

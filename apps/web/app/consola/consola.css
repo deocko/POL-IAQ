@@ -130,3 +130,44 @@
 /* Piezas de una misma línea como bloques con separación: así ningún lector las une sin espacio. */
 .c-linea { display: flex; flex-wrap: wrap; align-items: center; column-gap: .4em; row-gap: .2em; }
 .c-leyenda.c-linea > span { display: inline-flex; align-items: center; gap: .3em; }
+
+/* Municipios, unidades, reportes por municipio y SESNSP */
+.c-tabla-desliza { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: var(--e3); }
+.c-tabla-desliza .c-tiempos { min-width: 560px; }
+.c-mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .8125rem; }
+.c-municipios th[scope="row"] .c-chip { margin-left: var(--e2); }
+.c-acciones-fila { display: flex; gap: var(--e1); flex-wrap: wrap; justify-content: flex-end; }
+.c-acciones-fila button { min-height: var(--toque); }
+.c-alta { display: grid; gap: var(--e1); }
+.c-opciones { border: 1px solid var(--borde); border-radius: var(--r-s); padding: var(--e2) var(--e3); display: grid; gap: var(--e1); margin: 0; }
+.c-opciones legend { font-weight: 600; font-size: .875rem; padding: 0 var(--e1); }
+.c-opciones .c-check { min-height: var(--toque); }
+.c-filtros, .c-form-unidad { align-items: end; }
+.c-filtros .c-campo, .c-form-unidad .c-campo { flex: 1 1 180px; margin-top: 0; }
+.c-form-unidad .c-boton { min-height: var(--toque); }
+.c-campo-linea { display: flex; align-items: center; gap: var(--e2); margin-top: 0; }
+.c-sesnsp td, .c-sesnsp th { white-space: nowrap; }
+/* Encabezados en dos renglones (y con guion suave) para que a 1280 px o más la tabla quepa sin desplazamiento. */
+.c-sesnsp thead th { white-space: normal; vertical-align: bottom; hyphens: manual; }
+.c-sesnsp .c-grupo-col { text-align: center; border-bottom: 1px solid var(--borde); }
+.c-sesnsp th[scope="row"] { white-space: normal; min-width: 160px; }
+.c-panel-ancho { max-width: 1400px; }
+.c-solo-imprimir { display: none; }
+details.c-tarjeta > summary { cursor: pointer; font-weight: 700; min-height: var(--toque); display: flex; align-items: center; }
+
+@media print {
+  .c-cabecera, .c-subcabecera, .c-demo-barra, .c-pestanas, .c-no-imprimir, .c-aviso, .c-botones { display: none !important; }
+  .c-solo-imprimir { display: block; }
+  body, .c-mesa { background: #fff !important; color: #000 !important; }
+  .c-panel, .c-tarjeta { box-shadow: none !important; border: 1px solid #999 !important; background: #fff !important; color: #000 !important; break-inside: avoid; }
+  .c-tabla-desliza { overflow: visible; }
+  .c-tabla-desliza .c-tiempos { min-width: 0; }
+  .c-chip { border: 1px solid #666; background: #fff !important; color: #000 !important; }
+  .suave { color: #333 !important; }
+}
+.c-publico { max-width: 960px; margin: 0 auto; padding: var(--e4); display: grid; gap: var(--e3); }
+.c-publico h1 { margin: 0; font-size: 1.5rem; }
+.c-publico h2 { font-size: 1.125rem; margin: 0 0 var(--e2); }
+/* Respaldo estatal (CQ CIAS): por qué lo atiende el CQ CIAS desde su creación. */
+.c-respaldo { margin: 4px 0 0; font-weight: 700; color: var(--aviso); }
+.c-acciones-fila button { white-space: nowrap; }

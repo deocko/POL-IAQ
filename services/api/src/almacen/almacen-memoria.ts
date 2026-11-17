@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { ESTADOS_FINALES, PERFIL_VACIO, type Perfil } from '@pol-iaq/shared';
+import { ESTADOS_FINALES, PERFIL_VACIO, type CierreMensual, type Perfil } from '@pol-iaq/shared';
 import { Almacen } from './almacen';
-import type { Auditoria, Ciudadano, Envio, Otp, Reporte } from './modelos';
+import type { Auditoria, Ciudadano, Envio, Otp, DisponibilidadCad, RegistroCad, Reporte, UnidadRegistrada } from './modelos';
 
 const copia = <T>(x: T): T => structuredClone(x);
 
@@ -17,6 +17,9 @@ export class AlmacenMemoria extends Almacen {
   private readonly envios = new Map<string, Envio>();
   private readonly colas = new Map<string, Promise<unknown>>();
   private readonly perfiles = new Map<string, Perfil>();
+  private readonly registros = new Map<string, RegistroCad>();
+  private readonly unidades = new Map<string, UnidadRegistrada>();
+  private readonly cierres = new Map<string, CierreMensual>();
 
   async ciudadanoPorTelefono(telefono: string) {
     const c = [...this.ciudadanos.values()].find((x) => x.telefono === telefono);
@@ -60,6 +63,13 @@ export class AlmacenMemoria extends Almacen {
       .filter((r) => (todos || cadIds.includes(r.cadId)) && (!soloActivos || !ESTADOS_FINALES.includes(r.estado)))
       .sort((a, b) => b.creadoEn.localeCompare(a.creadoEn))
       .slice(0, 200)
+      .map(copia);
+  }
+  async reportesEntre(cadIds: string[], desdeIso: string | null, hastaIso: string | null) {
+    const todos = !cadIds.length || cadIds.includes('*');
+    return [...this.reportes.values()]
+      .filter((r) => (todos || cadIds.includes(r.cadId)) && (!desdeIso || r.creadoEn >= desdeIso) && (!hastaIso || r.creadoEn < hastaIso))
+      .sort((a, b) => a.creadoEn.localeCompare(b.creadoEn))
       .map(copia);
   }
   async contarReportesDesde(ciudadanoId: string, desdeIso: string) {
@@ -120,8 +130,39 @@ export class AlmacenMemoria extends Almacen {
     if (o) Object.assign(o, cambios);
   }
 
+  async registrosCad() {
+    return [...this.registros.values()].map(copia);
+  }
+  async guardarRegistroCad(r: RegistroCad) {
+    this.registros.set(r.cadId, copia(r));
+  }
+  private disponibilidad = new Map<string, DisponibilidadCad>();
+  async disponibilidades() {
+    return [...this.disponibilidad.values()].map(copia);
+  }
+  async guardarDisponibilidad(d: DisponibilidadCad) {
+    this.disponibilidad.set(d.cadId, copia(d));
+  }
+  async unidadesRegistradas() {
+    return [...this.unidades.values()].map(copia);
+  }
+  async guardarUnidad(u: UnidadRegistrada) {
+    this.unidades.set(u.unidadId, copia(u));
+  }
+  async cierresSesnsp() {
+    return [...this.cierres.values()].sort((a, b) => a.mes.localeCompare(b.mes)).map(copia);
+  }
+  async guardarCierreSesnsp(c: CierreMensual) {
+    if (this.cierres.has(c.mes)) return false;
+    this.cierres.set(c.mes, copia(c));
+    return true;
+  }
+
   async guardarEnvio(e: Envio) {
     this.envios.set(e.evento.eventoId, copia(e));
+  }
+  async enviosDe(folio: string) {
+    return [...this.envios.values()].filter((e) => e.evento.folio === folio).map(copia);
   }
   async enviosPendientes() {
     return [...this.envios.values()].filter((e) => e.estado === 'pendiente').map(copia);
