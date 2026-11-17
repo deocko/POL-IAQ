@@ -110,6 +110,11 @@ export type ColumnaFolio =
 export const COLUMNAS_FOLIO: readonly { id: ColumnaFolio; nombre: string; lista?: boolean }[] = [
   { id: 'folio', nombre: 'Folio' },
   { id: 'fecha', nombre: 'Fecha' },
+  { id: 'nombre', nombre: 'Nombre' },
+  { id: 'telefono', nombre: 'Teléfono' },
+  { id: 'canal', nombre: 'Canal de origen', lista: true },
+  { id: 'tipoTelefono', nombre: 'Tipo de teléfono', lista: true },
+  { id: 'demora', nombre: 'Demora' },
   { id: 'municipio', nombre: 'Municipio', lista: true },
   { id: 'cnieTipo', nombre: 'CNIE tipo', lista: true },
   { id: 'cnieSubtipo', nombre: 'CNIE subtipo', lista: true },
@@ -119,11 +124,6 @@ export const COLUMNAS_FOLIO: readonly { id: ColumnaFolio; nombre: string; lista?
   { id: 'prioridadCnie', nombre: 'Prioridad CNIE', lista: true },
   { id: 'unidad', nombre: 'Unidad', lista: true },
   { id: 'corporacion', nombre: 'Corporación', lista: true },
-  { id: 'canal', nombre: 'Canal de origen', lista: true },
-  { id: 'tipoTelefono', nombre: 'Tipo de teléfono', lista: true },
-  { id: 'nombre', nombre: 'Nombre' },
-  { id: 'telefono', nombre: 'Teléfono' },
-  { id: 'demora', nombre: 'Demora' },
 ];
 
 /** Texto que se muestra (y se busca) en cada celda. */
