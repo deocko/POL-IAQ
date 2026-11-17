@@ -350,3 +350,12 @@ details.c-tarjeta > summary { cursor: pointer; font-weight: 700; min-height: var
 /* Los «summary» con display:flex pierden el triángulo: se dibuja aquí. */
 .c-umbrales summary::before, .c-folio-mas summary::before { content: '▸'; margin-right: .4em; }
 .c-umbrales[open] > summary::before, .c-folio-mas[open] > summary::before { content: '▾'; }
+/* SESNSP en tablet: letra y relleno compactos para que las 11 columnas quepan desde 768 px sin cortarse. */
+@media (min-width: 768px) and (max-width: 1279.98px) {
+  .c-sesnsp { font-size: .78rem; }
+  .c-sesnsp th, .c-sesnsp td { padding: 6px 4px; }
+  .c-sesnsp thead th { text-transform: none; letter-spacing: 0; font-size: .72rem; }
+  .c-sesnsp td:nth-child(2) { white-space: normal; }
+  .c-sesnsp th[scope="row"] { min-width: 104px; }
+  .c-sesnsp .c-mono { font-size: .75rem; }
+}
