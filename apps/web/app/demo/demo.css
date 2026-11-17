@@ -189,3 +189,39 @@
 /* Lugar de prueba con su destino actual (CAD local o CQ CIAS). */
 .d-chip-lugar { flex-direction: column; align-items: flex-start; gap: 0; padding-top: 6px; padding-bottom: 6px; border-radius: var(--r-m, 12px); line-height: 1.25; text-align: left; }
 .d-chip-destino { font-size: .75rem; font-weight: 500; opacity: .85; }
+
+/* ── Mensaje 12: la app ciudadana usa el ancho de cada pantalla ─────────────────────────────
+ * Móvil (<768): una columna a todo el ancho. Tablet (768–1279): contenido ancho, mosaicos en 4
+ * columnas. Escritorio (≥1024/1280): el formulario y el seguimiento se reparten en dos columnas para
+ * no dejar márgenes muertos. Botones y campos a todo el ancho de su bloque, objetivo táctil ≥ 44 px. */
+.app { --ancho-app: 100%; }
+.app-contenido { width: 100%; padding-left: clamp(.75rem, .4rem + 1.5vw, 1.5rem); padding-right: clamp(.75rem, .4rem + 1.5vw, 1.5rem); }
+.barra-app { padding-left: clamp(.75rem, .4rem + 1.5vw, 1.5rem); padding-right: clamp(.75rem, .4rem + 1.5vw, 1.5rem); }
+.pestanas button { max-width: none; }
+.d-detalles summary { min-height: var(--toque); display: flex; align-items: center; }
+.d-bloque select, .d-bloque input:not([type="checkbox"]):not([type="radio"]), .d-bloque textarea { width: 100%; }
+.d-chips > .d-chip { flex: 1 1 auto; }
+.d-opcion { min-width: var(--toque); justify-content: center; }
+.d-chat input { min-width: 0; }
+@media (max-width: 400px) { .d-acciones { grid-template-columns: 1fr; } }
+@media (min-width: 768px) {
+  .app { --ancho-app: 1600px; }
+  .app-contenido { max-width: min(1600px, 100%); }
+  .barra-app { padding-left: max(clamp(.75rem, .4rem + 1.5vw, 1.5rem), calc((100% - 1600px) / 2 + 1.5rem)); padding-right: max(clamp(.75rem, .4rem + 1.5vw, 1.5rem), calc((100% - 1600px) / 2 + 1.5rem)); }
+  .pestanas { padding-left: max(0px, calc((100% - 1600px) / 2)); padding-right: max(0px, calc((100% - 1600px) / 2)); }
+  .d-mosaicos { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .d-mosaico { min-height: 104px; }
+  .d-registro { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; column-gap: var(--e6); }
+  .d-registro > .d-centro { grid-column: 1 / -1; }
+}
+@media (min-width: 1024px) {
+  .d-mosaicos { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  /* Formulario del reporte: dos columnas; encabezado, errores y botón de enviar a todo el ancho. */
+  .d-confirmar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .d-confirmar > .d-encabezado, .d-confirmar > .d-accion-fija, .d-confirmar > .c-error, .d-confirmar > .estado, .d-confirmar > [role="alert"] { grid-column: 1 / -1; }
+  /* Seguimiento del folio: el estado arriba a todo el ancho y las tarjetas en dos columnas. */
+  .d-seguimiento { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .d-seguimiento > .d-hero { grid-column: 1 / -1; }
+}
+.d-detalles summary::before { content: '▸'; margin-right: .4em; }
+.d-detalles[open] > summary::before { content: '▾'; }

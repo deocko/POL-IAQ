@@ -39,7 +39,6 @@
 .c-bandeja, .c-detalle { min-width: 0; }
 .c-bandeja h2 { font-size: 1.125rem; margin: var(--e2) 0; }
 .c-detalle { padding-top: var(--e2); }
-.c-vacio { display: grid; place-items: center; text-align: center; border: 1px dashed var(--borde-fuerte); border-radius: var(--r-m); min-height: 240px; padding: var(--e5); margin-top: var(--e2); }
 .c-volver { display: none; }
 .c-esq-item { height: 96px; margin-bottom: var(--e2); }
 .c-esq-kpi { height: 84px; }
@@ -106,11 +105,8 @@
 .c-kpi.alerta strong { color: var(--asistencia); }
 .c-lista-plana { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--e2); }
 
-@media (max-width: 760px) {
-  .c-columnas { grid-template-columns: minmax(0, 1fr); }
-  .c-columnas.con-detalle .c-bandeja { display: none; }
-  .c-columnas:not(.con-detalle) .c-vacio { display: none; }
-  .c-volver { display: inline-flex; }
+/* Móvil (<768 px): ver el bloque «Mensaje 12» al final. */
+@media (max-width: 767.98px) {
   .c-ocultable { display: none; }
   .c-tiempos { font-size: .8125rem; }
   .c-unidades td:nth-child(4), .c-unidades th:nth-child(4) { display: none; }
@@ -229,3 +225,160 @@ details.c-tarjeta > summary { cursor: pointer; font-weight: 700; min-height: var
 .c-tabla-folios .c-filtros-columna select, .c-tabla-folios .c-filtros-columna input { min-height: 30px; font-size: .78rem; padding: 2px 6px; max-width: 11rem; }
 .c-orden { background: none; border: 0; font: inherit; font-weight: 700; color: inherit; cursor: pointer; padding: 0; }
 .c-paginas { display: flex; align-items: center; gap: var(--e3); justify-content: flex-end; margin-top: var(--e3); }
+
+/* ── Mensaje 12: diseño responsivo (escritorio ≥1280, tablet 768–1279, móvil <768) ───────────
+ * - Las columnas (bandeja + detalle) usan todo el ancho y el alto restante de la ventana; la lista y el
+ *   detalle se desplazan dentro de su columna (--alto-cabecera y --alto-barra los mide la página).
+ * - Sin reporte elegido, el panel derecho muestra el resumen de la bandeja (nunca un área vacía).
+ * - Objetivo táctil mínimo de 44 × 44 px; la barra con «Iniciar nuevo reporte» queda fija arriba.
+ * - Las tablas se desplazan dentro de su contenedor con el encabezado fijo; la página nunca se desplaza
+ *   a lo ancho. */
+.c-mesa { --pad: clamp(.75rem, .4rem + 1.2vw, 1.5rem); --alto-cabecera: 0px; --alto-barra: 0px; min-height: 100dvh; overflow-x: clip; }
+.c-cabecera, .c-subcabecera, .c-pestanas, .c-franja-filtros, .c-columnas, .c-panel { padding-left: var(--pad); padding-right: var(--pad); }
+.c-demo-barra, .c-aviso, .c-creado { margin-left: var(--pad); margin-right: var(--pad); }
+.c-panel, .c-panel-ancho { max-width: none; }
+.c-panel { padding-bottom: var(--e6); }
+.c-mesa h2 { font-size: clamp(1.0625rem, 1rem + .3vw, 1.25rem); }
+.c-kpi strong { font-size: clamp(1.4rem, 1.2rem + .8vw, 1.75rem); }
+
+/* Controles táctiles de 44 px */
+.c-salir, .c-cabecera .tema button, .tema button { min-height: var(--toque); }
+.c-velocidad select { min-height: var(--toque); padding: 0 var(--e2); }
+.c-filtro { min-height: var(--toque); padding: 4px 14px; }
+.c-umbrales summary, .c-reasignar summary, .c-folio-mas summary { min-height: var(--toque); display: flex; align-items: center; }
+.c-orden { min-height: var(--toque); min-width: var(--toque); display: inline-flex; align-items: center; text-align: left; }
+.c-tabla-folios .c-filtros-columna select, .c-tabla-folios .c-filtros-columna input { min-height: var(--toque); font-size: .82rem; }
+.c-volver { min-height: var(--toque); }
+.c-filtro-n { font-variant-numeric: tabular-nums; }
+
+/* Barra fija de la bandeja: título, filtros (móvil) e «Iniciar nuevo reporte» siempre a la vista. */
+.c-barra-bandeja { position: sticky; top: var(--alto-cabecera); z-index: 15; display: flex; align-items: center; justify-content: space-between; gap: var(--e2) var(--e3); flex-wrap: wrap; padding: var(--e2) var(--pad); background: var(--fondo); border-bottom: 1px solid var(--borde); }
+.c-barra-bandeja h2 { margin: 0; }
+.c-barra-acciones { display: flex; gap: var(--e2); flex-wrap: wrap; margin-left: auto; }
+.c-boton-filtros { display: none; }
+.c-franja-filtros { padding-top: var(--e2); }
+.c-filtros-bandeja { gap: var(--e2) var(--e4); }
+.c-grupo-select { flex-wrap: wrap; }
+.c-campo-linea select { min-width: 0; max-width: 100%; }
+
+/* Dos columnas reequilibradas: tablet 44 % / 56 %, escritorio 40 % / 60 %. */
+.c-columnas { display: grid; gap: var(--e4); padding-top: var(--e3); padding-bottom: var(--e3); align-items: start; }
+.c-lista-bandeja { display: grid; gap: var(--e2); grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); align-content: start; }
+.c-lista-bandeja .c-item { margin-bottom: 0; }
+.c-bandeja, .c-detalle { min-width: 0; }
+@media (min-width: 768px) {
+  .c-columnas { grid-template-columns: minmax(0, 45fr) minmax(0, 55fr); height: calc(100dvh - var(--alto-cabecera) - var(--alto-barra)); min-height: 420px; }
+  .c-columnas > .c-bandeja, .c-columnas > .c-detalle { height: 100%; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; scrollbar-gutter: stable; }
+  .c-columnas > .c-detalle { padding-top: 0; }
+  .c-volver { display: none; }
+}
+@media (min-width: 1280px) {
+  .c-columnas { grid-template-columns: minmax(0, 42fr) minmax(0, 58fr); }
+}
+
+/* Resumen de la bandeja (panel derecho sin selección) */
+.c-resumen { display: grid; gap: var(--e3); align-content: start; }
+.c-resumen > * { margin: 0; }
+.c-resumen .c-tarjeta { margin: 0; }
+.c-resumen-rejilla { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
+.c-resumen-conteos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--e2); }
+.c-resumen-conteo { display: grid; justify-items: start; gap: 2px; min-height: 72px; padding: var(--e2) var(--e3); font: inherit; color: var(--texto); text-align: left; background: var(--superficie); border: 1px solid var(--borde); border-left-width: 5px; border-radius: var(--r-s); cursor: pointer; min-width: 0; }
+.c-resumen-conteo:hover { border-color: var(--borde-fuerte); }
+.c-resumen-conteo strong { font-size: clamp(1.4rem, 1.1rem + 1vw, 2rem); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.c-resumen-conteo span { font-size: .8125rem; font-weight: 600; color: var(--suave); overflow-wrap: anywhere; }
+.c-resumen-conteo.alerta { border-color: var(--asistencia); }
+.c-resumen-conteo.alerta strong { color: var(--asistencia); }
+.c-prio-borde-alta { border-left-color: var(--asistencia); }
+.c-prio-borde-media { border-left-color: #d98a00; }
+.c-prio-borde-baja { border-left-color: var(--primario); }
+.c-sem-borde-verde { border-left-color: #1b9e4b; }
+.c-sem-borde-amarillo { border-left-color: #f2b705; }
+.c-sem-borde-rojo { border-left-color: #d62828; }
+.c-resumen .c-item { margin: 0; }
+
+/* Tablas: desplazamiento horizontal dentro de su contenedor, encabezado fijo y primera columna fija. */
+.c-tabla-desliza { overflow: auto; max-height: min(72vh, 720px); overscroll-behavior-x: contain; border-radius: var(--r-s); }
+.c-tabla-desliza thead { position: sticky; top: 0; z-index: 2; }
+.c-tabla-desliza thead th { background: var(--tarjeta); }
+.c-tabla-desliza .c-tiempos { min-width: 0; }
+.c-sesnsp th[scope="row"] { white-space: normal; min-width: 130px; max-width: 360px; }
+.c-sesnsp td { white-space: nowrap; }
+/* Tabla de folios: en pantallas anchas los textos largos (CNIE, corporación, unidad) se envuelven para que
+   las 16 columnas quepan sin desplazamiento a 1440 px y más; folio, fecha, teléfono y demora no se parten. */
+@media (min-width: 1280px) {
+  .c-tabla-folios th, .c-tabla-folios td { white-space: normal; overflow-wrap: anywhere; }
+  .c-tabla-folios td.c-mono, .c-tabla-folios td:nth-child(2), .c-tabla-folios td:nth-child(7) { white-space: nowrap; overflow-wrap: normal; }
+  .c-tabla-folios .c-filtros-columna input, .c-tabla-folios .c-filtros-columna select { width: 100%; max-width: 9rem; }
+}
+.c-folios-tarjetas { display: none; list-style: none; margin: 0 0 var(--e3); padding: 0; gap: var(--e2); }
+.c-folio-tarjeta { border: 1px solid var(--borde); border-radius: var(--r-m); padding: var(--e2) var(--e3); background: var(--tarjeta); min-width: 0; }
+.c-folio-tarjeta .c-mono { overflow-wrap: anywhere; }
+.c-folio-mas dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--e2) var(--e3); margin: var(--e2) 0 0; }
+.c-folio-mas dt { font-size: .75rem; color: var(--suave); font-weight: 700; }
+.c-folio-mas dd { margin: 0; font-size: .875rem; overflow-wrap: anywhere; }
+
+/* Móvil (<768 px): una sola columna; el detalle es vista completa con «Atrás»; filtros plegables. */
+@media (max-width: 767.98px) {
+  .c-cabecera { position: static; }
+  .c-barra-bandeja { top: 0; }
+  .c-boton-filtros { display: inline-flex; }
+  .c-barra-acciones { width: 100%; }
+  .c-barra-acciones > * { flex: 1 1 auto; }
+  .c-franja-filtros { display: none; }
+  .c-filtros-bandeja { flex-direction: column; align-items: stretch; }
+  .c-campo-linea { flex-wrap: wrap; }
+  .c-campo-linea select { flex: 1 1 180px; }
+  .c-columnas { grid-template-columns: minmax(0, 1fr); }
+  .c-columnas.con-detalle .c-bandeja { display: none; }
+  .c-columnas:not(.con-detalle) > .c-resumen { display: none; }
+  .c-volver { display: inline-flex; }
+  .c-resumen-conteos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .c-tabla-desliza th[scope="row"] { position: sticky; left: 0; z-index: 1; background: var(--tarjeta); }
+  .c-folios-tarjetas { display: grid; }
+  .c-tabla-folios-caja { display: none; }
+  .c-pestanas { padding-top: var(--e2); }
+  .c-demo-barra { font-size: .78rem; }
+}
+@media print {
+  .c-tabla-desliza { max-height: none; overflow: visible; }
+  .c-folios-tarjetas { display: none !important; }
+  .c-tabla-folios-caja { display: block !important; }
+  .c-barra-bandeja { position: static; }
+}
+.c-lista-bandeja { align-items: start; }
+/* Los «summary» con display:flex pierden el triángulo: se dibuja aquí. */
+.c-umbrales summary::before, .c-folio-mas summary::before { content: '▸'; margin-right: .4em; }
+.c-umbrales[open] > summary::before, .c-folio-mas[open] > summary::before { content: '▾'; }
+/* SESNSP en tablet: letra y relleno compactos para que las 11 columnas quepan desde 768 px sin cortarse. */
+@media (min-width: 768px) and (max-width: 1279.98px) {
+  .c-sesnsp { font-size: .78rem; }
+  .c-sesnsp th, .c-sesnsp td { padding: 6px 4px; }
+  .c-sesnsp thead th { text-transform: none; letter-spacing: 0; font-size: .72rem; }
+  .c-sesnsp td:nth-child(2) { white-space: normal; }
+  .c-sesnsp th[scope="row"] { min-width: 104px; }
+  .c-sesnsp .c-mono { font-size: .75rem; }
+}
+
+/* ── Mensaje 13: filtros de la bandeja en móvil ─────────────────────────────────────────
+ * Móvil (<768 px): botón «Filtros» con insignia; el panel se superpone (no empuja la lista), apila
+ * todos los grupos, se desplaza por dentro y cierra con «Aplicar» o «Limpiar». Los filtros activos
+ * quedan como chips removibles en la barra fija, arriba de la lista. */
+.c-chips-activos, .c-hoja-fondo { display: none; }
+@media (max-width: 767.98px) {
+  .c-chips-activos { display: flex; flex-wrap: wrap; gap: var(--e2); width: 100%; margin: 0; padding: 0; list-style: none; }
+  .c-chip-quitar { display: inline-flex; align-items: center; gap: var(--e2); min-height: var(--toque); max-width: 100%; padding: 0 6px 0 14px; font: inherit; font-size: .85rem; font-weight: 600; border-radius: var(--r-pill); border: 1px solid var(--primario); background: var(--superficie); color: var(--texto); cursor: pointer; text-align: left; }
+  .c-chip-quitar span { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; font-size: 1.15rem; line-height: 1; color: var(--primario); }
+  .c-hoja-fondo { display: flex; align-items: flex-end; position: fixed; inset: 0; z-index: 60; background: rgba(11, 22, 48, .5); }
+  .c-hoja { display: flex; flex-direction: column; width: 100%; max-height: 92dvh; background: var(--fondo); border-radius: var(--r-l) var(--r-l) 0 0; box-shadow: var(--sombra-alta); }
+  .c-hoja-cabeza { display: flex; align-items: center; justify-content: space-between; gap: var(--e3); padding: var(--e2) var(--pad); border-bottom: 1px solid var(--borde); }
+  .c-hoja-cabeza h2 { margin: 0; }
+  .c-hoja-cerrar { min-width: var(--toque); min-height: var(--toque); font: inherit; font-size: 1.5rem; line-height: 1; border: 0; border-radius: 50%; background: transparent; color: var(--texto); cursor: pointer; }
+  .c-hoja-cuerpo { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--e3) var(--pad); }
+  .c-hoja .c-filtros-bandeja { gap: var(--e4); }
+  .c-hoja .c-grupo-titulo { flex-basis: 100%; }
+  .c-hoja .c-grupo-select { flex-direction: column; align-items: stretch; }
+  .c-hoja .c-campo-linea { display: flex; flex-direction: column; align-items: stretch; gap: var(--e1); }
+  .c-hoja .c-campo-linea select { flex: none; width: 100%; }
+  .c-hoja-pie { display: flex; gap: var(--e2); padding: var(--e2) var(--pad) calc(var(--e2) + env(safe-area-inset-bottom)); border-top: 1px solid var(--borde); background: var(--tarjeta); }
+  .c-hoja-pie > * { flex: 1 1 0; }
+}

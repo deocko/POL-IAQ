@@ -14,6 +14,8 @@ import { ESTADO, ErrorApi, ERRORES, api, guardarArchivo, type FiltroReportes } f
 
 const POR_PAGINA = [10, 25, 50, 100];
 const mensaje = (e: unknown) => (e instanceof ErrorApi ? ERRORES[e.codigo] ?? e.mensaje ?? `Error (${e.codigo})` : 'Sin conexión con el API.');
+/** Campos clave que la tarjeta muestra siempre en móvil; el resto se ve al expandir. */
+const CLAVE_TARJETA = new Set<ColumnaFolio>(['folio', 'municipio', 'estado', 'prioridad', 'demora']);
 const ORDENABLES = new Set<ColumnaFolio>(COLUMNAS_FOLIO.map((c) => c.id));
 
 export function TablaFolios({ token, filtro, ahora, titulo, umbrales = UMBRALES_SEMAFORO_PREDETERMINADOS }: { token: string; filtro: FiltroReportes; ahora: number; titulo: string; umbrales?: UmbralesSemaforo }) {
@@ -60,7 +62,33 @@ export function TablaFolios({ token, filtro, ahora, titulo, umbrales = UMBRALES_
       {error && <p className="c-error" role="alert">{error}</p>}
       {!filas && !error && <div className="esqueleto c-esq-tabla" aria-busy="true" />}
       {filas && (
-        <div className="c-tabla-desliza">
+        <ul className="c-folios-tarjetas" data-testid="folios-tarjetas" aria-label="Folios">
+          {p.filas.map((f) => (
+            <li key={f.folio} className="c-folio-tarjeta">
+              <div className="c-fila">
+                <span className="c-mono"><strong>{f.folio}</strong></span>
+                <span className={`c-sem-chip c-sem-chip-${colorSemaforo(f.demoraFraccion ?? 0, umbrales)}`}>{`Demora ${textoCelda(f, 'demora') || '—'}`}</span>
+              </div>
+              <div className="c-etiquetas">
+                <span className="c-chip c-chip-neutro">{textoCelda(f, 'municipio') || 'Sin municipio'}</span>
+                <span className="c-chip">{ESTADO[f.estado]}</span>
+                <span className="c-chip">{`Prioridad ${textoCelda(f, 'prioridad') || '—'}`}</span>
+              </div>
+              <details className="c-folio-mas">
+                <summary>Ver todos los campos</summary>
+                <dl>
+                  {COLUMNAS_FOLIO.filter((c) => !CLAVE_TARJETA.has(c.id)).map((c) => (
+                    <div key={c.id}><dt>{c.nombre}</dt><dd className={c.id === 'telefono' ? 'c-mono' : ''}>{c.id === 'canal' ? ETIQUETA_CANAL[f.canal] : textoCelda(f, c.id) || '—'}</dd></div>
+                  ))}
+                </dl>
+              </details>
+            </li>
+          ))}
+          {!p.filas.length && <li className="suave">Sin folios con esos criterios.</li>}
+        </ul>
+      )}
+      {filas && (
+        <div className="c-tabla-desliza c-tabla-folios-caja">
           <table className="c-tiempos c-tabla-folios">
             <thead>
               <tr>
