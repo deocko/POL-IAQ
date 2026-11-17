@@ -5,7 +5,7 @@
  * (tipo, subtipo e incidente, comparable entre municipios y con el CQ CIAS), corporación y unidad.
  * La versión pública no lleva datos personales y oculta los grupos con pocos reportes.
  */
-import type { ClasificacionCnie } from './cnie';
+import { esMalUso, type ClasificacionCnie } from './cnie';
 import type { EstadoIncidente } from './estados';
 import { CORPORACIONES } from './interconexion';
 import { TEXTO_RESPALDO, type MotivoRespaldo } from './geo';
@@ -42,6 +42,10 @@ export interface Grupo {
   quejas: number;
   /** Desde que se levanta el reporte hasta que llega la unidad. */
   llegada: ResumenEtapa;
+  /** Atendidos o en atención. */
+  procedentes: number;
+  /** Improcedentes, cancelados o recatalogados a Mal Uso del servicio (tipo 7 del CNIE). */
+  improcedentes: number;
   /** Solo en `porCad`: folios que este CAD tiene hoy pero se crearon para otro (escalados o transferidos). */
   deOtroCad?: number;
 }
@@ -71,6 +75,10 @@ export const enRango = (creadoEn: string, desde?: string, hasta?: string) => {
   return (!desde || f >= desde) && (!hasta || f < hasta);
 };
 
+/** Mismo criterio que el SESNSP: improcedente, cancelado o recatalogado a Mal Uso (tipo 7). */
+export const esImprocedente = (f: Pick<FilaEstadistica, 'estado' | 'cnie'>) =>
+  f.estado === 'improcedente' || f.estado === 'cancelado' || esMalUso(f.cnie?.tipo.codigo);
+
 function agrupar(filas: FilaEstadistica[], clave: (f: FilaEstadistica) => { clave: string; nombre: string } | null): Grupo[] {
   const g = new Map<string, { nombre: string; filas: FilaEstadistica[] }>();
   for (const f of filas) {
@@ -86,6 +94,8 @@ function agrupar(filas: FilaEstadistica[], clave: (f: FilaEstadistica) => { clav
       nombre: x.nombre,
       reportes: x.filas.length,
       quejas: x.filas.filter((f) => f.queja).length,
+      procedentes: x.filas.filter((f) => !esImprocedente(f)).length,
+      improcedentes: x.filas.filter(esImprocedente).length,
       llegada: resumirTiempos(x.filas.map((f) => f.tiempos)).find((e) => e.id === 'llegada')!,
     }))
     .sort((a, b) => b.reportes - a.reportes || a.clave.localeCompare(b.clave));
@@ -102,6 +112,8 @@ export function estadistica(filas: FilaEstadistica[]) {
   const califs = filas.flatMap((f) => (f.calificacion ? [f.calificacion] : []));
   return {
     reportes: filas.length,
+    procedentes: filas.filter((f) => !esImprocedente(f)).length,
+    improcedentes: filas.filter(esImprocedente).length,
     quejas: filas.filter((f) => f.queja).length,
     calificacionPromedio: califs.length ? Math.round((califs.reduce((a, b) => a + b, 0) / califs.length) * 10) / 10 : null,
     etapas: resumirTiempos(filas.map((f) => f.tiempos)),

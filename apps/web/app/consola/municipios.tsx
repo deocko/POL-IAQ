@@ -7,7 +7,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { imprimirReporte } from './imprimir';
-import { ACTOR_ESTADO, CAD_ESTATAL_ID, CORPORACIONES, MUNICIPIOS_QRO, NOMBRE_RESPALDO_ESTATAL, NOMBRE_RESPALDO_ESTATAL_LARGO, TIPOS_UNIDAD, duracionTexto, type Grupo, type TipoUnidad } from '@pol-iaq/shared/movil';
+import { TablaFolios } from './folios';
+import { ACTOR_ESTADO, CAD_ESTATAL_ID, CORPORACIONES, MUNICIPIOS_QRO, NOMBRE_RESPALDO_ESTATAL, NOMBRE_RESPALDO_ESTATAL_LARGO, TIPOS_UNIDAD, duracionTexto, type Grupo, type TipoUnidad, type UmbralesSemaforo } from '@pol-iaq/shared/movil';
 import { CORPORACION, DEMO, ErrorApi, ERRORES, api, guardarArchivo, type EstadisticaVista, type FiltroReportes, type ListaSesnsp, type MesSesnsp, type UnidadDisponible, type VistaCad, type Yo } from './consola';
 
 const mensajeDe = (e: unknown) => (e instanceof ErrorApi ? ERRORES[e.codigo] ?? e.mensaje ?? `Error (${e.codigo})` : 'Sin conexión con el API.');
@@ -260,12 +261,14 @@ function TablaGrupos({ titulo, grupos, clave = true, testId, deOtroCad = false }
   return (
     <div className="c-tabla-desliza">
       <table className="c-tiempos" aria-label={titulo} data-testid={testId}>
-        <thead><tr><th scope="col">{titulo}</th><th scope="col">Reportes</th>{deOtroCad && <th scope="col" title="Folios que se crearon para otro CAD y llegaron aquí por escalamiento (sin acuse a tiempo) o transferencia">Llegaron de otro CAD</th>}<th scope="col">Quejas</th><th scope="col">Llegada (mediana)</th><th scope="col">En meta</th></tr></thead>
+        <thead><tr><th scope="col">{titulo}</th><th scope="col">Reportes</th><th scope="col">Procedentes</th><th scope="col" title="Improcedentes, cancelados o recatalogados a Mal Uso del servicio (tipo 7)">Improcedentes</th>{deOtroCad && <th scope="col" title="Folios que se crearon para otro CAD y llegaron aquí por escalamiento (sin acuse a tiempo) o transferencia">Llegaron de otro CAD</th>}<th scope="col">Quejas</th><th scope="col">Llegada (mediana)</th><th scope="col">En meta</th></tr></thead>
         <tbody>
           {grupos.map((g) => (
             <tr key={g.clave}>
               <th scope="row">{clave && g.clave !== 'sin' && g.clave !== '000' ? <><span className="c-mono">{g.clave}</span>{` ${g.nombre}`}</> : g.nombre}</th>
               <td>{g.reportes}</td>
+              <td>{g.procedentes}</td>
+              <td>{g.improcedentes}</td>
               {deOtroCad && <td>{g.deOtroCad ?? 0}</td>}
               <td>{g.quejas ? <span className="c-chip c-chip-alerta">{g.quejas}</span> : 0}</td>
               <td>{g.llegada.medianaSegundos == null ? '—' : duracionTexto(g.llegada.medianaSegundos)}</td>
@@ -278,7 +281,7 @@ function TablaGrupos({ titulo, grupos, clave = true, testId, deOtroCad = false }
   );
 }
 
-export function VistaReportes({ token, yo, ahora }: { token: string; yo: Yo; ahora: number }) {
+export function VistaReportes({ token, yo, ahora, umbrales }: { token: string; yo: Yo; ahora: number; umbrales?: UmbralesSemaforo }) {
   const [municipio, setMunicipio] = useState('');
   const [cadId, setCadId] = useState('');
   const [periodo, setPeriodo] = useState<'diario' | 'semanal' | 'mensual'>('mensual');
@@ -324,6 +327,8 @@ export function VistaReportes({ token, yo, ahora }: { token: string; yo: Yo; aho
         <p className="suave c-pequeno" data-testid="periodo-reporte">{`${titulo} · ${periodo === 'mensual' ? 'mes' : periodo === 'semanal' ? 'semana' : 'día'} ${e.periodo.etiqueta} · hora de Querétaro · sin datos personales`}</p>
         <div className="c-kpis">
           <div className="c-kpi"><strong>{e.reportes}</strong><span>reportes</span></div>
+          <div className="c-kpi"><strong data-testid="kpi-procedentes">{e.procedentes}</strong><span>procedentes</span></div>
+          <div className="c-kpi"><strong data-testid="kpi-improcedentes">{e.improcedentes}</strong><span title="Improcedentes, cancelados o recatalogados a Mal Uso del servicio">improcedentes</span></div>
           <div className="c-kpi"><strong>{pct(e.etapas.find((x) => x.id === 'llegada')?.enMeta ?? null)}</strong><span>llegadas en meta</span></div>
           <div className="c-kpi"><strong>{e.calificacionPromedio ?? '—'}</strong><span>calificación (1 a 5)</span></div>
           <div className={`c-kpi ${e.quejas ? 'alerta' : ''}`}><strong>{e.quejas}</strong><span>quejas</span></div>
@@ -345,6 +350,7 @@ export function VistaReportes({ token, yo, ahora }: { token: string; yo: Yo; aho
               </table>
             </div>
           </div>
+          <TablaFolios token={token} filtro={filtro} ahora={ahora} titulo={titulo} umbrales={umbrales} />
           <div className="c-tarjeta"><h3>Por municipio (clave INEGI)</h3><TablaGrupos titulo="Municipio" grupos={e.porMunicipio} testId="por-municipio" /></div>
           <div className="c-tarjeta">
             <h3>Por responsable actual (tras escalamiento)</h3>

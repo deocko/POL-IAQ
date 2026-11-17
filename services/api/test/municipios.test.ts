@@ -75,7 +75,7 @@ describe.skipIf(!TEST_DATABASE_URL)('migración 006 en PostgreSQL', () => {
       const { rows } = await pool.query("INSERT INTO ciudadano (telefono, nombre) VALUES ('+520000000000', 'Demo') RETURNING id");
       await pool.query(`INSERT INTO reporte (folio, ciudadano_id, incidente_id, prioridad, corporacion_sugerida, ubicacion, municipio_clave, cad_id, estado)
         VALUES ('QRO-014-2026-000777', $1, 'emergencia-medica', 'alta', 'cruz_roja', ST_SetSRID(ST_MakePoint(-100.39, 20.59), 4326)::geography, '014', 'cad-queretaro', 'cerrado')`, [rows[0].id]);
-      expect(await migrar(pool)).toEqual(['006_municipios_interconexion.sql', '007_respaldo_cq_cias.sql']);
+      expect(await migrar(pool)).toEqual(['006_municipios_interconexion.sql', '007_respaldo_cq_cias.sql', '008_alta_911.sql']);
       const r = await pool.query("SELECT municipio_clave FROM reporte WHERE folio = 'QRO-014-2026-000777'");
       expect(r.rows[0].municipio_clave).toBe('22014');
       await pool.query("INSERT INTO cierre_sesnsp (mes, cerrado_en, cerrado_por, filas, ajustes, foto) VALUES ('2026-01', now(), 'prueba', '[]', '[]', '{}')");

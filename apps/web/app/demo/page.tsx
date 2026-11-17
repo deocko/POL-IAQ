@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './demo.css';
 import {
-  ESPERA_ANTES_DE_911_SEG, TIPOS_CNIE, buscarCnie, debeOfrecer911, duracionTexto, encolar, enmascararTelefono, incidenteCnie, incidentesDeSubtipo, nombreLegible,
+  ESPERA_ANTES_DE_911_SEG, TIPOS_CNIE_CIUDADANO, esMalUso, buscarCnie, debeOfrecer911, duracionTexto, encolar, enmascararTelefono, incidenteCnie, incidentesDeSubtipo, nombreLegible,
   INCIDENTES_CNIE, SUBTIPOS_CNIE, SUBTIPOS_CNIE_BAJA, subtipoCnie, subtiposDeBajaDeTipo, subtiposDeTipo, vaciarCola, type IncidenteCnie, type Identidad, type Opinion, type PendienteEnvio,
 } from '@pol-iaq/shared/movil';
 import { CODIGO_SMS_DEMO } from '../../lib/demo/textos';
@@ -264,6 +264,7 @@ function Registro({ alRegistrar }: { alRegistrar: (c: Ciudadano) => void }) {
     if (!enviado) return setEnviado(true);
     if (codigo !== CODIGO_SMS_DEMO) return setError(`Ese código no es correcto. En la demo es ${CODIGO_SMS_DEMO}.`);
     if (!acepto) return setError('Para continuar, acepta el aviso de privacidad y los términos.');
+    demo.registrarCiudadano(nombre.trim() || 'Ciudadano de prueba', telefono);
     alRegistrar({ nombre: nombre.trim() || 'Ciudadano de prueba', telefono });
   }
 
@@ -531,9 +532,9 @@ function ExplorarCatalogo({ alElegir, alVolver }: { alElegir: (codigo: string | 
   const [texto, setTexto] = useState('');
   const [tipo, setTipo] = useState<string | null>(null);
   const [subtipo, setSubtipo] = useState<string | null>(null);
-  const resultados = useMemo(() => (texto.trim().length >= 2 ? buscarCnie(texto, 25) : []), [texto]);
+  const resultados = useMemo(() => (texto.trim().length >= 2 ? buscarCnie(texto, 25, { ciudadano: true }) : []), [texto]);
   const atras = () => (subtipo ? setSubtipo(null) : tipo ? setTipo(null) : alVolver());
-  const nombreTipo = TIPOS_CNIE.find((t) => t.codigo === tipo)?.nombre;
+  const nombreTipo = TIPOS_CNIE_CIUDADANO.find((t) => t.codigo === tipo)?.nombre;
   const nombreSubtipo = subtipo ? subtiposDeTipo(tipo!).find((x) => x.codigo === subtipo)?.nombreCorto : null;
 
   const Caso = ({ i, contexto }: { i: IncidenteCnie; contexto?: boolean }) => (
@@ -563,11 +564,11 @@ function ExplorarCatalogo({ alElegir, alVolver }: { alElegir: (codigo: string | 
       ) : !tipo ? (
         <>
           <ul className="d-lista-catalogo" aria-label="Tipos de emergencia">
-            {TIPOS_CNIE.map((t) => (
+            {TIPOS_CNIE_CIUDADANO.map((t) => (
               <li key={t.codigo}><button type="button" onClick={() => setTipo(t.codigo)}><span>{t.nombre}</span><span aria-hidden="true">›</span></button></li>
             ))}
           </ul>
-          <p className="suave c-pequeno d-nota" data-testid="catalogo-conteo">{`Catálogo Nacional de Incidentes de Emergencia V 3.0: ${TIPOS_CNIE.length} tipos, ${SUBTIPOS_CNIE.length + SUBTIPOS_CNIE_BAJA.length} subtipos (${SUBTIPOS_CNIE.length} vigentes y ${SUBTIPOS_CNIE_BAJA.length} dado de baja) y ${INCIDENTES_CNIE.length} casos vigentes.`}</p>
+          <p className="suave c-pequeno d-nota" data-testid="catalogo-conteo">{`Catálogo Nacional de Incidentes de Emergencia V 3.0: ${TIPOS_CNIE_CIUDADANO.length} tipos, ${SUBTIPOS_CNIE.filter((x) => !esMalUso(x.codigo)).length + SUBTIPOS_CNIE_BAJA.length} subtipos (${SUBTIPOS_CNIE.filter((x) => !esMalUso(x.codigo)).length} vigentes y ${SUBTIPOS_CNIE_BAJA.length} dado de baja) y ${INCIDENTES_CNIE.filter((x) => !esMalUso(x.codigo)).length} casos vigentes. «Mal Uso del servicio» no se reporta desde la app: lo aplica el operador del CAD.`}</p>
         </>
       ) : !subtipo ? (
         <>
@@ -578,7 +579,7 @@ function ExplorarCatalogo({ alElegir, alVolver }: { alElegir: (codigo: string | 
           </ul>
           {subtiposDeBajaDeTipo(tipo).map((x) => (
             <p key={x.codigo} className="suave c-pequeno d-nota" data-testid="subtipo-baja">
-              {`${x.nombreCorto} (${x.codigo}) se dio de baja en el CNIE V 3.0. Ahora está en ${TIPOS_CNIE.find((t) => t.codigo === x.reemplazo[0])?.nombre} · ${subtipoCnie(x.reemplazo)?.nombreCorto} (${x.reemplazo}). `}
+              {`${x.nombreCorto} (${x.codigo}) se dio de baja en el CNIE V 3.0. Ahora está en ${TIPOS_CNIE_CIUDADANO.find((t) => t.codigo === x.reemplazo[0])?.nombre} · ${subtipoCnie(x.reemplazo)?.nombreCorto} (${x.reemplazo}). `}
               <button type="button" className="c-enlace" onClick={() => { setTipo(x.reemplazo[0]); setSubtipo(x.reemplazo); }}>{`Ver ${subtipoCnie(x.reemplazo)?.nombreCorto}`}</button>
             </p>
           ))}

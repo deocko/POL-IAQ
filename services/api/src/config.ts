@@ -1,5 +1,5 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import { UNIDADES_EJEMPLO } from '@pol-iaq/shared';
+import { UMBRALES_SEMAFORO_PREDETERMINADOS, UNIDADES_EJEMPLO, validarUmbrales, type UmbralesSemaforo } from '@pol-iaq/shared';
 
 /**
  * Configuración por variables de entorno. Ver .env.example.
@@ -93,6 +93,8 @@ export interface Config {
   exigirMtls: boolean;
   /** Valor de `trust proxy` de Express (p. ej. `1` o `10.0.0.0/8`) para tomar la IP real del CAD. */
   confiarProxy?: string;
+  /** Umbrales del semáforo de la bandeja: fracción de la meta de llegada (SEMAFORO_AMARILLO, SEMAFORO_ROJO). */
+  semaforo: UmbralesSemaforo;
 }
 
 /** Hash de una clave de operador (scrypt). */
@@ -156,7 +158,19 @@ export function cargarConfig(env: NodeJS.ProcessEnv = process.env): Config {
     cabeceraCertificado: (env.MTLS_CERT_HEADER ?? 'x-client-cert').toLowerCase(),
     exigirMtls: env.MTLS_REQUIRED ? env.MTLS_REQUIRED !== 'off' : produccion,
     confiarProxy: env.TRUST_PROXY || undefined,
+    semaforo: umbralesDe(env),
   };
+}
+
+/** SEMAFORO_AMARILLO=0.5 SEMAFORO_ROJO=1 (fracción de la meta de llegada). Sin variables, los valores del Mensaje 11. */
+function umbralesDe(env: NodeJS.ProcessEnv): UmbralesSemaforo {
+  const u = {
+    amarillo: env.SEMAFORO_AMARILLO ? Number(env.SEMAFORO_AMARILLO) : UMBRALES_SEMAFORO_PREDETERMINADOS.amarillo,
+    rojo: env.SEMAFORO_ROJO ? Number(env.SEMAFORO_ROJO) : UMBRALES_SEMAFORO_PREDETERMINADOS.rojo,
+  };
+  const error = validarUmbrales(u);
+  if (error) throw new Error(`SEMAFORO_AMARILLO / SEMAFORO_ROJO: ${error}`);
+  return u;
 }
 
 export const CONFIG = Symbol('CONFIG');

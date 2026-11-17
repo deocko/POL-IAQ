@@ -4,7 +4,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
-  CORPORACIONES, ESTADOS_FINALES, METAS_PROVISIONALES, TIPOS_UNIDAD, agruparPorCnie, candidatasPorCercania, medirTiempos, puedeDespachar, minutosDe, resumirTiempos, subtipoCnie, type EventoDesdeCad, type UnidadAvl,
+  CORPORACIONES, ESTADOS_FINALES, METAS_PROVISIONALES, TIPOS_UNIDAD, UbicacionSchema, ValorRespuestaSchema, esMalUso, agruparPorCnie, candidatasPorCercania, medirTiempos, puedeDespachar, minutosDe, resumirTiempos, subtipoCnie, type EventoDesdeCad, type UnidadAvl,
 } from '@pol-iaq/shared';
 import { AvlService, RutasService } from '../despacho/avl.service';
 import { Almacen } from '../almacen/almacen';
@@ -18,6 +18,7 @@ import { ProtocolosService } from '../protocolos/protocolos.service';
 import { OperadorGuard, puedeVer, type OperadorSesion } from './operador.guard';
 import { CADS_CONOCIDOS, consolaOpera, vistaOperador } from './vista';
 import { RegistroCadService } from '../municipios/registro-cad.service';
+import { ReportesService } from '../reportes/reportes.service';
 
 const DURACION_SESION_SEG = 12 * 60 * 60;
 const MAX_FALLOS = 5;
@@ -42,8 +43,31 @@ const AccionSchema = z.discriminatedUnion('accion', [
     codigoCnieSecundario: z.string().trim().max(10).nullable().optional(),
     motivo: z.string().trim().max(500).optional(),
   }),
+  /**
+   * Recataloga a «Mal Uso del servicio (Improcedentes)», tipo 7 del CNIE, después de verificar el reporte.
+   * Motivo obligatorio (texto corto). Queda en el historial con el tipo original; el folio cuenta como improcedente.
+   */
+  z.object({ accion: z.literal('recatalogar_mal_uso'), codigoCnie: z.string().trim().min(5).max(5), motivo: z.string().trim().min(3, 'Escribe el motivo').max(200) }),
 ]);
 type Accion = z.infer<typeof AccionSchema>;
+
+const TELEFONO = (t: string) => {
+  const d = t.replace(/\D/g, '').replace(/^52(?=\d{10}$)/, '');
+  return /^\d{10}$/.test(d) ? `+52${d}` : null;
+};
+
+/** Alta en la consola de un reporte que llegó por teléfono al 911. */
+const Alta911Schema = z.object({
+  telefono: z.string().min(10).max(20),
+  nombre: z.string().trim().max(80).optional(),
+  tipoTelefono: z.enum(['celular', 'fijo']),
+  incidenteId: z.string().min(1),
+  descripcion: z.string().max(1000).optional(),
+  ubicacion: UbicacionSchema,
+  respuestas: z.array(z.object({ preguntaId: z.string().min(1).max(60), respuesta: ValorRespuestaSchema })).max(40).default([]),
+  prioridad: z.enum(['alta', 'media', 'baja']).optional(),
+  codigoCnie: z.string().trim().max(10).optional(),
+});
 
 const UnidadSchema = z.object({
   unidadId: z.string().trim().regex(/^[A-Za-z0-9-]{1,30}$/, 'Clave de unidad: letras, números y guiones'),
@@ -76,7 +100,54 @@ export class OperadorController {
     @Inject(AvlService) private readonly avl: AvlService,
     @Inject(RutasService) private readonly rutas: RutasService,
     @Inject(RegistroCadService) private readonly registro: RegistroCadService,
+    @Inject(ReportesService) private readonly reportesSrv: ReportesService,
   ) {}
+
+  /** Paso 1 del alta por 911: ¿el número ya está dado de alta como reportante? */
+  @Get('reportantes/:telefono')
+  @UseGuards(OperadorGuard)
+  async reportante(@Req() req: { operador: OperadorSesion }, @Param('telefono') telefono: string) {
+    const tel = TELEFONO(telefono);
+    if (!tel) throw new BadRequestException({ codigo: 'telefono_invalido', mensaje: 'Escribe el número de 10 dígitos (puede llevar +52).' });
+    const c = await this.almacen.ciudadanoPorTelefono(tel);
+    await this.almacen.auditar({ actor: `operador:${req.operador.usuario}`, accion: 'reportante_consultado', detalle: { registrado: !!c } });
+    if (!c) return { telefono: tel.slice(3), registrado: false, reportante: null };
+    const folios = (await this.almacen.reportesDe(c.id)).filter((r) => r.identidad !== 'anonimo').length;
+    return { telefono: tel.slice(3), registrado: true, reportante: { nombre: c.nombre, registradoEn: c.aceptadoEn || null, origen: c.aceptadoEn ? 'app' : '911', folios } };
+  }
+
+  /**
+   * «Iniciar nuevo reporte»: alta por llamada al 911. Mismo folio (QRO-###-AAAA-NNNNNN), enrutado por
+   * municipio y CAD, cuestionario e historial que un reporte de la app; queda marcado con origen 911 y
+   * el tipo de línea. Si el número no está registrado, se da de alta al reportante con los datos capturados.
+   */
+  @Post('reportes/911')
+  @UseGuards(OperadorGuard)
+  async alta911(@Req() req: { operador: OperadorSesion }, @Body(new ZodPipe(Alta911Schema)) body: z.infer<typeof Alta911Schema>) {
+    const op = req.operador;
+    const tel = TELEFONO(body.telefono);
+    if (!tel) throw new BadRequestException({ codigo: 'telefono_invalido', mensaje: 'Escribe el número de 10 dígitos (puede llevar +52).' });
+    const previo = await this.almacen.ciudadanoPorTelefono(tel);
+    const nombre = body.nombre?.trim() || previo?.nombre || '';
+    if (nombre.length < 2) throw new BadRequestException({ codigo: 'falta_nombre', mensaje: 'Escribe el nombre de quien llama.' });
+    // Reportante nuevo: sin aceptación legal (no usó la app); si después se registra en la app, acepta ahí.
+    const ciudadano = previo ?? { id: randomUUID(), telefono: tel, nombre, confiabilidad: 1, avisoPrivacidadVersion: '', terminosVersion: '', aceptadoEn: '', suspendido: false };
+    if (!previo) {
+      await this.almacen.guardarCiudadano(ciudadano);
+      await this.almacen.auditar({ actor: `operador:${op.usuario}`, accion: 'reportante_alta_911', detalle: { ciudadanoId: ciudadano.id } });
+    }
+    const r = await this.reportesSrv.crear(ciudadano, {
+      incidenteId: body.incidenteId,
+      ubicacion: body.ubicacion,
+      ...(body.descripcion?.trim() && { descripcion: body.descripcion.trim() }),
+      respuestas: {},
+      asistenciaDirecta: false,
+      ...(body.respuestas.length && { cuestionario: { via: 'texto' as const, entradas: body.respuestas } }),
+      ocultarIdentidadAUnidad: false,
+      identidad: 'completa',
+    }, { operador: op.usuario, operadorNombre: op.nombre, tipoTelefono: body.tipoTelefono, prioridad: body.prioridad, codigoCnie: body.codigoCnie });
+    return { reporte: await this.vista(r), reportanteNuevo: !previo };
+  }
 
   @Post('sesion')
   @HttpCode(200)
@@ -217,7 +288,8 @@ export class OperadorController {
       secuenciaSiguiente: true,
       antes: (r) => {
         // La clasificación se puede corregir aun cerrado el reporte (sirve a la estadística).
-        if (ESTADOS_FINALES.includes(r.estado) && body.accion !== 'reclasificar') throw new ConflictException({ codigo: 'reporte_cerrado' });
+        if (ESTADOS_FINALES.includes(r.estado) && body.accion !== 'reclasificar' && body.accion !== 'recatalogar_mal_uso') throw new ConflictException({ codigo: 'reporte_cerrado' });
+        if (body.accion === 'recatalogar_mal_uso' && esMalUso(r.cnie?.tipo.codigo) && r.cnie?.incidente?.codigo === body.codigoCnie) throw new ConflictException({ codigo: 'ya_recatalogado' });
         if (body.accion === 'recibir' && r.estado !== 'recibido' && r.estado !== 'transferido') throw new ConflictException({ codigo: 'ya_recibido' });
       },
     });
@@ -268,7 +340,12 @@ export class OperadorController {
       case 'mensaje':
         return { ...base, tipo: 'mensaje.operador', datos: { texto: a.texto, autor: op.nombre } };
       case 'reclasificar':
+        // Mal Uso tiene su propia acción (motivo obligatorio y trazabilidad del tipo original).
+        if (esMalUso(a.codigoCnie)) throw new BadRequestException({ codigo: 'usar_recatalogar_mal_uso', mensaje: 'Para Mal Uso del servicio usa la acción recatalogar_mal_uso, con su motivo.' });
         return { ...base, tipo: 'incidente.reclasificado', datos: { codigoCnie: a.codigoCnie, codigoCnieSecundario: a.codigoCnieSecundario, motivo: a.motivo, operador: op.nombre } };
+      case 'recatalogar_mal_uso':
+        if (!esMalUso(a.codigoCnie)) throw new BadRequestException({ codigo: 'no_es_mal_uso', mensaje: 'Elige un incidente del tipo 7, Mal Uso del servicio.' });
+        return { ...base, tipo: 'incidente.reclasificado', datos: { codigoCnie: a.codigoCnie, codigoCnieSecundario: null, motivo: a.motivo, operador: op.nombre } };
       case 'transferir':
         if (a.cadDestinoId === cadId || !CADS_CONOCIDOS.some((c) => c.id === a.cadDestinoId)) throw new BadRequestException({ codigo: 'cad_destino_invalido' });
         // Solo a un CAD que ya recibe reportes (Modo A o B activo) o al C5.
@@ -282,6 +359,7 @@ export class OperadorController {
       operador: op,
       cads: CADS_CONOCIDOS.map((c) => ({ ...c, modo: consolaOpera(this.config, c.id) ? 'consola' : 'webhook', mio: puedeVer(op, c.id), conectado: this.registro.conectado(c.id), estado: this.config.cads[c.id]?.estado ?? null, sinCapacidad: this.registro.conectado(c.id) ? this.registro.capacidad(c.id) : null, sinOperador: !!this.registro.disponibilidadDe(c.id)?.sinOperador })),
       protocolo: { version: this.protocolos.vigente().version, estado: this.protocolos.vigente().estado },
+      semaforo: this.config.semaforo,
     };
   }
 

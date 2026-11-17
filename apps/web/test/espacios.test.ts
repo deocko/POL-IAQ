@@ -15,7 +15,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { textosPartidos } from './textos-partidos';
 
-const ARCHIVOS = ['app/demo/page.tsx', 'app/consola/page.tsx', 'app/page.tsx', 'app/legal/[documento]/page.tsx'];
+const ARCHIVOS = ['app/demo/page.tsx', 'app/consola/page.tsx', 'app/page.tsx', 'app/legal/[documento]/page.tsx', 'app/consola/bandeja.tsx', 'app/consola/alta911.tsx', 'app/consola/folios.tsx'];
 
 describe('textos sin espacio', () => {
   it('detecta los casos de la verificación en vivo', () => {

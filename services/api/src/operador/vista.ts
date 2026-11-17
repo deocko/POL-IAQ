@@ -66,6 +66,10 @@ export function vistaOperador(r: Reporte, ciudadano: Ciudadano | undefined, prot
     ruta: r.ruta ?? { cadOrigen: r.cadId, motivo: null, canal: '911' as const },
     /** "Atiende CQ CIAS — municipio sin capacidad (…)", o null si lo atiende el municipio. */
     respaldo: textoRespaldo(r.ruta),
+    /** app o 911 (llamada capturada en la consola), y si fue de celular o fijo. */
+    origen: r.origen ?? 'app',
+    tipoTelefono: r.tipoTelefono ?? null,
+    altaPor: r.altaPor ?? null,
     /** Solo los CAD en modo consola se operan aquí; los demás despachan en su propio sistema. */
     operable,
     transiciones: operable ? ESTADOS.filter((e) => puedeTransicionar(r.estado, e)) : [],

@@ -26,7 +26,8 @@ import {
   PROTOCOLO_PROVISIONAL, UNIDADES_EJEMPLO, VELOCIDAD_EMERGENCIA_KMH,
   agruparPorCnie, aplica, candidatasPorCercania, canalizar, puedeDespachar, clasificacionDe, clasificarCnie, distanciaMetros, etiquetaCnie, subtipoCnie, validarCodigoCnie, enrutarPorUbicacion, esQueja, estimarRuta, generarFolio, incidentePorId, medirTiempos,
   minutosDe, permiteAnonimo, preguntasPara as preguntasProtocolo, preguntasPendientes, protocoloDe, puedeTransicionar, reportanteVisible, resolverEntradas,
-  respuestasDe, resumirTiempos, transcripcion,
+  respuestasDe, resumirTiempos, transcripcion, esMalUso, tipoCnie, UMBRALES_SEMAFORO_PREDETERMINADOS, validarUmbrales, filaFolio,
+  type UmbralesSemaforo, type OrigenFolio, type TipoTelefono, type FilaFolio, type Prioridad,
   type Canalizacion, type ClasificacionCnie, type Cuestionario, type EntradaCuestionario, type EstadoIncidente, type Identidad, type Opinion, type OpinionGuardada,
   type PreguntaProtocolo, type Punto, type UnidadAvl, type ValorRespuesta,
 } from '@pol-iaq/shared/movil';
@@ -128,9 +129,24 @@ export interface ReporteDemo {
   cerradoPorDemo?: boolean;
   /** Cómo se enrutó al crearse (CAD de origen, motivo del respaldo y canal). */
   ruta?: RutaFolio;
+  /** Por dónde entró: la app ciudadana o una llamada al 911 capturada en la consola. Sin dato = app. */
+  origen?: OrigenFolio;
+  /** Solo en altas por 911: si la llamada fue de celular o de teléfono fijo. */
+  tipoTelefono?: TipoTelefono | null;
+  /** Operador que capturó la llamada al 911. */
+  altaPor?: string | null;
 }
 
-export interface CorreccionCnie { en: string; actor: string; de: string | null; a: string; secundario: string | null; motivo: string | null }
+export interface CorreccionCnie {
+  en: string; actor: string; de: string | null; a: string; secundario: string | null; motivo: string | null;
+  /** Tipo CNIE antes y después (trazabilidad de la recatalogación a Mal Uso del servicio). */
+  tipoDe?: string | null; tipoA?: string;
+  /** Recatalogación a Mal Uso del servicio (Improcedentes), tipo 7. */
+  malUso?: boolean;
+}
+
+/** Reportante dado de alta (por la app o por una llamada al 911). Clave: los 10 dígitos del teléfono. */
+export interface ReportanteDemo { telefono: string; nombre: string; origen: OrigenFolio; registradoEn: string; actualizadoEn: string }
 
 interface PosicionAvl { lat: number; lng: number; rumbo?: number; en: string }
 
@@ -169,6 +185,10 @@ interface Estado {
   cierres?: (CierreMensual & { prueba?: boolean })[];
   /** CAD marcados «sin operador disponible»: sus reportes nuevos van al CQ CIAS. */
   sinOperador?: Record<string, { en: string; nota: string | null }>;
+  /** Reportantes dados de alta (app o 911), por teléfono de 10 dígitos. */
+  reportantes?: Record<string, ReportanteDemo>;
+  /** Umbrales del semáforo de la bandeja (fracción de la meta de llegada). */
+  umbrales?: UmbralesSemaforo;
 }
 
 // ---------------------------------------------------------------------------
@@ -344,6 +364,33 @@ export interface NuevoReporte {
   codigoCnie?: string;
   /** true: el CAD simulado lo despacha solo; false: lo despacha quien use la consola. */
   cadSimulado: boolean;
+  /** Solo alta por 911 (consola). */
+  origen?: OrigenFolio;
+  tipoTelefono?: TipoTelefono;
+  altaPor?: string;
+  /** Solo alta por 911: prioridad operativa que fijó el operador (si no, la del protocolo). */
+  prioridad?: Prioridad;
+  /** Solo alta por 911: código CNIE que eligió el operador (cualquier opción, salvo Mal Uso). */
+  codigoCnieOperador?: string;
+}
+
+/** Los 10 dígitos de un teléfono mexicano (acepta +52, espacios y guiones). null si no son 10. */
+export function telefonoNormal(t: string): string | null {
+  const d = t.replace(/\D/g, '').replace(/^52(?=\d{10}$)/, '');
+  return /^\d{10}$/.test(d) ? d : null;
+}
+
+function registrar(e: Estado, nombre: string, telefono: string, origen: OrigenFolio) {
+  const tel = telefonoNormal(telefono);
+  if (!tel || !nombre.trim()) return;
+  const r = (e.reportantes ??= {});
+  const iso = ahoraIso();
+  r[tel] = { telefono: tel, nombre: nombre.trim(), origen: r[tel]?.origen ?? origen, registradoEn: r[tel]?.registradoEn ?? iso, actualizadoEn: iso };
+}
+
+/** Alta del ciudadano en la app de la demo: queda como reportante registrado (lo encuentra la consola al capturar una llamada). */
+export function registrarCiudadano(nombre: string, telefono: string) {
+  cambiar((e) => { registrar(e, nombre, telefono, 'app'); return { resultado: null, folios: ['*'] }; });
 }
 
 export function crearReporte(d: NuevoReporte): ReporteDemo {
@@ -354,11 +401,17 @@ export function crearReporte(d: NuevoReporte): ReporteDemo {
   if (d.codigoCnie) {
     if (incidente.id !== 'otro') throw new ErrorDemo(400, 'cnie_no_aplica');
     exigirCnie(d.codigoCnie);
+    // Mal Uso del servicio (tipo 7) solo lo aplica el operador, al verificar el reporte.
+    if (esMalUso(d.codigoCnie)) throw new ErrorDemo(400, 'cnie_solo_operador', 'Ese tipo lo aplica solo el operador del CAD.');
+  }
+  if (d.codigoCnieOperador) {
+    exigirCnie(d.codigoCnieOperador);
+    if (esMalUso(d.codigoCnieOperador)) throw new ErrorDemo(400, 'cnie_solo_recatalogar', 'Mal Uso del servicio se aplica después de verificar el reporte, con «Recatalogar».');
   }
   const respuestasDadas = respuestasDe(resolverEntradas(PROTOCOLO, incidente.id, d.respuestas, 'formulario').validas);
   if (identidad === 'anonimo' && !permiteAnonimo(incidente.id, respuestasDadas, d.codigoCnie)) throw new ErrorDemo(400, 'anonimo_no_permitido');
   if (identidad === 'seudonimo' && !d.alias?.trim()) throw new ErrorDemo(400, 'falta_seudonimo');
-  const cnie = clasificarCnie(incidente.id, respuestasDadas, d.codigoCnie);
+  const cnie = d.codigoCnieOperador ? clasificacionDe(d.codigoCnieOperador, 'operador') : clasificarCnie(incidente.id, respuestasDadas, d.codigoCnie);
   return cambiar((e) => {
     // Anónimo: por el 089 al CQ CIAS. Sin CAD conectado o sin capacidad, también al CQ CIAS.
     const ruta = enrutarPorUbicacion(lugar.lat, lugar.lng, (cadId) => cadConectado(e, cadId), undefined, { capacidad: (cadId) => capacidad(e, cadId), anonimo: identidad === 'anonimo' });
@@ -372,7 +425,10 @@ export function crearReporte(d: NuevoReporte): ReporteDemo {
     e.consecutivos[k] = (e.consecutivos[k] ?? 0) + 1;
     const folio = generarFolio(claveFolio, anio, e.consecutivos[k]);
     const { validas } = resolverEntradas(PROTOCOLO, incidente.id, d.respuestas, 'formulario', iso);
-    const canalizacion = canalizar(PROTOCOLO, incidente, respuestasDe(validas), { asistenciaDirecta: d.asistenciaDirecta });
+    const canalizada = canalizar(PROTOCOLO, incidente, respuestasDe(validas), { asistenciaDirecta: d.asistenciaDirecta });
+    const canalizacion = d.prioridad ? { ...canalizada, prioridad: d.prioridad } : canalizada;
+    const por911 = d.origen === '911';
+    const notaAlta = por911 ? `Alta por llamada al 911 (${d.tipoTelefono === 'fijo' ? 'teléfono fijo' : 'celular'}), capturada por ${d.altaPor ?? OPERADOR_DEMO.nombre}` : null;
     const r: ReporteDemo = {
       folio,
       folioCad: null,
@@ -395,8 +451,11 @@ export function crearReporte(d: NuevoReporte): ReporteDemo {
       unidad: null,
       evidencias: (d.fotos ?? []).map((f) => ({ ...f, id: id() })),
       mensajes: [],
-      historial: [{ estado: 'recibido', en: iso, ...(notaRuta && { nota: notaRuta }) }],
+      historial: [{ estado: 'recibido', en: iso, ...((notaAlta || notaRuta) && { nota: [notaAlta, notaRuta].filter(Boolean).join('. ') }) }],
       ruta: rutaDe(ruta),
+      origen: d.origen ?? 'app',
+      tipoTelefono: por911 ? d.tipoTelefono ?? null : null,
+      altaPor: por911 ? d.altaPor ?? OPERADOR_DEMO.usuario : null,
       opinion: null,
       creadoEn: iso,
       actualizadoEn: iso,
@@ -404,6 +463,7 @@ export function crearReporte(d: NuevoReporte): ReporteDemo {
       cadSimulado: d.cadSimulado || !operaEnConsola(e, ruta.cadId) ? { inicio: virtual(e.reloj), paso: 0 } : null,
     };
     e.reportes.push(r);
+    if (identidad !== 'anonimo') registrar(e, r.ciudadano.nombre, r.ciudadano.telefono, d.origen ?? 'app');
     return { resultado: r, folios: [folio] };
   });
 }
@@ -569,7 +629,12 @@ export type AccionDemo =
   | { accion: 'estado'; estado: 'en_camino' | 'en_sitio' | 'cerrado' | 'improcedente'; nota?: string }
   | { accion: 'mensaje'; texto: string }
   | { accion: 'transferir'; cadDestinoId: string; motivo?: string }
-  | { accion: 'reclasificar'; codigoCnie: string; codigoCnieSecundario?: string | null; motivo?: string };
+  | { accion: 'reclasificar'; codigoCnie: string; codigoCnieSecundario?: string | null; motivo?: string }
+  | { accion: 'recatalogar_mal_uso'; codigoCnie: string; motivo: string };
+
+/** Acciones que no son despacho: se pueden hacer con el folio cerrado y no quitan la demo automática. */
+const SOLO_CLASIFICACION = new Set(['reclasificar', 'recatalogar_mal_uso']);
+export const umbralesDe = (e: Estado = leer()) => e.umbrales ?? UMBRALES_SEMAFORO_PREDETERMINADOS;
 
 function yo() {
   const e = leer();
@@ -578,6 +643,7 @@ function yo() {
     // En la demo los CAD conectados despachan desde la consola (salvo un alta en Modo A).
     cads: CADS_DEMO.map((c) => ({ ...c, modo: operaEnConsola(e, c.id) ? 'consola' as const : 'webhook' as const, mio: true, conectado: cadConectado(e, c.id), estado: e.registros?.[c.id]?.estado ?? (cadConectado(e, c.id) ? 'activo' as const : null), sinCapacidad: cadConectado(e, c.id) ? capacidad(e, c.id) : null, sinOperador: !!e.sinOperador?.[c.id] })),
     protocolo: { version: PROTOCOLO.version, estado: PROTOCOLO.estado },
+    semaforo: umbralesDe(e),
   };
 }
 
@@ -625,10 +691,27 @@ export function vistaOperador(r: ReporteDemo) {
     actualizadoEn: r.actualizadoEn,
     escalaAlC5En,
     ruta: r.ruta ?? { cadOrigen: r.cadId, motivo: null, canal: '911' as const },
+    origen: r.origen ?? 'app',
+    tipoTelefono: r.tipoTelefono ?? null,
+    altaPor: r.altaPor ?? null,
     respaldo: textoRespaldo(r.ruta),
     operable: operaEnConsola(leer(), r.cadId),
     transiciones: operaEnConsola(leer(), r.cadId) ? ESTADOS.filter((x) => puedeTransicionar(r.estado, x)) : [],
   };
+}
+
+export interface Alta911 {
+  telefono: string;
+  /** Solo si el número no está registrado (o para corregirlo). */
+  nombre?: string;
+  tipoTelefono: TipoTelefono;
+  incidenteId: string;
+  descripcion?: string;
+  lugarId?: string;
+  ubicacion?: { lat: number; lng: number; precisionMetros?: number; referencia?: string };
+  respuestas: EntradaCuestionario[];
+  prioridad?: Prioridad;
+  codigoCnie?: string;
 }
 
 export const operador = {
@@ -670,15 +753,50 @@ export const operador = {
       ),
     };
   },
+  /** Paso 1 del alta por 911: ¿el número ya está dado de alta como reportante? */
+  reportante(token: string | null, telefono: string) {
+    exigirToken(token);
+    const tel = telefonoNormal(telefono);
+    if (!tel) throw new ErrorDemo(400, 'telefono_invalido', 'Escribe el número de 10 dígitos (puede llevar +52).');
+    const r = leer().reportantes?.[tel];
+    const folios = leer().reportes.filter((x) => telefonoNormal(x.ciudadano.telefono) === tel && x.identidad !== 'anonimo').length;
+    return r ? { telefono: tel, registrado: true as const, reportante: { nombre: r.nombre, registradoEn: r.registradoEn, origen: r.origen, folios } } : { telefono: tel, registrado: false as const, reportante: null };
+  },
+  /** Alta de un reporte que llegó por teléfono al 911: mismo folio, enrutado e historial que el de la app. */
+  alta911(token: string | null, d: Alta911) {
+    exigirToken(token);
+    const tel = telefonoNormal(d.telefono);
+    if (!tel) throw new ErrorDemo(400, 'telefono_invalido', 'Escribe el número de 10 dígitos (puede llevar +52).');
+    if (d.tipoTelefono !== 'celular' && d.tipoTelefono !== 'fijo') throw new ErrorDemo(400, 'falta_tipo_telefono', 'Indica si la llamada fue de celular o de teléfono fijo.');
+    const previo = leer().reportantes?.[tel];
+    const nombre = (d.nombre ?? '').trim() || previo?.nombre || '';
+    if (nombre.length < 2) throw new ErrorDemo(400, 'falta_nombre', 'Escribe el nombre de quien llama.');
+    const r = crearReporte({
+      incidenteId: d.incidenteId, lugarId: d.lugarId, ubicacion: d.ubicacion, descripcion: d.descripcion, respuestas: d.respuestas,
+      nombre, telefono: tel, identidad: 'completa', cadSimulado: false, origen: '911', tipoTelefono: d.tipoTelefono, altaPor: OPERADOR_DEMO.nombre,
+      ...(d.prioridad && { prioridad: d.prioridad }), ...(d.codigoCnie && { codigoCnieOperador: d.codigoCnie }),
+    });
+    return { reporte: vistaOperador(r), reportanteNuevo: !previo };
+  },
+  umbrales(token: string | null) {
+    exigirToken(token);
+    return umbralesDe();
+  },
+  fijarUmbrales(token: string | null, u: UmbralesSemaforo) {
+    exigirToken(token);
+    const error = validarUmbrales(u);
+    if (error) throw new ErrorDemo(400, 'umbrales_invalidos', error);
+    return cambiar((e) => { e.umbrales = { amarillo: u.amarillo, rojo: u.rojo }; return { resultado: e.umbrales, folios: ['*'] }; });
+  },
   accion(token: string | null, folio: string, a: AccionDemo) {
     exigirToken(token);
     return cambiar((e) => {
       const r = delFolio(e, folio);
       if (!operaEnConsola(e, r.cadId)) throw new ErrorDemo(409, 'cad_con_sistema_propio');
       // La clasificación se puede corregir aun cerrado el reporte (sirve a la estadística).
-      if (ESTADOS_FINALES.includes(r.estado) && a.accion !== 'reclasificar') throw new ErrorDemo(409, 'reporte_cerrado');
+      if (ESTADOS_FINALES.includes(r.estado) && !SOLO_CLASIFICACION.has(a.accion)) throw new ErrorDemo(409, 'reporte_cerrado');
       // Si alguien despacha a mano, el CAD simulado deja de mover ese reporte (corregir el código no cuenta).
-      if (a.accion !== 'reclasificar') r.cadSimulado = null;
+      if (!SOLO_CLASIFICACION.has(a.accion)) r.cadSimulado = null;
       aplicar(e, r, a, OPERADOR_DEMO.nombre);
       r.actualizadoEn = ahoraIso();
       return { resultado: vistaOperador(r), folios: [folio] };
@@ -713,11 +831,28 @@ function aplicar(e: Estado, r: ReporteDemo, a: AccionDemo, autor: string) {
       break;
     case 'reclasificar': {
       exigirCnie(a.codigoCnie);
+      if (esMalUso(a.codigoCnie)) throw new ErrorDemo(400, 'usar_recatalogar_mal_uso', 'Para Mal Uso del servicio usa «Recatalogar a Mal Uso del servicio», con su motivo.');
       if (a.codigoCnieSecundario) exigirCnie(a.codigoCnieSecundario);
       const antes = r.cnie ?? null;
       const secundario = a.codigoCnieSecundario === null ? null : a.codigoCnieSecundario ?? antes?.secundario?.codigo ?? null;
       r.cnie = clasificacionDe(a.codigoCnie, 'operador', secundario);
-      (r.correccionesCnie ??= []).push({ en: ahoraIso(), actor: `operador:${OPERADOR_DEMO.usuario}`, de: codigoDe(antes), a: a.codigoCnie, secundario, motivo: a.motivo?.trim() || null });
+      (r.correccionesCnie ??= []).push({ en: ahoraIso(), actor: `operador:${OPERADOR_DEMO.usuario}`, de: codigoDe(antes), a: a.codigoCnie, secundario, motivo: a.motivo?.trim() || null, tipoDe: antes?.tipo.codigo ?? null, tipoA: a.codigoCnie[0] });
+      break;
+    }
+    case 'recatalogar_mal_uso': {
+      const motivo = a.motivo?.trim() ?? '';
+      if (motivo.length < 3) throw new ErrorDemo(400, 'motivo_obligatorio', 'Escribe el motivo de la recatalogación (por ejemplo, «llamada de broma verificada»).');
+      if (motivo.length > 200) throw new ErrorDemo(400, 'motivo_largo', 'El motivo debe ser un texto corto (hasta 200 caracteres).');
+      const i = exigirCnie(a.codigoCnie);
+      if (!esMalUso(i.codigo)) throw new ErrorDemo(400, 'no_es_mal_uso', 'Elige un incidente del tipo 7, Mal Uso del servicio.');
+      const antes = r.cnie ?? null;
+      if (antes && esMalUso(antes.tipo.codigo) && antes.incidente?.codigo === i.codigo) throw new ErrorDemo(409, 'ya_recatalogado');
+      r.cnie = clasificacionDe(i.codigo, 'operador', null);
+      const tipoDe = antes?.tipo.codigo ?? null;
+      (r.correccionesCnie ??= []).push({ en: ahoraIso(), actor: `operador:${OPERADOR_DEMO.usuario}`, de: codigoDe(antes), a: i.codigo, secundario: null, motivo, tipoDe, tipoA: i.tipo.codigo, malUso: true });
+      // Queda en el historial del folio, sin cambiar su estado: tipo original, tipo nuevo, quién y por qué.
+      const original = tipoDe ? `${tipoDe} ${tipoCnie(tipoDe)?.nombre ?? ''} (${codigoDe(antes)})` : 'sin clasificar';
+      r.historial.push({ estado: r.estado, en: ahoraIso(), nota: `Recatalogado a Mal Uso del servicio (Improcedentes) por ${autor}: tipo ${original} → ${i.tipo.codigo} ${i.tipo.nombre} (${i.codigo}). Motivo: ${motivo}` });
       break;
     }
     case 'transferir':
@@ -961,6 +1096,19 @@ function filasFiltradas(f: FiltroReportes) {
 }
 
 export const reportes = {
+  /** Folios del periodo para la tabla dinámica (con lo que el operador ve del reportante). */
+  folios(token: string | null, f: FiltroReportes): { filas: FilaFolio[] } {
+    exigirToken(token);
+    const { filas } = filasFiltradas(f);
+    const porFolio = new Map(leer().reportes.map((r) => [r.folio, r]));
+    const ahoraMs = Date.now();
+    return {
+      filas: filas.map((x) => {
+        const r = porFolio.get(x.folio)!;
+        return filaFolio({ ...x, cnie: r.cnie, unidad: r.unidad, origen: r.origen ?? 'app', ruta: r.ruta, tipoTelefono: r.tipoTelefono ?? null, reportante: reportanteVisible(r, r.ciudadano) }, ahoraMs);
+      }),
+    };
+  },
   estadistica(token: string | null, f: FiltroReportes) {
     exigirToken(token);
     const { rango, filas } = filasFiltradas(f);

@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Controller, ForbiddenException, Get, HttpCode, Inject, NotFoundException, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import {
-  CAD_IDS, METAS_PROVISIONALES, cerrarMes, csvAjustesSesnsp, csvFolios, csvSesnsp, enRango, estadistica, estadisticaPublica, mesLocal, xlsxSesnsp,
+  CAD_IDS, METAS_PROVISIONALES, cerrarMes, filaFolio, reportanteVisible, csvAjustesSesnsp, csvFolios, csvSesnsp, enRango, estadistica, estadisticaPublica, mesLocal, xlsxSesnsp,
   type CierreMensual, type FilaEstadistica,
 } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
@@ -32,7 +32,26 @@ export class EstadisticaController {
     const rango = rangoDe(f);
     const [desde, hasta] = limitesUtc(rango.desde, rango.hasta);
     const todos = await this.almacen.reportesEntre(op.cads, desde, hasta);
-    return { rango, filas: filtrarFilas(todos.map(filaEstadistica), f, rango) };
+    return { rango, filas: filtrarFilas(todos.map(filaEstadistica), f, rango), reportes: todos };
+  }
+
+  /**
+   * Tabla dinámica de folios (consola): un renglón por folio con lo que el operador ya ve del
+   * reportante (nombre y teléfono con identidad completa; de un seudónimo, los últimos 4 dígitos;
+   * de un anónimo, nada), canal de origen y tipo de teléfono. La consulta queda en la auditoría.
+   */
+  @Get('estadistica/folios')
+  async folios(@Req() req: { operador: OperadorSesion }, @Query() q: FiltroEstadistica) {
+    const { filas, reportes } = await this.filas(req.operador, q);
+    const porFolio = new Map(reportes.map((r) => [r.folio, r]));
+    const ahora = Date.now();
+    const salida = await Promise.all(filas.map(async (x) => {
+      const r = porFolio.get(x.folio)!;
+      const c = await this.almacen.ciudadano(r.ciudadanoId);
+      return filaFolio({ ...x, cnie: r.cnie, unidad: r.unidad, origen: r.origen ?? 'app', ruta: r.ruta, tipoTelefono: r.tipoTelefono ?? null, reportante: c ? reportanteVisible(r, c) : null }, ahora);
+    }));
+    await this.almacen.auditar({ actor: `operador:${req.operador.usuario}`, accion: 'folios_consultados', detalle: { cadId: q.cadId ?? null, municipio: q.municipio ?? null, periodo: q.periodo ?? null, fecha: q.fecha ?? null, filas: salida.length } });
+    return { filas: salida };
   }
 
   /** Volumen, tiempos y quejas, con desgloses. Filtros: cadId, municipio (22001–22018), periodo + fecha, o desde/hasta. */

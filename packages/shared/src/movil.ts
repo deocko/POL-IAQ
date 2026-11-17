@@ -23,3 +23,5 @@ export * from './interconexion';
 export * from './estadistica';
 export * from './sesnsp';
 export * from './xlsx';
+export * from './bandeja';
+export * from './folios';

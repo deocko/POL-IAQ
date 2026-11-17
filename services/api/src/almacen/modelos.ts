@@ -1,4 +1,4 @@
-import type { ClasificacionCnie, Identidad, OpinionGuardada, RutaFolio } from '@pol-iaq/shared';
+import type { ClasificacionCnie, Identidad, OpinionGuardada, OrigenFolio, RutaFolio, TipoTelefono } from '@pol-iaq/shared';
 import type { CasoPruebaCad, ContactoTecnico, EstadoCad, ModoCad, ResultadoCaso, TipoUnidad } from '@pol-iaq/shared';
 import type { Canalizacion, Corporacion, Cuestionario, EstadoIncidente, EventoHaciaCad, Prioridad, Ubicacion } from '@pol-iaq/shared';
 
@@ -86,6 +86,12 @@ export interface Reporte {
   actualizadoEn: string;
   /** Cómo se enrutó al crearse: CAD de origen, motivo del respaldo (CQ CIAS) y canal (911/089). */
   ruta?: RutaFolio;
+  /** Por dónde entró: la app (sin dato) o una llamada al 911 capturada en la consola. */
+  origen?: OrigenFolio;
+  /** Solo llamadas al 911: celular o teléfono fijo. */
+  tipoTelefono?: TipoTelefono | null;
+  /** Operador que capturó la llamada al 911. */
+  altaPor?: string | null;
   /** Secuencia del último evento enviado al CAD. */
   secuenciaSalida: number;
   /** Secuencia del último evento aceptado desde el CAD. */
@@ -99,6 +105,11 @@ export interface CorreccionCnie {
   a: string;
   secundario: string | null;
   motivo: string | null;
+  /** Tipo CNIE antes y después (trazabilidad de la recatalogación a Mal Uso del servicio). */
+  tipoDe?: string | null;
+  tipoA?: string;
+  /** Recatalogación a Mal Uso del servicio (Improcedentes), tipo 7. */
+  malUso?: boolean;
 }
 
 /** Entrada de bitácora de auditoría: quién hizo qué sobre qué folio. */

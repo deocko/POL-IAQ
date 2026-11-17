@@ -4,7 +4,7 @@ import { minutosDe, type EventoDesdeCad } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
 import { AvlService, RutasService } from '../despacho/avl.service';
 import type { Reporte } from '../almacen/modelos';
-import { ReportesService, validarCnieOFallar } from '../reportes/reportes.service';
+import { ReportesService, exigirMotivoMalUso, validarCnieOFallar } from '../reportes/reportes.service';
 import { AvisosSmsService } from '../sms/avisos-sms.service';
 
 export type ResultadoEvento = { aceptado: true; duplicado?: true; descartado?: 'secuencia_antigua' };
@@ -41,6 +41,8 @@ export class EventosCadService {
       if (ev.tipo === 'incidente.reclasificado') {
         validarCnieOFallar(ev.datos.codigoCnie, 'codigoCnie');
         if (ev.datos.codigoCnieSecundario) validarCnieOFallar(ev.datos.codigoCnieSecundario, 'codigoCnieSecundario');
+        // Mal Uso del servicio (tipo 7): motivo obligatorio, también desde un CAD con sistema propio.
+        exigirMotivoMalUso(ev.datos);
       }
       if (ev.tipo === 'incidente.recibido' && ev.datos.codigoCnie) validarCnieOFallar(ev.datos.codigoCnie, 'codigoCnie');
       if (!(await this.almacen.marcarEventoProcesado(ev.eventoId, cadId, ev.folio))) return { aceptado: true, duplicado: true };

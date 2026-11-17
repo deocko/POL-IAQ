@@ -174,7 +174,7 @@ paths:
           description: |
             `datos_invalidos`, `incidente_desconocido`, `escenario_desconocido`, `anonimo_no_permitido`, `falta_seudonimo`,
             o código CNIE no válido: `cnie_formato` (no tiene 5 dígitos), `cnie_inexistente`, `cnie_retirado` (incluye `reemplazo`
-            cuando el CNIE V 3.0 lo cambió de numeral) o `cnie_no_aplica` (solo "Otra emergencia" acepta `codigoCnie`).
+            cuando el CNIE V 3.0 lo cambió de numeral), `cnie_no_aplica` (solo "Otra emergencia" acepta `codigoCnie`) o `cnie_solo_operador` (el tipo 7, Mal Uso del servicio, solo lo aplica el operador).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorCnie' }
@@ -468,12 +468,50 @@ paths:
                 - { type: object, required: [accion, estado], properties: { accion: { const: estado }, estado: { type: string, enum: [en_camino, en_sitio, cerrado, improcedente] }, nota: { type: string } } }
                 - { type: object, required: [accion, texto], properties: { accion: { const: mensaje }, texto: { type: string, maxLength: 1000 } } }
                 - { type: object, required: [accion, cadDestinoId], properties: { accion: { const: transferir }, cadDestinoId: { type: string }, motivo: { type: string } } }
-                - { type: object, required: [accion, codigoCnie], description: 'Incidente vigente del CNIE V 3.0. `codigoCnieSecundario` null lo quita; omitido conserva el anterior.', properties: { accion: { const: reclasificar }, codigoCnie: { type: string, pattern: '^\d{5}$', example: '31112' }, codigoCnieSecundario: { type: [string, 'null'], example: '10225' }, motivo: { type: string, maxLength: 500 } } }
+                - { type: object, required: [accion, codigoCnie], description: 'Incidente vigente del CNIE V 3.0, salvo tipo 7 (usa recatalogar_mal_uso). `codigoCnieSecundario` null lo quita; omitido conserva el anterior.', properties: { accion: { const: reclasificar }, codigoCnie: { type: string, pattern: '^\d{5}$', example: '31112' }, codigoCnieSecundario: { type: [string, 'null'], example: '10225' }, motivo: { type: string, maxLength: 500 } } }
+                - { type: object, required: [accion, codigoCnie, motivo], description: 'Recataloga a Mal Uso del servicio (Improcedentes), tipo 7, tras verificar el reporte. Motivo obligatorio. Queda en el historial con el tipo original; el folio cuenta como improcedente en estadística y SESNSP. Se puede hacer con el folio cerrado.', properties: { accion: { const: recatalogar_mal_uso }, codigoCnie: { type: string, pattern: '^7\d{4}$', example: '70107' }, motivo: { type: string, minLength: 3, maxLength: 200 } } }
       responses:
-        '200': { description: 'VistaOperador actualizada (incluye `cnie` y `cnieEtiqueta`, p. ej. "CNIE 30202 · Seguridad / Armas y explosivos / Detonación por arma de fuego · ALTA")' }
-        '400': { description: '`unidad_desconocida`, `cad_destino_invalido`, `datos_invalidos` o `cnie_formato` / `cnie_inexistente` / `cnie_retirado`', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorCnie' } } } }
+        '200': { description: 'VistaOperador actualizada (incluye `cnie`, `cnieEtiqueta`, `origen` app/911 y `tipoTelefono`)' }
+        '400': { description: '`unidad_desconocida`, `cad_destino_invalido`, `datos_invalidos`, `cnie_formato` / `cnie_inexistente` / `cnie_retirado`, `usar_recatalogar_mal_uso`, `no_es_mal_uso`, `motivo_obligatorio`', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorCnie' } } } }
         '404': { description: '`folio_no_encontrado`' }
-        '409': { description: '`cad_con_sistema_propio`, `reporte_cerrado`, `ya_recibido`, `transicion_invalida` o `sin_unidades_disponibles`' }
+        '409': { description: '`cad_con_sistema_propio`, `reporte_cerrado`, `ya_recibido`, `transicion_invalida`, `sin_unidades_disponibles` o `ya_recatalogado`' }
+  /v1/operador/reportantes/{telefono}:
+    get:
+      tags: [Consola de operador]
+      summary: Alta por 911, paso 1. ¿El número ya está dado de alta como reportante? (queda en la auditoría)
+      operationId: consultarReportante
+      security: [{ operador: [] }]
+      parameters: [{ name: telefono, in: path, required: true, schema: { type: string }, example: '4421234567' }]
+      responses:
+        '200': { description: '`{ telefono, registrado, reportante: { nombre, registradoEn, origen: app|911, folios } | null }`' }
+        '400': { description: '`telefono_invalido`' }
+  /v1/operador/reportes/911:
+    post:
+      tags: [Consola de operador]
+      summary: «Iniciar nuevo reporte». Alta de un reporte que llegó por teléfono al 911, con el mismo cuestionario, folio, enrutado e historial que la app
+      description: Si el número no está registrado, se crea el reportante con los datos capturados (sin aceptación legal; ver PENDIENTES-JURIDICO B8). El folio queda con origen 911 y tipo de línea.
+      operationId: alta911
+      security: [{ operador: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [telefono, tipoTelefono, incidenteId, ubicacion]
+              properties:
+                telefono: { type: string, example: '+52 442 123 4567' }
+                nombre: { type: string, maxLength: 80, description: Obligatorio si el número no está registrado }
+                tipoTelefono: { type: string, enum: [celular, fijo] }
+                incidenteId: { type: string, example: robo-en-curso }
+                descripcion: { type: string, maxLength: 1000 }
+                ubicacion: { $ref: '#/components/schemas/Ubicacion' }
+                respuestas: { type: array, items: { type: object, properties: { preguntaId: { type: string }, respuesta: {} } } }
+                prioridad: { type: string, enum: [alta, media, baja], description: Si se omite, la del protocolo }
+                codigoCnie: { type: string, description: 'Opcional; cualquier incidente vigente salvo tipo 7' }
+      responses:
+        '201': { description: '`{ reporte: VistaOperador, reportanteNuevo: boolean }`' }
+        '400': { description: '`telefono_invalido`, `falta_nombre`, `incidente_desconocido`, `cnie_solo_recatalogar` o errores CNIE' }
   /v1/operador/unidades:
     get:
       tags: [Consola de operador]
@@ -577,6 +615,14 @@ paths:
         - { name: desde, in: query, schema: { type: string, format: date } }
         - { name: hasta, in: query, schema: { type: string, format: date } }
       responses: { '200': { description: OK } }
+  /v1/operador/estadistica/folios:
+    get:
+      tags: [Reportes por municipio]
+      summary: Tabla dinámica de la consola, un renglón por folio con nombre y teléfono que ve el operador (mismos filtros). Queda en la auditoría
+      description: Campos de FilaFolio (packages/shared/src/folios.ts) — folio, fecha, municipio, CNIE, estado, prioridad, unidad, corporación, canal (app, 911, anonimo), tipoTelefono, nombre, telefono y demora. La búsqueda, los filtros por columna, el orden y la exportación de lo filtrado se hacen en la consola.
+      operationId: tablaFolios
+      security: [{ operador: [] }]
+      responses: { '200': { description: '`{ filas: FilaFolio[] }`' } }
   /v1/operador/estadistica/folios.csv:
     get:
       tags: [Reportes por municipio]
@@ -794,7 +840,7 @@ components:
     ErrorCnie:
       type: object
       properties:
-        codigo: { type: string, enum: [cnie_formato, cnie_inexistente, cnie_retirado, cnie_no_aplica] }
+        codigo: { type: string, enum: [cnie_formato, cnie_inexistente, cnie_retirado, cnie_no_aplica, cnie_solo_operador] }
         campo: { type: string, enum: [codigoCnie, codigoCnieSecundario] }
         mensaje: { type: string }
         reemplazo: { type: string, description: Código vigente que sustituye a uno cambiado de numeral. }
