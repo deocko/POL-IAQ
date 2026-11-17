@@ -93,7 +93,7 @@ export function Alta911({ token, alCrear, alCancelar }: { token: string; alCrear
   return (
     <section className="c-detalle c-alta911" aria-label="Iniciar nuevo reporte por llamada al 911" data-testid="alta-911">
       <div className="c-fila">
-        <button className="c-enlace c-volver" onClick={alCancelar}>← Bandeja</button>
+        <button className="c-boton-sec c-volver" onClick={alCancelar} data-testid="atras">← Atrás</button>
         <span className="c-chip c-chip-911">Llamada 911</span>
       </div>
       <div className="c-tarjeta">

@@ -205,3 +205,71 @@ export function RecatalogarMalUso({ r, ocupado, hacer }: { r: Reporte; ocupado: 
     </div>
   );
 }
+
+/**
+ * Panel de la derecha cuando no hay reporte elegido: resumen útil de la bandeja (conteos por estado y
+ * por prioridad, el pendiente más antiguo con su semáforo y el botón para iniciar un reporte), para que
+ * ningún tamaño de pantalla muestre un área vacía. Cada conteo aplica su filtro.
+ */
+export function ResumenBandeja({ reportes, contadores, ahora, umbrales, alFiltrar, alAbrir, alIniciar }: {
+  reportes: Reporte[]; contadores: Contadores; ahora: number; umbrales: UmbralesSemaforo;
+  alFiltrar: (f: FiltroVista) => void; alAbrir: (folio: string) => void; alIniciar: () => void;
+}) {
+  const activos = reportes.filter((r) => grupoEstado(r.estado) !== 'atendidos');
+  const porPrioridad: Record<string, number> = { alta: 0, media: 0, baja: 0 };
+  const porEspera: Record<ColorSemaforo, number> = { verde: 0, amarillo: 0, rojo: 0 };
+  for (const r of activos) { porPrioridad[r.prioridad] = (porPrioridad[r.prioridad] ?? 0) + 1; porEspera[semaforoDe(r, ahora, umbrales).color]++; }
+  const masAntiguo = [...activos].sort((a, b) => Date.parse(a.creadoEn) - Date.parse(b.creadoEn))[0];
+  const Conteo = ({ n, texto, filtro, clase = '' }: { n: number; texto: string; filtro: FiltroVista; clase?: string }) => (
+    <button type="button" className={`c-resumen-conteo ${clase}`} onClick={() => alFiltrar(filtro)} data-testid={`resumen-${texto.toLowerCase()}`}>
+      <strong>{n}</strong><span>{texto}</span>
+    </button>
+  );
+  return (
+    <section className="c-detalle c-resumen" aria-label="Resumen de la bandeja" data-testid="resumen-bandeja">
+      <div className="c-fila">
+        <h2>Resumen de la bandeja</h2>
+        <button type="button" className="c-boton" onClick={alIniciar} data-testid="resumen-iniciar">Iniciar nuevo reporte</button>
+      </div>
+      <p className="suave c-pequeno">Elige un reporte de la lista para ver el cuestionario de la despachadora virtual y despachar. Toca un conteo para filtrar la bandeja.</p>
+      <div className="c-tarjeta">
+        <h3>Por estado</h3>
+        <div className="c-resumen-conteos">
+          <Conteo n={contadores.estado.nuevos} texto="Nuevos" filtro={{ ...FILTRO_INICIAL, estado: 'nuevos' }} clase={contadores.estado.nuevos ? 'alerta' : ''} />
+          <Conteo n={contadores.estado.pendientes} texto="Pendientes" filtro={{ ...FILTRO_INICIAL, estado: 'pendientes' }} />
+          <Conteo n={contadores.estado.atendidos} texto="Atendidos" filtro={{ ...FILTRO_INICIAL, estado: 'atendidos' }} />
+        </div>
+      </div>
+      <div className="c-rejilla c-resumen-rejilla">
+        <div className="c-tarjeta">
+          <h3>Activos por prioridad</h3>
+          <div className="c-resumen-conteos">
+            {(['alta', 'media', 'baja'] as const).map((p) => (
+              <Conteo key={p} n={porPrioridad[p] ?? 0} texto={p[0].toUpperCase() + p.slice(1)} filtro={{ ...FILTRO_INICIAL, prioridad: p }} clase={`c-prio-borde-${p}`} />
+            ))}
+          </div>
+        </div>
+        <div className="c-tarjeta">
+          <h3>Activos por espera</h3>
+          <div className="c-resumen-conteos">
+            {(['verde', 'amarillo', 'rojo'] as ColorSemaforo[]).map((c) => (
+              <Conteo key={c} n={porEspera[c]} texto={ETIQUETA_SEMAFORO[c]} filtro={{ ...FILTRO_INICIAL, demora: c }} clase={`c-sem-borde-${c}`} />
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="c-tarjeta" data-testid="resumen-mas-antiguo">
+        <h3>Pendiente más antiguo</h3>
+        {masAntiguo ? (
+          <button type="button" className={`c-item p-${masAntiguo.prioridad}`} onClick={() => alAbrir(masAntiguo.folio)}>
+            <div className="c-fila">
+              <span className="c-linea"><PuntoPrioridad p={masAntiguo.prioridad} cnie={masAntiguo.cnie?.prioridad} /><strong>{masAntiguo.incidente}</strong></span>
+              <Semaforo s={semaforoDe(masAntiguo, ahora, umbrales)} />
+            </div>
+            <div className="suave c-pequeno">{`${masAntiguo.folio}${masAntiguo.municipioClave ? ` · municipio ${masAntiguo.municipioClave}` : ''} · creado a las ${hora(masAntiguo.creadoEn)} · abrir`}</div>
+          </button>
+        ) : <p className="suave">{'Sin reportes activos: todo está atendido.'}</p>}
+      </div>
+    </section>
+  );
+}

@@ -19,7 +19,7 @@ import {
   type Accion, type Reporte, type Tablero, type UnidadDisponible, type Yo,
 } from './consola';
 import { FormUnidad, VistaMunicipios, VistaReportes, VistaSesnsp, tipoDeUnidad } from './municipios';
-import { FILTRO_INICIAL, FiltrosBandeja, PuntoPrioridad, RecatalogarMalUso, Semaforo, UmbralesSemaforoForm, semaforoReporte, usarBandeja, type FiltroVista } from './bandeja';
+import { FILTRO_INICIAL, FiltrosBandeja, PuntoPrioridad, RecatalogarMalUso, ResumenBandeja, Semaforo, UmbralesSemaforoForm, semaforoReporte, usarBandeja, type FiltroVista } from './bandeja';
 import { Alta911, textoOrigen } from './alta911';
 
 const CLAVE_SESION = 'poliaq.consola.token';
@@ -106,6 +106,10 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
   const [orden, setOrden] = useState<OrdenBandeja>('prioridad_demora');
   const [alta, setAlta] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+  const mesa = useRef<HTMLDivElement>(null);
+  const cabecera = useRef<HTMLElement>(null);
+  const barra = useRef<HTMLDivElement>(null);
   const [enLinea, setEnLinea] = useState(false);
   const [aviso, setAviso] = useState('');
   const [ahora, setAhora] = useState(() => ahoraMs());
@@ -175,10 +179,32 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
     }
   }
 
+  // Alturas reales de la cabecera y de la barra de la bandeja (cambian al envolverse): con ellas las
+  // columnas usan exactamente el alto restante de la ventana y la lista se desplaza dentro de su columna.
+  useEffect(() => {
+    const m = mesa.current;
+    if (!m || typeof ResizeObserver === 'undefined') return;
+    const medir = () => {
+      m.style.setProperty('--alto-cabecera', `${cabecera.current?.offsetHeight ?? 0}px`);
+      m.style.setProperty('--alto-barra', `${barra.current?.offsetHeight ?? 0}px`);
+    };
+    const o = new ResizeObserver(medir);
+    if (cabecera.current) o.observe(cabecera.current);
+    if (barra.current) o.observe(barra.current);
+    medir();
+    return () => o.disconnect();
+  }, [vista]);
+  // En móvil el detalle se abre como vista completa: se empieza desde arriba.
+  const abrir = (folio: string | null, conAlta = false) => {
+    setSel(folio); setAlta(conAlta);
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767.98px)').matches) window.scrollTo({ top: 0 });
+  };
+  const filtrosActivos = Number(filtro.estado !== 'activos') + Number(!!filtro.prioridad) + Number(!!filtro.prioridadCnie) + Number(!!filtro.municipio) + Number(!!filtro.demora);
+
   const misCads = yo.cads.filter((c) => c.mio);
   return (
-    <div className="c-mesa">
-      <header className="c-cabecera">
+    <div className="c-mesa" ref={mesa}>
+      <header className="c-cabecera" ref={cabecera}>
         <div className="c-cabecera-izq">
           <Marca tam={34} />
           <span className="c-cabecera-titulo">Consola<span className="suave c-ocultable">{` · ${yo.operador.nombre}`}</span></span>
@@ -216,16 +242,21 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
       {vista === 'sesnsp' && supervision && <VistaSesnsp token={token} />}
       {vista === 'municipios' && supervision && <VistaMunicipios token={token} alCambio={() => void cargar()} />}
       {vista === 'tiempos' && <VistaTiempos token={token} ahora={ahora} nombreCad={nombreCad} alAbrir={(f) => { setSel(f); setAlta(false); setVista('bandeja'); setFiltro({ ...FILTRO_INICIAL, estado: 'todos' }); }} />}
-      {vista === 'bandeja' && <div className="c-franja-filtros">
+      {vista === 'bandeja' && <div className="c-barra-bandeja" ref={barra}>
+        <h2 className="c-linea">{'Bandeja'}{nuevos > 0 && <span className="c-contador">{`${nuevos} ${nuevos === 1 ? 'nuevo' : 'nuevos'}`}</span>}<span className="suave c-pequeno">{`${lista.length} en la lista`}</span></h2>
+        <div className="c-barra-acciones">
+          <button type="button" className="c-boton-sec c-boton-filtros" aria-expanded={filtrosAbiertos} aria-controls="franja-filtros" onClick={() => setFiltrosAbiertos((x) => !x)} data-testid="mostrar-filtros">
+            {filtrosAbiertos ? 'Ocultar filtros' : 'Filtros'}{filtrosActivos > 0 && <span className="c-filtro-n">{filtrosActivos}</span>}
+          </button>
+          <button className="c-boton" onClick={() => abrir(null, true)} data-testid="iniciar-reporte">Iniciar nuevo reporte</button>
+        </div>
+      </div>}
+      {vista === 'bandeja' && <div id="franja-filtros" className={`c-franja-filtros ${filtrosAbiertos ? 'abierta' : ''}`}>
         <FiltrosBandeja filtro={filtro} alCambiar={setFiltro} orden={orden} alOrden={setOrden} contadores={contadores} supervision={supervision} umbrales={umbrales} />
         {supervision && <UmbralesSemaforoForm key={`${umbrales.amarillo}-${umbrales.rojo}`} actuales={umbrales} alGuardar={async (u) => { try { await api.fijarUmbrales(token, u); await cargar(); return null; } catch (e) { return mensajeDe(e); } }} />}
       </div>}
       {vista === 'bandeja' && <div className={`c-columnas ${actual || alta ? 'con-detalle' : ''}`}>
         <section className="c-bandeja" aria-label="Bandeja de reportes">
-          <div className="c-fila">
-            <h2 className="c-linea">{'Bandeja'}{nuevos > 0 && <span className="c-contador">{`${nuevos} ${nuevos === 1 ? 'nuevo' : 'nuevos'}`}</span>}</h2>
-            <button className="c-boton" onClick={() => { setAlta(true); setSel(null); }} data-testid="iniciar-reporte">Iniciar nuevo reporte</button>
-          </div>
           {!cargado && !aviso && <div aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="esqueleto c-esq-item" />)}<span className="solo-lector">Cargando reportes…</span></div>}
           {cargado && !lista.length && (
             <div className="estado c-tarjeta">
@@ -234,8 +265,9 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
               <p>{todosLosReportes.length ? 'Quita o cambia un filtro.' : 'Los nuevos aparecen aquí al instante.'}</p>
             </div>
           )}
+          <div className="c-lista-bandeja">
           {lista.map((r) => (
-            <button key={r.folio} className={`c-item p-${r.prioridad} ${sel === r.folio ? 'sel' : ''} ${esFinal(r.estado) ? 'final' : ''}`} onClick={() => { setSel(r.folio); setAlta(false); }} data-folio={r.folio}>
+            <button key={r.folio} className={`c-item p-${r.prioridad} ${sel === r.folio ? 'sel' : ''} ${esFinal(r.estado) ? 'final' : ''}`} onClick={() => abrir(r.folio)} data-folio={r.folio}>
               <div className="c-fila">
                 <span className="c-linea"><PuntoPrioridad p={r.prioridad} cnie={r.cnie?.prioridad} /><strong>{r.incidente}</strong></span>
                 <Semaforo s={semaforoReporte(r, ahora, umbrales)} />
@@ -256,6 +288,7 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
               {r.escalaAlC5En && <Cuenta hasta={r.escalaAlC5En} ahora={ahora} />}
             </button>
           ))}
+          </div>
         </section>
 
         {alta ? (
@@ -268,7 +301,8 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
         ) : actual ? (
           <Detalle key={actual.folio} r={actual} ahora={ahora} unidades={unidades} yo={yo} nombreCad={nombreCad} actuar={actuar} alCerrar={() => setSel(null)} />
         ) : (
-          <section className="c-detalle c-vacio suave">Elige un reporte de la bandeja para ver el cuestionario de la despachadora virtual y despachar.</section>
+          <ResumenBandeja reportes={todosLosReportes} contadores={contadores} ahora={ahora} umbrales={umbrales}
+            alFiltrar={(f) => setFiltro(f)} alAbrir={(f) => abrir(f)} alIniciar={() => abrir(null, true)} />
         )}
       </div>}
     </div>
@@ -324,7 +358,7 @@ function Detalle({
   return (
     <section className="c-detalle" aria-label={`Reporte ${r.folio}`}>
       <div className="c-fila">
-        <button className="c-enlace c-volver" onClick={alCerrar}>← Bandeja</button>
+        <button className="c-boton-sec c-volver" onClick={alCerrar} data-testid="atras">← Atrás</button>
         <span className="suave c-pequeno">{`Actualizado ${hora(r.actualizadoEn)}`}</span>
       </div>
       <div className={`c-tarjeta c-titulo p-${r.prioridad}`}>
@@ -624,6 +658,7 @@ function ClasificacionCnie({ r, ocupado, hacer }: { r: Reporte; ocupado: boolean
 
 function TablaCnie({ titulo, grupos }: { titulo: string; grupos: GrupoCnie[] }) {
   return (
+    <div className="c-tabla-desliza">
     <table className="c-tiempos" aria-label={titulo}>
       <thead><tr><th scope="col">{titulo}</th><th scope="col">Reportes</th><th scope="col">Quejas</th><th scope="col">Llegada promedio</th><th scope="col">En meta</th></tr></thead>
       <tbody>
@@ -638,6 +673,7 @@ function TablaCnie({ titulo, grupos }: { titulo: string; grupos: GrupoCnie[] }) 
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
 
@@ -693,6 +729,7 @@ function VistaUnidades({ unidades, reportes, nombreCad, form }: { unidades: Unid
         alto={360}
         titulo="Mapa con la posición GPS de las unidades"
       />
+      <div className="c-tabla-desliza">
       <table className="c-tiempos c-unidades">
         <thead><tr><th scope="col">Unidad</th><th scope="col">CAD</th><th scope="col">Estado</th><th scope="col">GPS</th></tr></thead>
         <tbody>
@@ -706,6 +743,7 @@ function VistaUnidades({ unidades, reportes, nombreCad, form }: { unidades: Unid
           ))}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }
@@ -731,6 +769,7 @@ function VistaTiempos({ token, ahora, nombreCad, alAbrir }: { token: string; aho
         <div className={`c-kpi ${t.quejas ? 'alerta' : ''}`}><strong>{t.quejas}</strong><span>quejas</span></div>
       </div>
       <div className="c-tarjeta">
+        <div className="c-tabla-desliza">
         <table className="c-tiempos">
           <thead><tr><th scope="col">Etapa</th><th scope="col">Promedio</th><th scope="col">Mediana</th><th scope="col">Meta (alta / media / baja)</th><th scope="col">En meta</th></tr></thead>
           <tbody>
@@ -748,6 +787,7 @@ function VistaTiempos({ token, ahora, nombreCad, alAbrir }: { token: string; aho
             })}
           </tbody>
         </table>
+        </div>
       </div>
       <div className="c-tarjeta" data-testid="tablero-cnie">
         <h3>Por tipo y subtipo del CNIE</h3>
