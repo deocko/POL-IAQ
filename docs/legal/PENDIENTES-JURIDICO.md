@@ -1,6 +1,6 @@
 # Datos que debe proporcionar el área jurídica (lista cerrada)
 
-**Fecha:** 2026-11-15 · **Borradores:** `docs/legal/` versión 2026-11-14 · **Total:** 22 datos y 7 decisiones. No falta nada fuera de esta lista para publicar la versión definitiva.
+**Fecha:** 2026-11-15 · **Borradores:** `docs/legal/` versión 2026-11-14 · **Total:** 22 datos y 8 decisiones. No falta nada fuera de esta lista para publicar la versión definitiva.
 
 El bloqueo de las páginas legales es de **datos, no de código**. Ningún dato se llenó con un valor inventado. Mientras falten, las tres páginas muestran arriba «Versión preliminar en revisión jurídica» con lo que falta en cada una, y el texto omite el dato (sin huecos ni promesas). Las omisiones exactas están en `apps/web/lib/legal.ts`.
 
@@ -45,7 +45,7 @@ El bloqueo de las páginas legales es de **datos, no de código**. Ningún dato 
 | A21 | Teléfono de contacto de los Términos | Términos › 13. Contacto | 10 dígitos; puede ser el mismo que A12 | |
 | A22 | Domicilio de contacto de los Términos | Términos › 13. Contacto | Igual que A2; puede ser el mismo | |
 
-## B. Decisiones (7)
+## B. Decisiones (8)
 
 | ID | Decisión | Dónde cambia el texto | Formato de la respuesta | Respuesta |
 | --- | --- | --- | --- | --- |
@@ -55,6 +55,7 @@ El bloqueo de las páginas legales es de **datos, no de código**. Ningún dato 
 | B4 | ¿Se permite el registro de adolescentes con consentimiento de madre, padre o tutor? | Aviso integral › 9. Personas menores de edad; Términos › 3. Quién puede usarla | Sí (con edad mínima) / No | |
 | B5 | Alcance de la limitación de responsabilidad de una autoridad pública | Términos › 9. Responsabilidad | Texto aprobado del párrafo, o «se queda como está» | |
 | B6 | Validación de los municipios piloto y del C5 de las secciones de sanciones, responsabilidad y jurisdicción | Términos › 6, 9 y 12 | Aprobado / cambios, por municipio y por el C5 | |
+| B8 | Datos de quien llama al 911 y se captura en la consola (Mensaje 11): el operador registra nombre, teléfono y si es celular o fijo, y la persona queda como reportante sin haber aceptado el aviso en la app. ¿Basta el aviso del 911 o se le debe informar de otra forma? ¿Los nombres y teléfonos pueden salir en los archivos que exporta la consola (hoy no salen)? | Aviso integral › 2, 3 y 5 | Aprobado / cambios, y Sí / No para la exportación | |
 | B7 | Validación del tratamiento nuevo: reporte con seudónimo o anónimo (el teléfono verificado se conserva y solo se entrega a una autoridad cuando la ley lo exige), calificación y quejas tras el cierre, y medición de tiempos de respuesta | Aviso integral › 2, 3 y 5 | Aprobado / cambios | |
 
 ## Al recibir los datos

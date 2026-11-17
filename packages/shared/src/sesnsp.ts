@@ -13,15 +13,23 @@
  * El acomodo de columnas sigue lo pedido por Diego (Mensaje 9); el formato oficial de captura del
  * CNI debe confirmarse con el C5 antes del primer envío (docs/interconexion/SESNSP.md).
  */
+import { esMalUso } from './cnie';
 import type { EstadoIncidente } from './estados';
 import type { FilaEstadistica } from './estadistica';
 import { municipioPorClave } from './municipios';
 import { ETAPAS, resumirTiempos } from './tiempos';
 import { csvDeFilas, libroXlsx } from './xlsx';
 
-/** Procedente: se atiende o se atendió. Improcedente o cancelado: no ameritó atención. */
+/**
+ * Procedente: se atiende o se atendió. Improcedente o cancelado: no ameritó atención.
+ * Un folio que el operador recatalogó a Mal Uso del servicio (tipo 7 del CNIE) cuenta como
+ * improcedente aunque su estado sea otro.
+ */
 export type ClaseSesnsp = 'procedente' | 'improcedente_cancelado';
-export const claseSesnsp = (estado: EstadoIncidente): ClaseSesnsp => (estado === 'improcedente' || estado === 'cancelado' ? 'improcedente_cancelado' : 'procedente');
+export const claseSesnsp = (estado: EstadoIncidente, cnieTipo?: string | null): ClaseSesnsp =>
+  (estado === 'improcedente' || estado === 'cancelado' || esMalUso(cnieTipo) ? 'improcedente_cancelado' : 'procedente');
+/** Clase de un folio de la estadística (estado y tipo CNIE). */
+export const claseDeFila = (f: Pick<FilaEstadistica, 'estado' | 'cnie'>) => claseSesnsp(f.estado, f.cnie?.tipo.codigo);
 
 export interface FilaSesnsp {
   mes: string;
@@ -94,14 +102,14 @@ export function filasSesnsp(mes: string, filas: FilaEstadistica[]): FilaSesnsp[]
       subtipo: c?.subtipo.codigo ?? '', subtipoNombre: c?.subtipo.nombre ?? '',
       incidente: c?.incidente?.codigo ?? '', incidenteNombre: c?.incidente?.nombre ?? '',
       total: fs.length,
-      procedentes: fs.filter((f) => claseSesnsp(f.estado) === 'procedente').length,
-      improcedentesCancelados: fs.filter((f) => claseSesnsp(f.estado) === 'improcedente_cancelado').length,
+      procedentes: fs.filter((f) => claseDeFila(f) === 'procedente').length,
+      improcedentesCancelados: fs.filter((f) => claseDeFila(f) === 'improcedente_cancelado').length,
       medianas: Object.fromEntries(resumen.map((r) => [r.id, r.medianaSegundos])) as FilaSesnsp['medianas'],
     };
   }).sort((a, b) => a.claveMunicipio.localeCompare(b.claveMunicipio) || a.tipo.localeCompare(b.tipo) || a.subtipo.localeCompare(b.subtipo) || a.incidente.localeCompare(b.incidente));
 }
 
-const foto = (f: FilaEstadistica): FotoFolio => ({ claveMunicipio: f.municipioClave ?? '', cnie: codigoCnie(f), clase: claseSesnsp(f.estado) });
+const foto = (f: FilaEstadistica): FotoFolio => ({ claveMunicipio: f.municipioClave ?? '', cnie: codigoCnie(f), clase: claseDeFila(f) });
 const NOMBRE_CLASE: Record<ClaseSesnsp, string> = { procedente: 'procedente', improcedente_cancelado: 'improcedente o cancelado' };
 
 /**

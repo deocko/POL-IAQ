@@ -3,6 +3,7 @@
 import { io } from 'socket.io-client';
 import * as demo from '../../lib/demo/motor';
 import { horaLocal } from '../../lib/hora';
+import type { FilaFolio, OrigenFolio, TipoTelefono, UmbralesSemaforo } from '@pol-iaq/shared/movil';
 import type { ClasificacionCnie, Estadistica, FilaSesnsp, AjusteSesnsp, GrupoCnie, MetasTiempo, OpinionGuardada, Periodo, ResumenEtapa, TiemposReporte, TipoUnidad, RutaFolio } from '@pol-iaq/shared/movil';
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -16,6 +17,8 @@ export interface Yo {
   operador: { usuario: string; nombre: string; cads: string[] };
   cads: { id: string; nombre: string; clave: string | null; piloto: boolean; modo: 'consola' | 'webhook'; mio: boolean; conectado: boolean; estado: 'pruebas' | 'activo' | 'suspendido' | null; sinCapacidad?: string | null; sinOperador?: boolean }[];
   protocolo: { version: string; estado: 'provisional' | 'vigente' | 'retirado' };
+  /** Umbrales del semáforo de demora (fracción de la meta de llegada). */
+  semaforo?: UmbralesSemaforo;
 }
 
 export interface Reporte {
@@ -32,7 +35,7 @@ export interface Reporte {
   cnie: ClasificacionCnie | null;
   /** "CNIE 30202 · Seguridad / Armas y explosivos / Detonación por arma de fuego · ALTA". */
   cnieEtiqueta: string | null;
-  correccionesCnie: { en: string; actor: string; de: string | null; a: string; secundario: string | null; motivo: string | null }[];
+  correccionesCnie: { en: string; actor: string; de: string | null; a: string; secundario: string | null; motivo: string | null; tipoDe?: string | null; tipoA?: string; malUso?: boolean }[];
   prioridad: Prioridad;
   estado: Estado;
   asistenciaDirecta: boolean;
@@ -60,6 +63,11 @@ export interface Reporte {
   respaldo?: string | null;
   operable: boolean;
   transiciones: Estado[];
+  /** app o 911 (llamada capturada en la consola). */
+  origen?: OrigenFolio;
+  /** Solo llamadas al 911: celular o fijo. */
+  tipoTelefono?: TipoTelefono | null;
+  altaPor?: string | null;
   /** Solo demo: lo despacha la demo automática (el operador puede tomar el control). */
   automatico?: boolean;
   cerradoPorDemo?: boolean;
@@ -113,7 +121,22 @@ export type Accion =
   | { accion: 'estado'; estado: 'en_camino' | 'en_sitio' | 'cerrado' | 'improcedente'; nota?: string }
   | { accion: 'mensaje'; texto: string }
   | { accion: 'transferir'; cadDestinoId: string; motivo?: string }
-  | { accion: 'reclasificar'; codigoCnie: string; codigoCnieSecundario?: string | null; motivo?: string };
+  | { accion: 'reclasificar'; codigoCnie: string; codigoCnieSecundario?: string | null; motivo?: string }
+  | { accion: 'recatalogar_mal_uso'; codigoCnie: string; motivo: string };
+
+export interface Alta911 {
+  telefono: string;
+  nombre?: string;
+  tipoTelefono: TipoTelefono;
+  incidenteId: string;
+  descripcion?: string;
+  lugarId?: string;
+  ubicacion?: { lat: number; lng: number; precisionMetros?: number; referencia?: string };
+  respuestas: { preguntaId: string; respuesta: string | number | boolean }[];
+  prioridad?: Prioridad;
+  codigoCnie?: string;
+}
+export type ConsultaReportante = { telefono: string; registrado: true; reportante: { nombre: string; registradoEn: string; origen: OrigenFolio; folios: number } } | { telefono: string; registrado: false; reportante: null };
 
 export class ErrorApi extends Error {
   constructor(readonly status: number, readonly codigo: string, readonly mensaje?: string) {
@@ -159,6 +182,10 @@ const apiDemo = {
   cerrarMes: (t: string, mes: string, prueba = false) => enDemo<MesSesnsp>(() => demo.sesnsp.cerrar(t, mes, prueba)),
   disponibilidad: (t: string, cadId: string, sinOperador: boolean) => enDemo<unknown>(() => demo.marcarDisponibilidad(t, cadId, sinOperador)),
   archivoSesnsp: (t: string, mes: string, a: 'reporte.csv' | 'ajustes.csv' | 'reporte.xlsx') => enDemo<Archivo>(() => demo.sesnsp.archivo(t, mes, a)),
+  reportante: (t: string, telefono: string) => enDemo<ConsultaReportante>(() => demo.operador.reportante(t, telefono)),
+  alta911: (t: string, d: Alta911) => enDemo<{ reporte: Reporte; reportanteNuevo: boolean }>(() => demo.operador.alta911(t, d as demo.Alta911)),
+  fijarUmbrales: (t: string, u: UmbralesSemaforo) => enDemo<UmbralesSemaforo>(() => demo.operador.fijarUmbrales(t, u)),
+  folios: (t: string, f: FiltroReportes) => enDemo<{ filas: FilaFolio[] }>(() => demo.reportes.folios(t, f)),
 };
 
 const consulta = (f: FiltroReportes) => {
@@ -195,6 +222,11 @@ const apiReal = {
   cerrarMes: (t: string, mes: string, _prueba = false) => llamar<MesSesnsp>(`/v1/operador/sesnsp/${mes}/cerrar`, t, { method: 'POST' }),
   disponibilidad: (t: string, cadId: string, sinOperador: boolean) => llamar<unknown>(`/v1/operador/cads/${cadId}/disponibilidad`, t, { method: 'POST', body: JSON.stringify({ sinOperador }) }),
   archivoSesnsp: (t: string, mes: string, a: 'reporte.csv' | 'ajustes.csv' | 'reporte.xlsx') => bajar(`/v1/operador/sesnsp/${mes}/${a}`, t, `sesnsp-${mes}-${a}`),
+  reportante: (t: string, telefono: string) => llamar<ConsultaReportante>(`/v1/operador/reportantes/${encodeURIComponent(telefono)}`, t),
+  alta911: (t: string, d: Alta911) => llamar<{ reporte: Reporte; reportanteNuevo: boolean }>('/v1/operador/reportes/911', t, { method: 'POST', body: JSON.stringify(d) }),
+  /** En el API los umbrales se configuran en el servidor (SEMAFORO_AMARILLO, SEMAFORO_ROJO). */
+  fijarUmbrales: (_t: string, _u: UmbralesSemaforo) => Promise.reject(new ErrorApi(409, 'umbrales_en_servidor')),
+  folios: (t: string, f: FiltroReportes) => llamar<{ filas: FilaFolio[] }>(`/v1/operador/estadistica/folios${consulta(f)}`, t),
 };
 
 /** Guarda un archivo generado (CSV o Excel) en el equipo del operador. */
@@ -283,6 +315,14 @@ export const ERRORES: Record<string, string> = {
   mes_en_curso: 'Solo se cierran meses terminados.',
   mes_ya_cerrado: 'Ese mes ya está cerrado: no se reescribe. Las correcciones salen en el mes siguiente.',
   municipio_desconocido: 'Usa la clave INEGI de 5 dígitos (22001 a 22018).',
+  motivo_obligatorio: 'Escribe el motivo de la recatalogación.',
+  usar_recatalogar_mal_uso: 'Para Mal Uso del servicio usa «Recatalogar a Mal Uso del servicio», con su motivo.',
+  ya_recatalogado: 'El folio ya está recatalogado a ese incidente de Mal Uso.',
+  telefono_invalido: 'Escribe el número de 10 dígitos (puede llevar +52).',
+  falta_tipo_telefono: 'Indica si la llamada fue de celular o de teléfono fijo.',
+  falta_nombre: 'Escribe el nombre de quien llama.',
+  cnie_solo_recatalogar: 'Mal Uso del servicio se aplica después de verificar el reporte, con «Recatalogar».',
+  umbrales_en_servidor: 'Los umbrales del semáforo se configuran en el servidor (SEMAFORO_AMARILLO y SEMAFORO_ROJO).',
 };
 
 const PESO: Record<Prioridad, number> = { alta: 0, media: 1, baja: 2 };

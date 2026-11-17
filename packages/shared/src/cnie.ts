@@ -55,12 +55,28 @@ export interface CodigoRetirado { codigo: string; motivo: string; reemplazo: str
 export const CODIGOS_CNIE_RETIRADOS: readonly CodigoRetirado[] = CNIE_V3.retirados.map((r) => ({ ...r }));
 const RETIRADO = new Map(CODIGOS_CNIE_RETIRADOS.map((r) => [r.codigo, r]));
 
+// ---------------------------------------------------------------------------
+// Mal Uso del servicio (tipo 7): solo lo aplica el operador
+// ---------------------------------------------------------------------------
+
+/**
+ * Tipo 7 del CNIE, "Mal Uso del servicio (Improcedentes)". El ciudadano no lo puede levantar: no se
+ * ofrece en la app ni se acepta en el alta. Solo el operador recataloga un folio a este tipo, después
+ * de verificar que el reporte fue falso, una broma o un mal uso, con motivo obligatorio.
+ */
+export const TIPO_CNIE_MAL_USO = '7';
+export const esMalUso = (codigo: string | null | undefined) => !!codigo && codigo.startsWith(TIPO_CNIE_MAL_USO);
+/** Tipos que ve el ciudadano en "Otra emergencia" (todos menos Mal Uso). */
+export const TIPOS_CNIE_CIUDADANO: readonly CodigoNombre[] = TIPOS_CNIE.filter((t) => !esMalUso(t.codigo));
+
 export const tipoCnie = (codigo: string) => TIPO.get(codigo);
 export const subtipoCnie = (codigo: string) => SUBTIPO.get(codigo);
 export const incidenteCnie = (codigo: string) => INCIDENTE.get(codigo);
 export const subtiposDeTipo = (tipo: string) => SUBTIPOS_CNIE.filter((s) => s.tipo === tipo);
 export const subtiposDeBajaDeTipo = (tipo: string) => SUBTIPOS_CNIE_BAJA.filter((s) => s.tipo === tipo);
 export const incidentesDeSubtipo = (subtipo: string) => INCIDENTES_CNIE.filter((i) => i.subtipo.codigo === subtipo);
+/** Incidentes del tipo 7 a los que el operador puede recatalogar. */
+export const INCIDENTES_MAL_USO: readonly IncidenteCnie[] = INCIDENTES_CNIE.filter((i) => esMalUso(i.codigo));
 
 export type ErrorCodigoCnie = 'formato' | 'inexistente' | 'retirado';
 export type ValidacionCnie =
@@ -101,10 +117,12 @@ const VACIAS = new Set(['a', 'al', 'con', 'de', 'del', 'el', 'en', 'es', 'la', '
  * incidente, del subtipo o del tipo, sin importar acentos. Primero los que coinciden
  * con más palabras ("robo en curso" encuentra los robos aunque "curso" no aparezca).
  */
-export function buscarCnie(texto: string, limite = 30): IncidenteCnie[] {
+export function buscarCnie(texto: string, limite = 30, opciones: { ciudadano?: boolean } = {}): IncidenteCnie[] {
   const t = texto.trim();
   if (!t) return [];
-  if (/^\d{1,5}$/.test(t)) return INCIDENTES_CNIE.filter((i) => i.codigo.startsWith(t)).slice(0, limite);
+  // El ciudadano no ve el tipo 7 (Mal Uso del servicio): solo lo aplica el operador.
+  const base = opciones.ciudadano ? INCIDENTES_CNIE.filter((i) => !esMalUso(i.codigo)) : INCIDENTES_CNIE;
+  if (/^\d{1,5}$/.test(t)) return base.filter((i) => i.codigo.startsWith(t)).slice(0, limite);
   const todas = normalizar(t).split(' ').filter(Boolean);
   const utiles = todas.filter((p) => !VACIAS.has(p));
   const palabras = utiles.length ? utiles : todas;
@@ -118,7 +136,7 @@ export function buscarCnie(texto: string, limite = 30): IncidenteCnie[] {
     }
     return { coinciden, n };
   };
-  return INCIDENTES_CNIE.map((i) => ({ i, ...puntos(i) }))
+  return base.map((i) => ({ i, ...puntos(i) }))
     .filter((x) => x.coinciden > 0)
     .sort((a, b) => b.coinciden - a.coinciden || b.n - a.n || a.i.codigo.localeCompare(b.i.codigo))
     .slice(0, limite)

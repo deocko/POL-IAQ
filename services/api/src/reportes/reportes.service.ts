@@ -2,7 +2,7 @@ import { type OnModuleInit, ConflictException, ForbiddenException, HttpException
 import { createHash, randomUUID } from 'node:crypto';
 import {
   canalizar, clasificacionDe, clasificarCnie, esQueja, permiteAnonimo, generarFolio, incidentePorId, puedeTransicionar, resolverEntradas, respuestasDe,
-  validarCodigoCnie, ESTADOS_FINALES, type ClasificacionCnie,
+  validarCodigoCnie, ESTADOS_FINALES, esMalUso, tipoCnie, type ClasificacionCnie, type TipoTelefono,
   type CrearReporte, type EntradaGuardada, type EstadoIncidente, type IncidenteCatalogo, type Opinion, type Prioridad, type ResponderCuestionario, type SolicitarEvidencia, rutaDe, textoRespaldo } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
 import type { Ciudadano, Evidencia, Reporte } from '../almacen/modelos';
@@ -13,6 +13,17 @@ import { ProtocolosService } from '../protocolos/protocolos.service';
 import { RegistroCadService } from '../municipios/registro-cad.service';
 
 const ORDEN: Record<Prioridad, number> = { baja: 0, media: 1, alta: 2 };
+
+/** Alta de una llamada al 911 desde la consola. */
+export interface AltaPor911 { operador: string; operadorNombre: string; tipoTelefono: TipoTelefono; prioridad?: Prioridad; codigoCnie?: string }
+
+/** Recatalogar a Mal Uso del servicio (tipo 7) exige un motivo corto (lo pide el Mensaje 11). */
+export function exigirMotivoMalUso(datos: { codigoCnie: string; motivo?: string }) {
+  if (!esMalUso(datos.codigoCnie)) return;
+  const m = datos.motivo?.trim() ?? '';
+  if (m.length < 3) throw new BadRequestException({ codigo: 'motivo_obligatorio', mensaje: 'Recatalogar a Mal Uso del servicio requiere el motivo.' });
+  if (m.length > 200) throw new BadRequestException({ codigo: 'motivo_largo', mensaje: 'El motivo debe ser un texto corto (hasta 200 caracteres).' });
+}
 
 /** Código más preciso de una clasificación (incidente o, si falta, subtipo). */
 export const codigoDe = (c: ClasificacionCnie | null | undefined) => c?.incidente?.codigo ?? c?.subtipo.codigo ?? null;
@@ -63,7 +74,11 @@ export class ReportesService implements OnModuleInit {
     return n;
   }
 
-  async crear(ciudadano: Ciudadano, datos: CrearReporte): Promise<Reporte> {
+  /**
+   * Alta de un reporte. Desde la app (`alta` sin dar) o, desde la consola, de una llamada al 911
+   * capturada por el operador: mismo folio, enrutado, cuestionario e historial, con origen 911.
+   */
+  async crear(ciudadano: Ciudadano, datos: CrearReporte, alta?: AltaPor911): Promise<Reporte> {
     const incidente = incidentePorId(datos.incidenteId);
     if (!incidente) throw new BadRequestException({ codigo: 'incidente_desconocido' });
     if (datos.codigoCnie) {
@@ -71,11 +86,18 @@ export class ReportesService implements OnModuleInit {
         throw new BadRequestException({ codigo: 'cnie_no_aplica', mensaje: 'Solo "Otra emergencia" acepta un código CNIE elegido por el ciudadano; las demás opciones ya tienen el suyo.' });
       }
       validarCnieOFallar(datos.codigoCnie, 'codigoCnie');
+      // Mal Uso del servicio (tipo 7) solo lo aplica el operador del CAD, al verificar el reporte.
+      if (esMalUso(datos.codigoCnie)) throw new BadRequestException({ codigo: 'cnie_solo_operador', mensaje: 'Ese tipo lo aplica solo el operador del CAD.' });
+    }
+    if (alta?.codigoCnie) {
+      validarCnieOFallar(alta.codigoCnie, 'codigoCnie');
+      if (esMalUso(alta.codigoCnie)) throw new BadRequestException({ codigo: 'cnie_solo_recatalogar', mensaje: 'Mal Uso del servicio se aplica después de verificar el reporte, con «Recatalogar».' });
     }
     if (datos.identidad === 'seudonimo' && !datos.alias) throw new BadRequestException({ codigo: 'falta_seudonimo' });
 
     const haceUnaHora = new Date(Date.now() - 3600_000).toISOString();
-    if ((await this.almacen.contarReportesDesde(ciudadano.id, haceUnaHora)) >= this.config.maxReportesPorHora) {
+    // El límite por hora protege la app; una llamada al 911 la captura el operador.
+    if (!alta && (await this.almacen.contarReportesDesde(ciudadano.id, haceUnaHora)) >= this.config.maxReportesPorHora) {
       throw new HttpException({ codigo: 'limite_reportes', mensaje: 'Alcanzaste el límite de reportes por hora. Si es una emergencia, llama al 911.' }, HttpStatus.TOO_MANY_REQUESTS);
     }
 
@@ -97,8 +119,10 @@ export class ReportesService implements OnModuleInit {
     if (datos.identidad === 'anonimo' && !permiteAnonimo(incidente.id, todas, datos.codigoCnie)) {
       throw new BadRequestException({ codigo: 'anonimo_no_permitido', mensaje: 'Para este tipo de emergencia necesitamos poder contactarte. Puedes usar un seudónimo.' });
     }
-    const cnie = clasificarCnie(incidente.id, todas, datos.codigoCnie);
-    const canalizacion = canalizar(protocolo, incidente, respuestas, { asistenciaDirecta: datos.asistenciaDirecta });
+    const cnie = alta?.codigoCnie ? clasificacionDe(alta.codigoCnie, 'operador') : clasificarCnie(incidente.id, todas, datos.codigoCnie);
+    const canalizada = canalizar(protocolo, incidente, respuestas, { asistenciaDirecta: datos.asistenciaDirecta });
+    const canalizacion = alta?.prioridad ? { ...canalizada, prioridad: alta.prioridad } : canalizada;
+    const notaAlta = alta ? `Alta por llamada al 911 (${alta.tipoTelefono === 'fijo' ? 'teléfono fijo' : 'celular'}), capturada por ${alta.operadorNombre}` : undefined;
 
     // Anónimo: va por el 089 al CQ CIAS. Sin CAD municipal conectado o sin capacidad, también al CQ CIAS.
     const ruta = this.registro.enrutar(datos.ubicacion.lat, datos.ubicacion.lng, { anonimo: datos.identidad === 'anonimo' });
@@ -133,15 +157,16 @@ export class ReportesService implements OnModuleInit {
       estado: 'recibido',
       evidencias: [],
       mensajes: [],
-      historial: [{ estado: 'recibido', en: iso, ...(notaRuta && { nota: notaRuta }) }],
+      historial: [{ estado: 'recibido', en: iso, ...((notaAlta || notaRuta) && { nota: [notaAlta, notaRuta].filter(Boolean).join('. ') }) }],
       ruta: rutaDe(ruta),
+      ...(alta && { origen: '911' as const, tipoTelefono: alta.tipoTelefono, altaPor: alta.operador }),
       creadoEn: iso,
       actualizadoEn: iso,
       secuenciaSalida: 0,
       secuenciaEntrada: 0,
     };
     await this.almacen.guardarReporte(reporte);
-    await this.almacen.auditar({ actor: `ciudadano:${ciudadano.id}`, accion: 'reporte_creado', folio, detalle: { cadId: ruta.cadId, motivo: ruta.motivo, canal: ruta.canal, escenarioId: escenario?.id, protocolo: protocolo.version, cnie: cnie?.incidente?.codigo ?? cnie?.subtipo.codigo ?? null } });
+    await this.almacen.auditar({ actor: alta ? `operador:${alta.operador}` : `ciudadano:${ciudadano.id}`, accion: alta ? 'reporte_creado_911' : 'reporte_creado', folio, detalle: { cadId: ruta.cadId, motivo: ruta.motivo, canal: ruta.canal, escenarioId: escenario?.id, protocolo: protocolo.version, cnie: cnie?.incidente?.codigo ?? cnie?.subtipo.codigo ?? null, ...(alta && { origen: '911', tipoTelefono: alta.tipoTelefono, ciudadanoId: ciudadano.id }) } });
     // El envío al CAD modifica la secuencia de salida: va con el reporte bloqueado.
     return this.almacen.conReporte(folio, async () => {
       const r = (await this.almacen.reporte(folio))!;
@@ -293,20 +318,28 @@ export class ReportesService implements OnModuleInit {
    * contra el CNIE V 3.0 y deja en la bitácora el código anterior, el nuevo y el motivo.
    * Quien llama guarda el reporte.
    */
-  async corregirCnie(r: Reporte, datos: { codigoCnie: string; codigoCnieSecundario?: string | null; motivo?: string }, actor: string) {
+  async corregirCnie(r: Reporte, datos: { codigoCnie: string; codigoCnieSecundario?: string | null; motivo?: string; operador?: string }, actor: string) {
     validarCnieOFallar(datos.codigoCnie, 'codigoCnie');
     if (datos.codigoCnieSecundario) validarCnieOFallar(datos.codigoCnieSecundario, 'codigoCnieSecundario');
+    const malUso = esMalUso(datos.codigoCnie);
+    exigirMotivoMalUso(datos);
     const antes = r.cnie ?? null;
     const nuevo = clasificacionDe(datos.codigoCnie, 'operador', datos.codigoCnieSecundario ?? antes?.secundario?.codigo ?? null);
     if (datos.codigoCnieSecundario === null) nuevo.secundario = null;
     r.cnie = nuevo;
     r.codigoCnie = nuevo.incidente!.codigo;
-    (r.correccionesCnie ??= []).push({ en: new Date().toISOString(), actor, de: codigoDe(antes), a: nuevo.incidente!.codigo, secundario: nuevo.secundario?.codigo ?? null, motivo: datos.motivo ?? null });
+    const tipoDe = antes?.tipo.codigo ?? null;
+    (r.correccionesCnie ??= []).push({ en: new Date().toISOString(), actor, de: codigoDe(antes), a: nuevo.incidente!.codigo, secundario: nuevo.secundario?.codigo ?? null, motivo: datos.motivo?.trim() || null, tipoDe, tipoA: nuevo.tipo.codigo, ...(malUso && { malUso: true }) });
+    if (malUso) {
+      // Recatalogación a Mal Uso: queda en el historial sin cambiar el estado, con el tipo original, quién y por qué.
+      const original = tipoDe ? `${tipoDe} ${tipoCnie(tipoDe)?.nombre ?? ''} (${codigoDe(antes)})` : 'sin clasificar';
+      r.historial.push({ estado: r.estado, en: new Date().toISOString(), nota: `Recatalogado a Mal Uso del servicio (Improcedentes) por ${datos.operador ?? actor}: tipo ${original} → ${nuevo.tipo.codigo} ${nuevo.tipo.nombre} (${nuevo.incidente!.codigo}). Motivo: ${datos.motivo!.trim()}` });
+    }
     await this.almacen.auditar({
       actor,
       accion: 'cnie_corregido',
       folio: r.folio,
-      detalle: { de: codigoDe(antes), a: nuevo.incidente!.codigo, secundarioDe: antes?.secundario?.codigo ?? null, secundarioA: nuevo.secundario?.codigo ?? null, motivo: datos.motivo ?? null },
+      detalle: { de: codigoDe(antes), a: nuevo.incidente!.codigo, secundarioDe: antes?.secundario?.codigo ?? null, secundarioA: nuevo.secundario?.codigo ?? null, motivo: datos.motivo ?? null, tipoDe, tipoA: nuevo.tipo.codigo, malUso },
     });
   }
 

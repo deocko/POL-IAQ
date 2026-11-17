@@ -171,3 +171,61 @@ details.c-tarjeta > summary { cursor: pointer; font-weight: 700; min-height: var
 /* Respaldo estatal (CQ CIAS): por qué lo atiende el CQ CIAS desde su creación. */
 .c-respaldo { margin: 4px 0 0; font-weight: 700; color: var(--aviso); }
 .c-acciones-fila button { white-space: nowrap; }
+
+/* ── Mensaje 11: bandeja con filtros, semáforo por demora y prioridad ─────────────────── */
+.c-franja-filtros { padding: 0 var(--e4); }
+.c-filtros-bandeja { display: flex; flex-wrap: wrap; gap: var(--e2) var(--e5); align-items: center; margin-bottom: var(--e2); padding: var(--e2) var(--e3); background: var(--tarjeta); border: 1px solid var(--borde); border-radius: var(--r-m); }
+.c-grupo-filtro { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e1); }
+.c-grupo-titulo { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); margin-right: 2px; }
+.c-grupo-select { gap: var(--e3); }
+.c-filtro { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: .85rem; font-weight: 600; min-height: 34px; padding: 2px 10px; border-radius: var(--r-pill); border: 1px solid var(--borde); background: var(--campo); color: var(--texto); cursor: pointer; text-transform: none; }
+.c-filtro:hover { border-color: var(--borde-fuerte); }
+.c-filtro.sel { background: var(--primario); border-color: var(--primario); color: var(--boton-texto); }
+.c-filtro-n { font-size: .75rem; font-weight: 700; min-width: 1.4em; text-align: center; padding: 0 6px; border-radius: var(--r-pill); background: var(--superficie); color: var(--texto); }
+.c-filtro.sel .c-filtro-n { background: rgba(255,255,255,.25); color: inherit; }
+.c-campo-linea { display: inline-flex; align-items: center; gap: var(--e2); font-size: .85rem; font-weight: 600; }
+.c-campo-linea input { width: 5em; }
+/* Prioridad: punto + etiqueta. Alta rojo, media ámbar, baja azul (distinto del semáforo, que usa forma de anillo). */
+.c-prio { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.c-prio-alta { background: var(--asistencia); }
+.c-prio-media { background: #d98a00; }
+.c-prio-baja { background: var(--primario); }
+.c-prio-chip { display: inline-flex; align-items: center; gap: 5px; font-size: .75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+.c-prio-chip.c-prio-alta, .c-prio-chip.c-prio-media, .c-prio-chip.c-prio-baja { background: none; }
+.c-prio-chip.c-prio-alta { color: var(--asistencia); }
+.c-prio-chip.c-prio-media { color: var(--aviso); }
+.c-prio-chip.c-prio-baja { color: var(--primario); }
+/* Semáforo por demora: círculo verde / amarillo / rojo y la espera contra la meta. */
+.c-sem { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px var(--tarjeta), 0 0 0 3px currentColor; }
+.c-sem-verde { background: #1b9e4b; color: #1b9e4b; }
+.c-sem-amarillo { background: #f2b705; color: #c99700; }
+.c-sem-rojo { background: #d62828; color: #d62828; }
+.c-sem-chip { display: inline-flex; align-items: center; gap: 7px; font-size: .78rem; font-weight: 700; border-radius: var(--r-pill); padding: 2px 10px 2px 8px; white-space: nowrap; }
+.c-sem-chip-verde { background: var(--ok-suave); color: var(--ok); }
+.c-sem-chip-amarillo { background: var(--aviso-suave); color: var(--aviso); }
+.c-sem-chip-rojo { background: var(--asistencia-suave); color: var(--asistencia); }
+.c-chip-911 { background: #ede4ff; color: #4b2a9a; }
+:root[data-tema="oscuro"] .c-chip-911 { background: #2b1e4f; color: #cbb6ff; }
+.c-umbrales { margin-bottom: var(--e3); font-size: .85rem; }
+.c-umbrales summary { cursor: pointer; color: var(--suave); }
+.c-creado { display: flex; justify-content: space-between; align-items: center; gap: var(--e3); margin: var(--e2) var(--e4); }
+/* Mal uso */
+.c-mal-uso.aplicado { border-left: 6px solid var(--asistencia); }
+.c-form-columna { display: grid; gap: var(--e3); }
+/* Alta 911 */
+.c-pasos { display: flex; flex-wrap: wrap; gap: var(--e2); list-style: none; padding: 0; margin: var(--e3) 0; counter-reset: paso; }
+.c-pasos li { counter-increment: paso; font-size: .8rem; font-weight: 600; color: var(--suave); padding: 4px 10px; border-radius: var(--r-pill); background: var(--superficie); }
+.c-pasos li::before { content: counter(paso) ". "; }
+.c-pasos li.actual { background: var(--primario); color: var(--boton-texto); }
+.c-pasos li.hecho { color: var(--ok); }
+.c-opciones-incidente { display: flex; flex-wrap: wrap; gap: var(--e2); border: 0; padding: 0; margin: 0; }
+.c-pregunta { display: grid; gap: var(--e1); }
+.c-pie-alta { margin-top: var(--e4); }
+.c-resumen-alta { display: grid; gap: var(--e1); font-size: .9rem; background: var(--superficie); box-shadow: none; }
+/* Tabla dinámica de folios */
+.c-crece { flex: 1 1 320px; }
+.c-tabla-folios th, .c-tabla-folios td { white-space: nowrap; font-size: .82rem; }
+.c-tabla-folios .c-filtros-columna th { padding-top: 0; }
+.c-tabla-folios .c-filtros-columna select, .c-tabla-folios .c-filtros-columna input { min-height: 30px; font-size: .78rem; padding: 2px 6px; max-width: 11rem; }
+.c-orden { background: none; border: 0; font: inherit; font-weight: 700; color: inherit; cursor: pointer; padding: 0; }
+.c-paginas { display: flex; align-items: center; gap: var(--e3); justify-content: flex-end; margin-top: var(--e3); }

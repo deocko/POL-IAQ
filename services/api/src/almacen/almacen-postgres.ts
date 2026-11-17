@@ -25,7 +25,7 @@ const SELECT_REPORTE = `
          ST_Y(ubicacion::geometry) AS lat, ST_X(ubicacion::geometry) AS lng, precision_m, referencia,
          municipio_clave, cad_id, folio_cad, descripcion, respuestas, asistencia_directa, escenario_id, cuestionario, canalizacion,
          ocultar_identidad_a_unidad, estado, secuencia_salida, secuencia_entrada, creado_en, actualizado_en,
-         identidad, alias, opinion, cnie, cnie_correcciones, ruta
+         identidad, alias, opinion, cnie, cnie_correcciones, ruta, alta
     FROM reporte`;
 
 /**
@@ -187,6 +187,7 @@ export class AlmacenPostgres extends Almacen {
         cnie: f.cnie ?? null,
         correccionesCnie: f.cnie_correcciones ?? [],
         ...(f.ruta && { ruta: f.ruta }),
+        ...(f.alta && { origen: f.alta.origen, tipoTelefono: f.alta.tipoTelefono ?? null, altaPor: f.alta.altaPor ?? null }),
         prioridad: f.prioridad,
         corporacionSugerida: f.corporacion_sugerida,
         ubicacion: {
@@ -280,8 +281,8 @@ export class AlmacenPostgres extends Almacen {
         `INSERT INTO reporte (folio, ciudadano_id, incidente_id, codigo_cnie, prioridad, corporacion_sugerida, ubicacion,
             precision_m, referencia, municipio_clave, cad_id, folio_cad, descripcion, respuestas, asistencia_directa,
             ocultar_identidad_a_unidad, estado, secuencia_salida, secuencia_entrada, creado_en, actualizado_en,
-            escenario_id, cuestionario, canalizacion, identidad, alias, opinion, cnie, cnie_correcciones, ruta)
-         VALUES ($1, $2, $3, $4, $5, $6, ${PUNTO('$7', '$8')}, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
+            escenario_id, cuestionario, canalizacion, identidad, alias, opinion, cnie, cnie_correcciones, ruta, alta)
+         VALUES ($1, $2, $3, $4, $5, $6, ${PUNTO('$7', '$8')}, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
          ON CONFLICT (folio) DO UPDATE SET
             respuestas = EXCLUDED.respuestas, cuestionario = EXCLUDED.cuestionario, canalizacion = EXCLUDED.canalizacion,
             prioridad = EXCLUDED.prioridad, cad_id = EXCLUDED.cad_id, folio_cad = EXCLUDED.folio_cad,
@@ -297,6 +298,7 @@ export class AlmacenPostgres extends Almacen {
           r.identidad ?? 'completa', r.alias ?? null, r.opinion ? JSON.stringify(r.opinion) : null,
           r.cnie ? JSON.stringify(r.cnie) : null, JSON.stringify(r.correccionesCnie ?? []),
           r.ruta ? JSON.stringify(r.ruta) : null,
+          r.origen === '911' ? JSON.stringify({ origen: r.origen, tipoTelefono: r.tipoTelefono ?? null, altaPor: r.altaPor ?? null }) : null,
         ],
       );
 

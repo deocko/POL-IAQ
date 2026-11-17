@@ -6,7 +6,7 @@ import './consola.css';
 import {
   buscarCnie, duracionTexto, estimarRuta, etiquetaCnie, incidenteCnie, nombreLegible, subtipoPermiteAnonimo, type GrupoCnie, type IncidenteCnie, type TiempoEtapa,
   puedeDespachar, etaSuperaMeta,
-  municipioPorClave, NOMBRE_RESPALDO_ESTATAL, TEXTO_ANONIMA_089,
+  municipioPorClave, NOMBRE_RESPALDO_ESTATAL, TEXTO_ANONIMA_089, UMBRALES_SEMAFORO_PREDETERMINADOS, esMalUso, tipoCnie, type OrdenBandeja,
 } from '@pol-iaq/shared/movil';
 import { Mapa } from '../../lib/mapa/Mapa';
 import { SelectorTema } from '../../lib/tema';
@@ -15,10 +15,12 @@ import { horaLocal, ZONA_HORARIA } from '../../lib/hora';
 import { etiquetaVersion } from '../../lib/version-script';
 import * as demo from '../../lib/demo/motor';
 import {
-  CORPORACION, DEMO, ERRORES, IDENTIDAD, LLEGO, ahoraMs, conectarOperacion, distanciaTexto, ESTADO, ErrorApi, api, esFinal, hace, hora, ordenar,
+  CORPORACION, DEMO, ERRORES, IDENTIDAD, LLEGO, ahoraMs, conectarOperacion, distanciaTexto, ESTADO, ErrorApi, api, esFinal, hace, hora,
   type Accion, type Reporte, type Tablero, type UnidadDisponible, type Yo,
 } from './consola';
 import { FormUnidad, VistaMunicipios, VistaReportes, VistaSesnsp, tipoDeUnidad } from './municipios';
+import { FILTRO_INICIAL, FiltrosBandeja, PuntoPrioridad, RecatalogarMalUso, Semaforo, UmbralesSemaforoForm, semaforoReporte, usarBandeja, type FiltroVista } from './bandeja';
+import { Alta911, textoOrigen } from './alta911';
 
 const CLAVE_SESION = 'poliaq.consola.token';
 
@@ -100,7 +102,9 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
   const [yo, setYo] = useState(yoInicial);
   const [reportes, setReportes] = useState<Map<string, Reporte>>(new Map());
   const [unidades, setUnidades] = useState<UnidadDisponible[]>([]);
-  const [todos, setTodos] = useState(false);
+  const [filtro, setFiltro] = useState<FiltroVista>(FILTRO_INICIAL);
+  const [orden, setOrden] = useState<OrdenBandeja>('prioridad_demora');
+  const [alta, setAlta] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
   const [enLinea, setEnLinea] = useState(false);
   const [aviso, setAviso] = useState('');
@@ -111,7 +115,8 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
 
   const cargar = useCallback(async () => {
     try {
-      const [r, u, y] = await Promise.all([api.reportes(token, todos), api.unidades(token), api.yo(token)]);
+      // Se cargan también los atendidos: el filtro «Atendidos» y sus contadores los necesitan.
+      const [r, u, y] = await Promise.all([api.reportes(token, true), api.unidades(token), api.yo(token)]);
       setYo(y);
       setReportes(new Map(r.reportes.map((x) => [x.folio, x])));
       setUnidades(u.unidades);
@@ -121,7 +126,7 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
       if (err instanceof ErrorApi && err.status === 401) alSalir();
       else setAviso(mensajeDe(err));
     }
-  }, [token, todos, alSalir]);
+  }, [token, alSalir]);
 
   useEffect(() => { void cargar(); }, [cargar]);
   const cargarRef = useRef(cargar);
@@ -146,10 +151,14 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
   }), [token, supervision, yo.operador.cads, alSalir]);
 
   const [cargado, setCargado] = useState(false);
+  const [creado, setCreado] = useState('');
   useEffect(() => { if (reportes.size || unidades.length) setCargado(true); }, [reportes, unidades]);
-  const lista = useMemo(() => [...reportes.values()].filter((r) => todos || !esFinal(r.estado)).sort(ordenar), [reportes, todos]);
+  const umbrales = yo.semaforo ?? UMBRALES_SEMAFORO_PREDETERMINADOS;
+  // Operador de un municipio: solo sus CAD (el API ya lo filtra); supervisión filtra por municipio sin salir de la bandeja.
+  const todosLosReportes = useMemo(() => [...reportes.values()], [reportes]);
+  const { lista, contadores } = usarBandeja(todosLosReportes, filtro, orden, ahora, umbrales);
   const actual = sel ? reportes.get(sel) ?? null : null;
-  const nuevos = lista.filter((r) => r.estado === 'recibido' && r.operable).length;
+  const nuevos = todosLosReportes.filter((r) => r.estado === 'recibido' && r.operable).length;
 
   async function actuar(a: Accion) {
     if (!actual) return false;
@@ -191,6 +200,7 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
           <button key={v} className={vista === v ? 'activa' : ''} aria-pressed={vista === v} onClick={() => setVista(v)}>{t}</button>
         ))}
       </nav>
+      {creado && <div className="c-nota c-creado" role="status" data-testid="aviso-creado"><span>{creado}</span><button className="c-enlace" onClick={() => setCreado('')}>Cerrar</button></div>}
       {aviso && (
         <div className="c-aviso" role="alert">
           <span>{aviso}</span>
@@ -202,31 +212,37 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
       )}
 
       {vista === 'unidades' && <VistaUnidades unidades={unidades} reportes={lista} nombreCad={nombreCad} form={<FormUnidad token={token} yo={yo} unidades={unidades} alGuardar={() => void cargar()} />} />}
-      {vista === 'reportes' && <VistaReportes token={token} yo={yo} ahora={ahora} />}
+      {vista === 'reportes' && <VistaReportes token={token} yo={yo} ahora={ahora} umbrales={umbrales} />}
       {vista === 'sesnsp' && supervision && <VistaSesnsp token={token} />}
       {vista === 'municipios' && supervision && <VistaMunicipios token={token} alCambio={() => void cargar()} />}
-      {vista === 'tiempos' && <VistaTiempos token={token} ahora={ahora} nombreCad={nombreCad} alAbrir={(f) => { setSel(f); setVista('bandeja'); setTodos(true); }} />}
-      {vista === 'bandeja' && <div className={`c-columnas ${actual ? 'con-detalle' : ''}`}>
+      {vista === 'tiempos' && <VistaTiempos token={token} ahora={ahora} nombreCad={nombreCad} alAbrir={(f) => { setSel(f); setAlta(false); setVista('bandeja'); setFiltro({ ...FILTRO_INICIAL, estado: 'todos' }); }} />}
+      {vista === 'bandeja' && <div className="c-franja-filtros">
+        <FiltrosBandeja filtro={filtro} alCambiar={setFiltro} orden={orden} alOrden={setOrden} contadores={contadores} supervision={supervision} umbrales={umbrales} />
+        {supervision && <UmbralesSemaforoForm key={`${umbrales.amarillo}-${umbrales.rojo}`} actuales={umbrales} alGuardar={async (u) => { try { await api.fijarUmbrales(token, u); await cargar(); return null; } catch (e) { return mensajeDe(e); } }} />}
+      </div>}
+      {vista === 'bandeja' && <div className={`c-columnas ${actual || alta ? 'con-detalle' : ''}`}>
         <section className="c-bandeja" aria-label="Bandeja de reportes">
           <div className="c-fila">
             <h2 className="c-linea">{'Bandeja'}{nuevos > 0 && <span className="c-contador">{`${nuevos} ${nuevos === 1 ? 'nuevo' : 'nuevos'}`}</span>}</h2>
-            <label className="c-check"><input type="checkbox" checked={todos} onChange={(e) => setTodos(e.target.checked)} /> Ver cerrados</label>
+            <button className="c-boton" onClick={() => { setAlta(true); setSel(null); }} data-testid="iniciar-reporte">Iniciar nuevo reporte</button>
           </div>
           {!cargado && !aviso && <div aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="esqueleto c-esq-item" />)}<span className="solo-lector">Cargando reportes…</span></div>}
           {cargado && !lista.length && (
             <div className="estado c-tarjeta">
               <span className="estado-icono" aria-hidden="true">✓</span>
-              <h3>{todos ? 'Sin reportes por ahora' : 'Sin reportes activos por ahora'}</h3>
-              <p>Los nuevos aparecen aquí al instante.</p>
+              <h3>{todosLosReportes.length ? 'Ningún reporte con estos filtros' : 'Sin reportes por ahora'}</h3>
+              <p>{todosLosReportes.length ? 'Quita o cambia un filtro.' : 'Los nuevos aparecen aquí al instante.'}</p>
             </div>
           )}
           {lista.map((r) => (
-            <button key={r.folio} className={`c-item p-${r.prioridad} ${sel === r.folio ? 'sel' : ''} ${esFinal(r.estado) ? 'final' : ''}`} onClick={() => setSel(r.folio)}>
+            <button key={r.folio} className={`c-item p-${r.prioridad} ${sel === r.folio ? 'sel' : ''} ${esFinal(r.estado) ? 'final' : ''}`} onClick={() => { setSel(r.folio); setAlta(false); }} data-folio={r.folio}>
               <div className="c-fila">
-                <strong>{r.incidente}</strong>
-                <span className="suave">{hace(r.creadoEn, ahora)}</span>
+                <span className="c-linea"><PuntoPrioridad p={r.prioridad} cnie={r.cnie?.prioridad} /><strong>{r.incidente}</strong></span>
+                <Semaforo s={semaforoReporte(r, ahora, umbrales)} />
               </div>
               <div className="c-etiquetas">
+                {r.origen === '911' && <span className="c-chip c-chip-911" data-testid="origen-911">{textoOrigen(r)}</span>}
+                {esMalUso(r.cnie?.tipo.codigo) && <span className="c-chip c-chip-alerta">Mal uso</span>}
                 {r.asistenciaDirecta && <span className="c-chip c-chip-alerta">Asistencia directa</span>}
                 <span className={`c-chip e-${r.estado}`}>{ESTADO[r.estado]}</span>
                 <span className="c-chip" title="La que usa POL-IAQ para despachar, según las respuestas">{`Prioridad operativa: ${r.prioridad}`}</span>
@@ -234,16 +250,22 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
                 {!r.operable && <span className="c-chip">Solo lectura</span>}
                 {r.automatico && <span className="c-chip c-chip-neutro">Demo automática</span>}
                 {r.opinion?.queja && <span className="c-chip c-chip-alerta">Queja</span>}
-                {!esFinal(r.estado) && <ChipLlegada t={r.tiempos.llegada} />}
               </div>
-              <div className="suave c-pequeno">{`${r.folio} · ${nombreCad(r.cadId)}`}</div>
+              <div className="suave c-pequeno">{`${r.folio} · ${nombreCad(r.cadId)}${r.municipioClave ? ` · ${municipioPorClave(r.municipioClave)?.nombre ?? r.municipioClave}` : ''} · hace ${hace(r.creadoEn, ahora)}`}</div>
               {r.ruta?.canal === '089' ? <div className="c-pequeno c-respaldo">{TEXTO_ANONIMA_089}</div> : r.respaldo && <div className="c-pequeno c-respaldo">{r.respaldo}</div>}
               {r.escalaAlC5En && <Cuenta hasta={r.escalaAlC5En} ahora={ahora} />}
             </button>
           ))}
         </section>
 
-        {actual ? (
+        {alta ? (
+          <Alta911 token={token} alCancelar={() => setAlta(false)} alCrear={(r, nuevo) => {
+            setReportes((m) => new Map(m).set(r.folio, r));
+            setAlta(false); setSel(r.folio); setFiltro(FILTRO_INICIAL);
+            setAviso('');
+            setCreado(`Folio ${r.folio} creado por llamada al 911${nuevo ? '; el reportante quedó dado de alta' : ''}.`);
+          }} />
+        ) : actual ? (
           <Detalle key={actual.folio} r={actual} ahora={ahora} unidades={unidades} yo={yo} nombreCad={nombreCad} actuar={actuar} alCerrar={() => setSel(null)} />
         ) : (
           <section className="c-detalle c-vacio suave">Elige un reporte de la bandeja para ver el cuestionario de la despachadora virtual y despachar.</section>
@@ -317,6 +339,7 @@ function Detalle({
           <span className="c-chip" data-testid="municipio-clave" title="Clave INEGI del municipio donde ocurre">{r.municipioClave ? `Municipio ${r.municipioClave} · ${municipioPorClave(r.municipioClave)?.nombre ?? ''}` : 'Fuera de Querétaro'}</span>
           <span className="c-chip" data-testid="prioridad-operativa">{`Prioridad operativa (respuesta): ${r.prioridad}`}</span>
           {r.ruta?.canal === '089' && <span className="c-chip c-chip-aviso" data-testid="canal">{TEXTO_ANONIMA_089}</span>}
+          <span className={`c-chip ${r.origen === '911' ? 'c-chip-911' : ''}`} data-testid="origen-detalle">{`Origen: ${textoOrigen(r)}`}</span>
           {r.automatico && <span className="c-chip c-chip-neutro">Demo automática</span>}
         </div>
         {r.respaldo && <p className="c-respaldo" data-testid="respaldo">{r.respaldo}</p>}
@@ -326,6 +349,7 @@ function Detalle({
       </div>
 
       <ClasificacionCnie r={r} ocupado={ocupado} hacer={hacer} />
+      <RecatalogarMalUso r={r} ocupado={ocupado} hacer={hacer} />
 
       {r.canalizacion.alertas.length > 0 && (
         <div className="c-alertas">{r.canalizacion.alertas.map((a) => <span key={a} className="c-chip c-chip-alerta">{a}</span>)}</div>
@@ -521,7 +545,8 @@ function ClasificacionCnie({ r, ocupado, hacer }: { r: Reporte; ocupado: boolean
   const [elegido, setElegido] = useState<IncidenteCnie | null>(null);
   const [motivo, setMotivo] = useState('');
   const [abierto, setAbierto] = useState(!r.cnie?.incidente);
-  const resultados = useMemo(() => buscarCnie(busqueda, 8), [busqueda]);
+  // Mal Uso (tipo 7) tiene su propia acción, con motivo obligatorio.
+  const resultados = useMemo(() => buscarCnie(busqueda, 8).filter((i) => !esMalUso(i.codigo)), [busqueda]);
   const c = r.cnie;
   const difiere = c?.prioridad && c.prioridad.toLowerCase() !== r.prioridad;
   // Un reporte anónimo que se reclasifica a un subtipo que no admite anónimo: no se puede devolver la llamada.
@@ -588,7 +613,7 @@ function ClasificacionCnie({ r, ocupado, hacer }: { r: Reporte; ocupado: boolean
           <h4>Correcciones (bitácora)</h4>
           <ul className="c-lista c-pequeno" data-testid="cnie-correcciones">
             {r.correccionesCnie.map((x) => (
-              <li key={x.en + x.a}>{hora(x.en)} · {x.de ?? 'sin código'} → <strong>{x.a}</strong> {incidenteCnie(x.a) ? `(${nombreLegible(incidenteCnie(x.a)!.nombre)})` : ''} · {x.actor.replace(/^operador:/, '')}{x.motivo ? ` · “${x.motivo}”` : ''}</li>
+              <li key={x.en + x.a}>{hora(x.en)} · {x.de ?? 'sin código'} → <strong>{x.a}</strong> {incidenteCnie(x.a) ? `(${nombreLegible(incidenteCnie(x.a)!.nombre)})` : ''}{x.tipoA && x.tipoDe !== x.tipoA ? ` · tipo ${x.tipoDe ?? '—'} → ${x.tipoA} ${tipoCnie(x.tipoA)?.nombre ?? ''}` : ''} · {x.actor.replace(/^operador:/, '')}{x.motivo ? ` · “${x.motivo}”` : ''}</li>
             ))}
           </ul>
         </>
@@ -613,18 +638,6 @@ function TablaCnie({ titulo, grupos }: { titulo: string; grupos: GrupoCnie[] }) 
         ))}
       </tbody>
     </table>
-  );
-}
-
-/** Tiempo desde el reporte contra la meta de llegada, para la bandeja; dice en palabras si va fuera de meta. */
-function ChipLlegada({ t }: { t: Reporte['tiempos']['llegada'] }) {
-  if (t.segundos == null) return null;
-  const cls = t.estado === 'excedida' ? 'c-chip-alerta' : t.estado === 'en_riesgo' ? 'c-chip-aviso' : t.estado === 'cumplida' ? 'c-chip-ok' : '';
-  const aviso = t.estado === 'excedida' ? 'Fuera de meta · ' : t.estado === 'en_riesgo' ? 'Por vencer · ' : '';
-  return (
-    <span className={`c-chip ${cls}`} data-testid="chip-llegada" data-estado={t.estado} title="Desde el reporte hasta la llegada de la unidad, contra la meta de llegada">
-      {`${aviso}${duracionTexto(t.segundos)} / meta ${Math.round(t.metaSegundos / 60)} min`}
-    </span>
   );
 }
 
