@@ -48,8 +48,10 @@ function Boton<T extends string>({ valor, actual, n, alElegir, children, clase =
   );
 }
 
-export function FiltrosBandeja({ filtro, alCambiar, orden, alOrden, contadores, supervision, umbrales }: {
+export function FiltrosBandeja({ filtro, alCambiar, orden, alOrden, contadores, supervision, umbrales, sinQuitar = false }: {
   filtro: FiltroVista; alCambiar: (f: FiltroVista) => void; orden: OrdenBandeja; alOrden: (o: OrdenBandeja) => void; contadores: Contadores; supervision: boolean; umbrales: UmbralesSemaforo;
+  /** En el panel de móvil «Limpiar» ya quita los filtros. */
+  sinQuitar?: boolean;
 }) {
   const set = <K extends keyof FiltroVista>(k: K) => (v: FiltroVista[K] | null) => alCambiar({ ...filtro, [k]: v ?? (k === 'estado' ? 'activos' : null) });
   const pct = (x: number) => `${Math.round(x * 100)} %`;
@@ -97,13 +99,35 @@ export function FiltrosBandeja({ filtro, alCambiar, orden, alOrden, contadores, 
             {ORDENES_BANDEJA.map((o) => <option key={o.id} value={o.id}>{o.nombre}</option>)}
           </select>
         </label>
-        {hayFiltros && <button type="button" className="c-enlace" onClick={() => alCambiar(FILTRO_INICIAL)}>Quitar filtros</button>}
+        {hayFiltros && !sinQuitar && <button type="button" className="c-enlace" onClick={() => alCambiar(FILTRO_INICIAL)}>Quitar filtros</button>}
       </div>
     </div>
   );
 }
 
 /** Punto de prioridad: color + etiqueta (alta / media / baja). */
+/** Móvil: filtros activos como chips removibles arriba de la lista (cada «×» quita solo ese filtro). */
+export function ChipsFiltrosActivos({ filtro, alCambiar }: { filtro: FiltroVista; alCambiar: (f: FiltroVista) => void }) {
+  const chips: { clave: keyof FiltroVista; texto: string }[] = [];
+  if (filtro.estado !== 'activos') chips.push({ clave: 'estado', texto: `Estado: ${filtro.estado === 'todos' ? 'Todos' : GRUPOS_ESTADO.find((g) => g.id === filtro.estado)?.nombre ?? filtro.estado}` });
+  if (filtro.prioridad) chips.push({ clave: 'prioridad', texto: `Prioridad: ${filtro.prioridad}` });
+  if (filtro.prioridadCnie) chips.push({ clave: 'prioridadCnie', texto: `CNIE: ${filtro.prioridadCnie.toLowerCase()}` });
+  if (filtro.demora) chips.push({ clave: 'demora', texto: `Espera: ${ETIQUETA_SEMAFORO[filtro.demora]}` });
+  if (filtro.municipio) chips.push({ clave: 'municipio', texto: filtro.municipio === '000' ? 'Fuera de Querétaro' : `Municipio: ${MUNICIPIOS_QRO.find((m) => m.clave === filtro.municipio)?.nombre ?? filtro.municipio}` });
+  if (!chips.length) return null;
+  return (
+    <ul className="c-chips-activos" aria-label="Filtros activos" data-testid="chips-filtros">
+      {chips.map((c) => (
+        <li key={c.clave}>
+          <button type="button" className="c-chip-quitar" aria-label={`Quitar filtro ${c.texto}`} onClick={() => alCambiar({ ...filtro, [c.clave]: c.clave === 'estado' ? 'activos' : null })}>
+            {c.texto}<span aria-hidden="true">×</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function PuntoPrioridad({ p, cnie }: { p: Reporte['prioridad']; cnie?: string | null }) {
   return (
     <span className={`c-prio-chip c-prio-${p}`} data-testid="punto-prioridad" data-prioridad={p} title={`Prioridad operativa ${p}${cnie ? ` · CNIE ${cnie}` : ''}`}>

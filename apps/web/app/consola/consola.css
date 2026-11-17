@@ -325,7 +325,6 @@ details.c-tarjeta > summary { cursor: pointer; font-weight: 700; min-height: var
   .c-barra-acciones { width: 100%; }
   .c-barra-acciones > * { flex: 1 1 auto; }
   .c-franja-filtros { display: none; }
-  .c-franja-filtros.abierta { display: block; }
   .c-filtros-bandeja { flex-direction: column; align-items: stretch; }
   .c-campo-linea { flex-wrap: wrap; }
   .c-campo-linea select { flex: 1 1 180px; }
@@ -358,4 +357,28 @@ details.c-tarjeta > summary { cursor: pointer; font-weight: 700; min-height: var
   .c-sesnsp td:nth-child(2) { white-space: normal; }
   .c-sesnsp th[scope="row"] { min-width: 104px; }
   .c-sesnsp .c-mono { font-size: .75rem; }
+}
+
+/* ── Mensaje 13: filtros de la bandeja en móvil ─────────────────────────────────────────
+ * Móvil (<768 px): botón «Filtros» con insignia; el panel se superpone (no empuja la lista), apila
+ * todos los grupos, se desplaza por dentro y cierra con «Aplicar» o «Limpiar». Los filtros activos
+ * quedan como chips removibles en la barra fija, arriba de la lista. */
+.c-chips-activos, .c-hoja-fondo { display: none; }
+@media (max-width: 767.98px) {
+  .c-chips-activos { display: flex; flex-wrap: wrap; gap: var(--e2); width: 100%; margin: 0; padding: 0; list-style: none; }
+  .c-chip-quitar { display: inline-flex; align-items: center; gap: var(--e2); min-height: var(--toque); max-width: 100%; padding: 0 6px 0 14px; font: inherit; font-size: .85rem; font-weight: 600; border-radius: var(--r-pill); border: 1px solid var(--primario); background: var(--superficie); color: var(--texto); cursor: pointer; text-align: left; }
+  .c-chip-quitar span { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; font-size: 1.15rem; line-height: 1; color: var(--primario); }
+  .c-hoja-fondo { display: flex; align-items: flex-end; position: fixed; inset: 0; z-index: 60; background: rgba(11, 22, 48, .5); }
+  .c-hoja { display: flex; flex-direction: column; width: 100%; max-height: 92dvh; background: var(--fondo); border-radius: var(--r-l) var(--r-l) 0 0; box-shadow: var(--sombra-alta); }
+  .c-hoja-cabeza { display: flex; align-items: center; justify-content: space-between; gap: var(--e3); padding: var(--e2) var(--pad); border-bottom: 1px solid var(--borde); }
+  .c-hoja-cabeza h2 { margin: 0; }
+  .c-hoja-cerrar { min-width: var(--toque); min-height: var(--toque); font: inherit; font-size: 1.5rem; line-height: 1; border: 0; border-radius: 50%; background: transparent; color: var(--texto); cursor: pointer; }
+  .c-hoja-cuerpo { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--e3) var(--pad); }
+  .c-hoja .c-filtros-bandeja { gap: var(--e4); }
+  .c-hoja .c-grupo-titulo { flex-basis: 100%; }
+  .c-hoja .c-grupo-select { flex-direction: column; align-items: stretch; }
+  .c-hoja .c-campo-linea { display: flex; flex-direction: column; align-items: stretch; gap: var(--e1); }
+  .c-hoja .c-campo-linea select { flex: none; width: 100%; }
+  .c-hoja-pie { display: flex; gap: var(--e2); padding: var(--e2) var(--pad) calc(var(--e2) + env(safe-area-inset-bottom)); border-top: 1px solid var(--borde); background: var(--tarjeta); }
+  .c-hoja-pie > * { flex: 1 1 0; }
 }

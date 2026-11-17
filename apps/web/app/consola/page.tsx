@@ -19,7 +19,7 @@ import {
   type Accion, type Reporte, type Tablero, type UnidadDisponible, type Yo,
 } from './consola';
 import { FormUnidad, VistaMunicipios, VistaReportes, VistaSesnsp, tipoDeUnidad } from './municipios';
-import { FILTRO_INICIAL, FiltrosBandeja, PuntoPrioridad, RecatalogarMalUso, ResumenBandeja, Semaforo, UmbralesSemaforoForm, semaforoReporte, usarBandeja, type FiltroVista } from './bandeja';
+import { ChipsFiltrosActivos, FILTRO_INICIAL, FiltrosBandeja, PuntoPrioridad, RecatalogarMalUso, ResumenBandeja, Semaforo, UmbralesSemaforoForm, semaforoReporte, usarBandeja, type FiltroVista } from './bandeja';
 import { Alta911, textoOrigen } from './alta911';
 
 const CLAVE_SESION = 'poliaq.consola.token';
@@ -98,6 +98,19 @@ function Entrar({ alEntrar }: { alEntrar: (token: string, yo: Yo) => void }) {
   );
 }
 
+/** Móvil (<768 px), el mismo punto de corte que consola.css. */
+function useEsMovil() {
+  const [movil, setMovil] = useState(false);
+  useEffect(() => {
+    const q = window.matchMedia('(max-width: 767.98px)');
+    const act = () => setMovil(q.matches);
+    act();
+    q.addEventListener('change', act);
+    return () => q.removeEventListener('change', act);
+  }, []);
+  return movil;
+}
+
 function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSalir: () => void }) {
   const [yo, setYo] = useState(yoInicial);
   const [reportes, setReportes] = useState<Map<string, Reporte>>(new Map());
@@ -106,7 +119,10 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
   const [orden, setOrden] = useState<OrdenBandeja>('prioridad_demora');
   const [alta, setAlta] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
-  const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+  // Móvil: el panel de filtros edita un borrador; «Aplicar» lo pasa a la bandeja. null = panel cerrado.
+  const [borrador, setBorrador] = useState<{ filtro: FiltroVista; orden: OrdenBandeja } | null>(null);
+  const esMovil = useEsMovil();
+  const botonFiltros = useRef<HTMLButtonElement>(null);
   const mesa = useRef<HTMLDivElement>(null);
   const cabecera = useRef<HTMLElement>(null);
   const barra = useRef<HTMLDivElement>(null);
@@ -161,6 +177,18 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
   // Operador de un municipio: solo sus CAD (el API ya lo filtra); supervisión filtra por municipio sin salir de la bandeja.
   const todosLosReportes = useMemo(() => [...reportes.values()], [reportes]);
   const { lista, contadores } = usarBandeja(todosLosReportes, filtro, orden, ahora, umbrales);
+  // Los contadores del panel reflejan el borrador, igual que los de la franja reflejan el filtro aplicado.
+  const deBorrador = usarBandeja(todosLosReportes, borrador?.filtro ?? filtro, borrador?.orden ?? orden, ahora, umbrales);
+  const panelAbierto = esMovil && vista === 'bandeja' && borrador !== null;
+  const cerrarPanel = () => { setBorrador(null); botonFiltros.current?.focus(); };
+  useEffect(() => { if (!esMovil) setBorrador(null); }, [esMovil]);
+  // Con el panel abierto la página de atrás no se desplaza.
+  useEffect(() => {
+    if (!panelAbierto) return;
+    const antes = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = antes; };
+  }, [panelAbierto]);
   const actual = sel ? reportes.get(sel) ?? null : null;
   const nuevos = todosLosReportes.filter((r) => r.estado === 'recibido' && r.operable).length;
 
@@ -245,16 +273,40 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
       {vista === 'bandeja' && <div className="c-barra-bandeja" ref={barra}>
         <h2 className="c-linea">{'Bandeja'}{nuevos > 0 && <span className="c-contador">{`${nuevos} ${nuevos === 1 ? 'nuevo' : 'nuevos'}`}</span>}<span className="suave c-pequeno">{`${lista.length} en la lista`}</span></h2>
         <div className="c-barra-acciones">
-          <button type="button" className="c-boton-sec c-boton-filtros" aria-expanded={filtrosAbiertos} aria-controls="franja-filtros" onClick={() => setFiltrosAbiertos((x) => !x)} data-testid="mostrar-filtros">
-            {filtrosAbiertos ? 'Ocultar filtros' : 'Filtros'}{filtrosActivos > 0 && <span className="c-filtro-n">{filtrosActivos}</span>}
+          <button type="button" ref={botonFiltros} className="c-boton-sec c-boton-filtros" aria-haspopup="dialog" aria-expanded={panelAbierto} onClick={() => setBorrador({ filtro, orden })} data-testid="mostrar-filtros"
+            aria-label={filtrosActivos ? `Filtros, ${filtrosActivos} ${filtrosActivos === 1 ? 'activo' : 'activos'}` : 'Filtros'}>
+            {'Filtros'}{filtrosActivos > 0 && <span className="c-filtro-n" data-testid="insignia-filtros">{filtrosActivos}</span>}
           </button>
           <button className="c-boton" onClick={() => abrir(null, true)} data-testid="iniciar-reporte">Iniciar nuevo reporte</button>
         </div>
+        {esMovil && <ChipsFiltrosActivos filtro={filtro} alCambiar={setFiltro} />}
       </div>}
-      {vista === 'bandeja' && <div id="franja-filtros" className={`c-franja-filtros ${filtrosAbiertos ? 'abierta' : ''}`}>
+      {vista === 'bandeja' && !esMovil && <div id="franja-filtros" className="c-franja-filtros">
         <FiltrosBandeja filtro={filtro} alCambiar={setFiltro} orden={orden} alOrden={setOrden} contadores={contadores} supervision={supervision} umbrales={umbrales} />
         {supervision && <UmbralesSemaforoForm key={`${umbrales.amarillo}-${umbrales.rojo}`} actuales={umbrales} alGuardar={async (u) => { try { await api.fijarUmbrales(token, u); await cargar(); return null; } catch (e) { return mensajeDe(e); } }} />}
       </div>}
+      {panelAbierto && borrador && (
+        <div className="c-hoja-fondo" onClick={cerrarPanel}>
+          <div className="c-hoja" role="dialog" aria-modal="true" aria-labelledby="titulo-filtros" data-testid="panel-filtros"
+            onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') cerrarPanel(); }}>
+            <div className="c-hoja-cabeza">
+              <h2 id="titulo-filtros">{'Filtros'}</h2>
+              <button type="button" className="c-hoja-cerrar" aria-label="Cerrar sin aplicar" onClick={cerrarPanel} autoFocus>×</button>
+            </div>
+            <div className="c-hoja-cuerpo">
+              <FiltrosBandeja filtro={borrador.filtro} alCambiar={(f) => setBorrador({ ...borrador, filtro: f })} orden={borrador.orden} alOrden={(o) => setBorrador({ ...borrador, orden: o })}
+                contadores={deBorrador.contadores} supervision={supervision} umbrales={umbrales} sinQuitar />
+              {supervision && <UmbralesSemaforoForm key={`${umbrales.amarillo}-${umbrales.rojo}`} actuales={umbrales} alGuardar={async (u) => { try { await api.fijarUmbrales(token, u); await cargar(); return null; } catch (e) { return mensajeDe(e); } }} />}
+            </div>
+            <div className="c-hoja-pie">
+              <button type="button" className="c-boton-sec" onClick={() => setBorrador({ ...borrador, filtro: FILTRO_INICIAL })} data-testid="limpiar-filtros">Limpiar</button>
+              <button type="button" className="c-boton" onClick={() => { setFiltro(borrador.filtro); setOrden(borrador.orden); cerrarPanel(); }} data-testid="aplicar-filtros">
+                {`Aplicar (${deBorrador.lista.length})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {vista === 'bandeja' && <div className={`c-columnas ${actual || alta ? 'con-detalle' : ''}`}>
         <section className="c-bandeja" aria-label="Bandeja de reportes">
           {!cargado && !aviso && <div aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="esqueleto c-esq-item" />)}<span className="solo-lector">Cargando reportes…</span></div>}
