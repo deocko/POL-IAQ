@@ -116,6 +116,7 @@ export class ReportesService {
     const e = r.evidencias.find((x) => x.id === evidenciaId);
     if (!e) throw new NotFoundException({ codigo: 'evidencia_no_encontrada' });
     if (e.estado !== 'pendiente') throw new ConflictException({ codigo: 'evidencia_ya_recibida' });
+    if (!Buffer.isBuffer(datos) || datos.length === 0) throw new BadRequestException({ codigo: 'contenido_vacio' });
     const sha = createHash('sha256').update(datos).digest('hex');
     e.sha256Servidor = sha;
     e.recibidoEn = new Date().toISOString();

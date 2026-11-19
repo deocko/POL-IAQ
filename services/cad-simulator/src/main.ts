@@ -19,12 +19,17 @@ const PASO_MS = Number(process.env.SIM_STEP_MS ?? 3000);
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Folios que el ciudadano canceló: su simulación se detiene. */
+const cancelados = new Set<string>();
+class SimulacionCancelada extends Error {}
+
 /** Identifica qué CAD es por el secreto con el que firmó Pol-IAQ. */
 function cadPorFirma(ts: number, cuerpo: string, firma: string): string | undefined {
   return Object.entries(CADS).find(([, c]) => verificarFirma(c.secreto, ts, cuerpo, firma))?.[0];
 }
 
 async function enviar(cadId: string, folio: string, secuencia: number, tipo: string, datos: Record<string, unknown>) {
+  if (cancelados.has(folio)) throw new SimulacionCancelada();
   const cuerpo = JSON.stringify({ eventoId: randomUUID(), folio, secuencia, ocurridoEn: new Date().toISOString(), tipo, datos });
   const ts = Math.floor(Date.now() / 1000);
   const resp = await fetch(`${POLIAQ_URL}/v1/cad/${cadId}/eventos`, {
@@ -67,7 +72,14 @@ createServer((req, res) => {
       res.writeHead(401).end();
       return;
     }
-    const p = EventoHaciaCadSchema.safeParse(JSON.parse(cuerpo));
+    let json: unknown;
+    try {
+      json = JSON.parse(cuerpo);
+    } catch {
+      res.writeHead(400).end();
+      return;
+    }
+    const p = EventoHaciaCadSchema.safeParse(json);
     if (!p.success) {
       res.writeHead(400).end();
       return;
@@ -76,7 +88,13 @@ createServer((req, res) => {
     const ev = p.data;
     console.log(`[${cadId}] recibido ${ev.tipo} ${ev.folio}`);
     if (ev.tipo === 'incidente.creado') {
-      void simular(cadId, ev.folio, ev.datos.ubicacion.lat, ev.datos.ubicacion.lng).catch((e) => console.error(e));
+      cancelados.delete(ev.folio);
+      void simular(cadId, ev.folio, ev.datos.ubicacion.lat, ev.datos.ubicacion.lng).catch((e) => {
+        if (e instanceof SimulacionCancelada) console.log(`[${cadId}] ${ev.folio} cancelado por el ciudadano; se detiene la simulación`);
+        else console.error(e);
+      });
+    } else if (ev.datos.cancelado) {
+      cancelados.add(ev.folio);
     }
   });
 }).listen(PORT, () => console.log(`CAD simulado escuchando en :${PORT}, enviando a ${POLIAQ_URL}`));

@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { CAD_ESTATAL_ID, firmar, type EventoHaciaCad } from '@pol-iaq/shared';
 import { AlmacenService } from '../almacen/almacen.service';
 import type { Ciudadano, Evidencia, Reporte } from '../almacen/modelos';
@@ -75,8 +75,10 @@ export class DespachadorCadService implements OnModuleDestroy {
   }
 
   firmaEnlaceValida(evidenciaId: string, cadId: string, exp: number, firma: string) {
-    if (!(exp > Date.now() / 1000)) return false;
-    return createHmac('sha256', this.config.secretoTokens).update(`${evidenciaId}.${cadId}.${exp}`).digest('hex') === firma;
+    if (!(exp > Date.now() / 1000) || typeof firma !== 'string') return false;
+    const esperada = Buffer.from(createHmac('sha256', this.config.secretoTokens).update(`${evidenciaId}.${cadId}.${exp}`).digest('hex'));
+    const recibida = Buffer.from(firma);
+    return esperada.length === recibida.length && timingSafeEqual(esperada, recibida);
   }
 
   private vigilarAcuse(folio: string, cadId: string, ciudadano: Ciudadano) {

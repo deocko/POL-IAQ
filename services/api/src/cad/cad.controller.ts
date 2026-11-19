@@ -1,7 +1,7 @@
 import { BadRequestException, Controller, ForbiddenException, Get, Headers, HttpCode, Inject, NotFoundException, Param, Post, Query, Req, Res, UnauthorizedException } from '@nestjs/common';
 import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
-import { EventoDesdeCadSchema, verificarFirma, type EventoDesdeCad } from '@pol-iaq/shared';
+import { ESTADOS_FINALES, EventoDesdeCadSchema, verificarFirma, type EventoDesdeCad } from '@pol-iaq/shared';
 import { AlmacenService } from '../almacen/almacen.service';
 import { CONFIG, type Config } from '../config';
 import { ReportesService } from '../reportes/reportes.service';
@@ -41,11 +41,17 @@ export class CadController {
     const r = this.almacen.reporte(ev.folio);
     if (!r) throw new NotFoundException({ codigo: 'folio_no_encontrado' });
     if (r.cadId !== cadId) throw new ForbiddenException({ codigo: 'folio_de_otra_jurisdiccion' });
-    if (!this.almacen.marcarEventoProcesado(ev.eventoId)) return { aceptado: true, duplicado: true };
+    if (this.almacen.eventoProcesado(ev.eventoId)) return { aceptado: true, duplicado: true };
     // Las posiciones pueden llegar desordenadas: se descartan las viejas sin error.
     if (ev.secuencia <= r.secuenciaEntrada) return { aceptado: true, descartado: 'secuencia_antigua' };
+    if (ESTADOS_FINALES.includes(r.estado)) {
+      this.almacen.marcarEventoProcesado(ev.eventoId);
+      return { aceptado: true, descartado: 'reporte_finalizado' };
+    }
 
+    // Si el evento no aplica (p. ej. transición inválida) no se marca como procesado y el CAD puede reintentar.
     this.aplicar(cadId, ev);
+    this.almacen.marcarEventoProcesado(ev.eventoId);
     // Tras una transferencia, el CAD destino empieza su propia secuencia.
     if (ev.tipo !== 'incidente.transferido') r.secuenciaEntrada = ev.secuencia;
     this.almacen.auditar({ actor: `cad:${cadId}`, accion: ev.tipo, folio: ev.folio });
@@ -70,13 +76,13 @@ export class CadController {
     const ahora = new Date().toISOString();
     switch (ev.tipo) {
       case 'incidente.recibido':
-        r.folioCad = ev.datos.folioCad;
         this.reportes.cambiarEstado(r, 'validado', 'Recibido por el CAD');
+        r.folioCad = ev.datos.folioCad;
         break;
       case 'unidad.asignada':
-        r.unidad = { unidadId: ev.datos.unidadId, corporacion: ev.datos.corporacion, etiqueta: ev.datos.etiqueta, etaMinutos: ev.datos.etaMinutos };
         if (r.estado === 'recibido') this.reportes.cambiarEstado(r, 'validado');
         this.reportes.cambiarEstado(r, 'asignado');
+        r.unidad = { unidadId: ev.datos.unidadId, corporacion: ev.datos.corporacion, etiqueta: ev.datos.etiqueta, etaMinutos: ev.datos.etaMinutos };
         break;
       case 'unidad.posicion':
         if (!r.unidad || r.unidad.unidadId !== ev.datos.unidadId) return;
@@ -86,13 +92,18 @@ export class CadController {
       case 'incidente.estado':
         this.reportes.cambiarEstado(r, ev.datos.estado, ev.datos.nota);
         break;
-      case 'incidente.transferido':
+      case 'incidente.transferido': {
         this.reportes.cambiarEstado(r, 'transferido', ev.datos.motivo);
         r.cadId = ev.datos.cadDestinoId;
+        r.folioCad = undefined;
         r.unidad = undefined;
         r.secuenciaEntrada = 0;
         this.almacen.auditar({ actor: `cad:${cadId}`, accion: 'transferencia', folio: r.folio, detalle: { destino: ev.datos.cadDestinoId } });
+        // El CAD destino necesita los datos del incidente para atenderlo.
+        const ciudadano = this.almacen.ciudadano(r.ciudadanoId);
+        if (ciudadano) this.despachador.enviarCreado(r, ciudadano);
         break;
+      }
       case 'mensaje.operador':
         r.mensajes.push({ id: randomUUID(), autor: 'operador', nombreAutor: ev.datos.autor, texto: ev.datos.texto, en: ahora });
         break;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import * as Location from 'expo-location';
-import { api, type IncidenteCatalogoPublico } from '../api';
+import { api, ErrorApi, type IncidenteCatalogoPublico } from '../api';
 import { colores, e } from '../estilos';
 
 /** Pantalla principal: botón de pánico y catálogo en lenguaje simple. */
@@ -31,8 +31,9 @@ export function Inicio({ token, alCrear }: { token: string; alCrear: (folio: str
         ubicacion: { lat: pos.coords.latitude, lng: pos.coords.longitude, precisionMetros: pos.coords.accuracy ?? undefined },
       });
       alCrear(r.folio);
-    } catch {
-      Alert.alert('No se envió el reporte', 'Intenta de nuevo o llama al 911.', [
+    } catch (err) {
+      const mensaje = err instanceof ErrorApi && err.message !== err.codigo ? err.message : 'Intenta de nuevo o llama al 911.';
+      Alert.alert('No se envió el reporte', mensaje, [
         { text: 'Llamar al 911', onPress: () => Linking.openURL('tel:911') },
         { text: 'Cerrar' },
       ]);

@@ -31,8 +31,20 @@ export function Seguimiento({ token, folio, alSalir }: { token: string; folio: s
 
   async function enviarMensaje() {
     if (!texto.trim()) return;
-    setR(await api.mensaje(token, folio, texto.trim()));
-    setTexto('');
+    try {
+      setR(await api.mensaje(token, folio, texto.trim()));
+      setTexto('');
+    } catch {
+      Alert.alert('No se envió el mensaje', 'Revisa tu conexión e intenta de nuevo.');
+    }
+  }
+
+  async function cancelar() {
+    try {
+      setR(await api.cancelar(token, folio));
+    } catch {
+      Alert.alert('No se canceló el reporte', 'Es posible que la unidad ya esté en el lugar. Intenta de nuevo o llama al 911.');
+    }
   }
 
   async function foto() {
@@ -85,7 +97,7 @@ export function Seguimiento({ token, folio, alSalir }: { token: string; folio: s
           <Pressable style={e.boton} onPress={enviarMensaje}>
             <Text style={e.botonTexto}>Enviar</Text>
           </Pressable>
-          <Pressable style={e.botonSecundario} onPress={async () => setR(await api.cancelar(token, folio))}>
+          <Pressable style={e.botonSecundario} onPress={cancelar}>
             <Text style={e.botonSecundarioTexto}>Cancelar reporte</Text>
           </Pressable>
         </>
