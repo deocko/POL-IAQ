@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ESTADOS_FINALES, ETIQUETAS_CIUDADANO, type EstadoIncidente } from '@pol-iaq/shared/movil';
 import { api, seguir, type ReporteVista } from '../api';
 import { tomarYSubirFoto } from '../evidencia';
+import { avisar } from '../aviso';
 import { colores, e } from '../estilos';
 
 const PASOS: EstadoIncidente[] = ['recibido', 'validado', 'asignado', 'en_camino', 'en_sitio', 'cerrado'];
@@ -31,16 +32,28 @@ export function Seguimiento({ token, folio, alSalir }: { token: string; folio: s
 
   async function enviarMensaje() {
     if (!texto.trim()) return;
-    setR(await api.mensaje(token, folio, texto.trim()));
-    setTexto('');
+    try {
+      setR(await api.mensaje(token, folio, texto.trim()));
+      setTexto('');
+    } catch {
+      avisar('No se envió el mensaje', 'Revisa tu conexión e intenta de nuevo.');
+    }
+  }
+
+  async function cancelar() {
+    try {
+      setR(await api.cancelar(token, folio));
+    } catch {
+      avisar('No se canceló el reporte', 'Es posible que la unidad ya esté en el lugar. Intenta de nuevo o llama al 911.');
+    }
   }
 
   async function foto() {
     try {
       const res = await tomarYSubirFoto(token, folio);
-      if (res === 'sin_permiso') Alert.alert('Permiso de cámara', 'Activa la cámara en los ajustes para adjuntar fotos.');
+      if (res === 'sin_permiso') avisar('Permiso de cámara', 'Activa la cámara en los ajustes para adjuntar fotos.');
     } catch {
-      Alert.alert('No se subió la foto', 'Revisa tu conexión e intenta de nuevo.');
+      avisar('No se subió la foto', 'Revisa tu conexión e intenta de nuevo.');
     }
   }
 
@@ -85,7 +98,7 @@ export function Seguimiento({ token, folio, alSalir }: { token: string; folio: s
           <Pressable style={e.boton} onPress={enviarMensaje}>
             <Text style={e.botonTexto}>Enviar</Text>
           </Pressable>
-          <Pressable style={e.botonSecundario} onPress={async () => setR(await api.cancelar(token, folio))}>
+          <Pressable style={e.botonSecundario} onPress={cancelar}>
             <Text style={e.botonSecundarioTexto}>Cancelar reporte</Text>
           </Pressable>
         </>

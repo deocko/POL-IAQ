@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EstadoSchema, UbicacionSchema } from './schemas';
+import { UbicacionSchema } from './schemas';
 
 /**
  * Contrato "API Pol-IAQ CAD v1": eventos que viajan entre Pol-IAQ y cada CAD.
@@ -55,9 +55,11 @@ export const UnidadPosicionSchema = Base.extend({
   tipo: z.literal('unidad.posicion'),
   datos: z.object({ unidadId: z.string(), lat: z.number(), lng: z.number(), rumbo: z.number().optional(), etaMinutos: z.number().optional() }),
 });
+/** Estados que un CAD puede fijar con `incidente.estado` (ver asyncapi.yaml); transferir y cancelar tienen su propio flujo. */
+export const EstadoDesdeCadSchema = z.enum(['validado', 'asignado', 'en_camino', 'en_sitio', 'cerrado', 'improcedente']);
 export const IncidenteEstadoSchema = Base.extend({
   tipo: z.literal('incidente.estado'),
-  datos: z.object({ estado: EstadoSchema, nota: z.string().optional() }),
+  datos: z.object({ estado: EstadoDesdeCadSchema, nota: z.string().optional() }),
 });
 export const IncidenteTransferidoSchema = Base.extend({
   tipo: z.literal('incidente.transferido'),

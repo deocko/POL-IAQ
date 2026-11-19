@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { CAD_ESTATAL_ID, firmar, type EventoHaciaCad } from '@pol-iaq/shared';
 import { AlmacenService } from '../almacen/almacen.service';
 import type { Ciudadano, Evidencia, Reporte } from '../almacen/modelos';
@@ -22,7 +22,8 @@ export interface Envio {
 @Injectable()
 export class DespachadorCadService implements OnModuleDestroy {
   private readonly log = new Logger('DespachadorCad');
-  private readonly temporizadores = new Set<NodeJS.Timeout>();
+  /** Un vigilante de acuse por folio: un nuevo envío reemplaza al anterior. */
+  private readonly temporizadores = new Map<string, NodeJS.Timeout>();
   /** Bandeja de salida (en memoria en el scaffold). */
   readonly bandeja: Envio[] = [];
 
@@ -75,15 +76,18 @@ export class DespachadorCadService implements OnModuleDestroy {
   }
 
   firmaEnlaceValida(evidenciaId: string, cadId: string, exp: number, firma: string) {
-    if (!(exp > Date.now() / 1000)) return false;
-    return createHmac('sha256', this.config.secretoTokens).update(`${evidenciaId}.${cadId}.${exp}`).digest('hex') === firma;
+    if (!(exp > Date.now() / 1000) || typeof firma !== 'string') return false;
+    const esperada = Buffer.from(createHmac('sha256', this.config.secretoTokens).update(`${evidenciaId}.${cadId}.${exp}`).digest('hex'));
+    const recibida = Buffer.from(firma);
+    return esperada.length === recibida.length && timingSafeEqual(esperada, recibida);
   }
 
   private vigilarAcuse(folio: string, cadId: string, ciudadano: Ciudadano) {
+    clearTimeout(this.temporizadores.get(folio));
     const t = setTimeout(() => {
-      this.temporizadores.delete(t);
+      this.temporizadores.delete(folio);
       const r = this.almacen.reporte(folio);
-      if (!r || r.folioCad || r.cadId !== cadId || r.estado !== 'recibido') return;
+      if (!r || r.folioCad || r.cadId !== cadId || (r.estado !== 'recibido' && r.estado !== 'transferido')) return;
       this.log.warn(`${folio}: ${cadId} no acusó en ${this.config.esperaAcuseSeg}s, se escala al C5`);
       this.almacen.auditar({ actor: 'sistema', accion: 'escalado_c5_sin_acuse', folio, detalle: { cadId } });
       r.cadId = CAD_ESTATAL_ID;
@@ -91,7 +95,7 @@ export class DespachadorCadService implements OnModuleDestroy {
       this.enviarCreado(r, ciudadano);
     }, this.config.esperaAcuseSeg * 1000);
     t.unref();
-    this.temporizadores.add(t);
+    this.temporizadores.set(folio, t);
   }
 
   private encolar(cadId: string, evento: EventoHaciaCad) {

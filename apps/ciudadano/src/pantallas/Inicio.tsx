@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import * as Location from 'expo-location';
-import { api, type IncidenteCatalogoPublico } from '../api';
+import { api, ErrorApi, type IncidenteCatalogoPublico } from '../api';
+import { avisar } from '../aviso';
 import { colores, e } from '../estilos';
 
 /** Pantalla principal: botón de pánico y catálogo en lenguaje simple. */
@@ -10,7 +11,7 @@ export function Inicio({ token, alCrear }: { token: string; alCrear: (folio: str
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
-    api.catalogo().then((c) => setCatalogo(c.incidentes)).catch(() => Alert.alert('Sin conexión', 'No pudimos cargar el catálogo. Si es urgente, llama al 911.'));
+    api.catalogo().then((c) => setCatalogo(c.incidentes)).catch(() => avisar('Sin conexión', 'No pudimos cargar el catálogo. Si es urgente, llama al 911.'));
   }, []);
 
   async function reportar(incidenteId: string, esPanico = false) {
@@ -18,7 +19,7 @@ export function Inicio({ token, alCrear }: { token: string; alCrear: (folio: str
     try {
       const permiso = await Location.requestForegroundPermissionsAsync();
       if (!permiso.granted) {
-        Alert.alert('Ubicación necesaria', 'Sin tu ubicación no podemos enviar una unidad. Puedes llamar al 911.', [
+        avisar('Ubicación necesaria', 'Sin tu ubicación no podemos enviar una unidad. Puedes llamar al 911.', [
           { text: 'Llamar al 911', onPress: () => Linking.openURL('tel:911') },
           { text: 'Cerrar' },
         ]);
@@ -31,8 +32,9 @@ export function Inicio({ token, alCrear }: { token: string; alCrear: (folio: str
         ubicacion: { lat: pos.coords.latitude, lng: pos.coords.longitude, precisionMetros: pos.coords.accuracy ?? undefined },
       });
       alCrear(r.folio);
-    } catch {
-      Alert.alert('No se envió el reporte', 'Intenta de nuevo o llama al 911.', [
+    } catch (err) {
+      const mensaje = err instanceof ErrorApi && err.message !== err.codigo ? err.message : 'Intenta de nuevo o llama al 911.';
+      avisar('No se envió el reporte', mensaje, [
         { text: 'Llamar al 911', onPress: () => Linking.openURL('tel:911') },
         { text: 'Cerrar' },
       ]);

@@ -49,6 +49,10 @@ export class AlmacenService {
     return [...this.reportes.values()];
   }
 
+  eventoProcesado(eventoId: string): boolean {
+    return this.eventosProcesados.has(eventoId);
+  }
+
   /** Devuelve false si el evento ya se había procesado (idempotencia). */
   marcarEventoProcesado(eventoId: string): boolean {
     if (this.eventosProcesados.has(eventoId)) return false;

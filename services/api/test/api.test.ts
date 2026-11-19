@@ -120,6 +120,54 @@ describe('flujo de punta a punta con el CAD de Corregidora', () => {
   });
 });
 
+describe('robustez ante eventos del CAD', () => {
+  it('descarta eventos de un reporte cancelado y no deja aplicar estados reservados', async () => {
+    const token = await registrar('+524429999991');
+    const auth = { authorization: `Bearer ${token}` };
+    const folio = (await http.post('/v1/reportes').set(auth).send({ incidenteId: 'agresion', ubicacion: { lat: 20.539, lng: -100.442 } })).body.folio;
+    const reservado = await eventoCad('cad-corregidora', SECRETO_CORR, { folio, secuencia: 1, tipo: 'incidente.estado', datos: { estado: 'cancelado' } });
+    expect(reservado.status).toBe(400);
+    expect((await http.post(`/v1/reportes/${folio}/cancelar`).set(auth)).body.estado).toBe('cancelado');
+    const tarde = await eventoCad('cad-corregidora', SECRETO_CORR, { folio, secuencia: 1, tipo: 'unidad.asignada', datos: { unidadId: 'P-1', corporacion: 'policia_municipal', etiqueta: 'Patrulla 1' } });
+    expect(tarde.body).toEqual({ aceptado: true, descartado: 'reporte_finalizado' });
+    const r = await http.get(`/v1/reportes/${folio}`).set(auth);
+    expect(r.body.unidad).toBeNull();
+  });
+
+  it('no marca como procesado un evento rechazado ni lo aplica a medias', async () => {
+    const token = await registrar('+524429999992');
+    const auth = { authorization: `Bearer ${token}` };
+    const folio = (await http.post('/v1/reportes').set(auth).send({ incidenteId: 'agresion', ubicacion: { lat: 20.539, lng: -100.442 } })).body.folio;
+    const ev = { eventoId: randomUUID(), folio, secuencia: 1, tipo: 'incidente.recibido', datos: { folioCad: 'CORR-1' } };
+    // Un acuse sobre un reporte en camino es una transición inválida.
+    await eventoCad('cad-corregidora', SECRETO_CORR, { folio, secuencia: 1, tipo: 'unidad.asignada', datos: { unidadId: 'P-1', corporacion: 'policia_municipal', etiqueta: 'Patrulla 1' } });
+    await eventoCad('cad-corregidora', SECRETO_CORR, { folio, secuencia: 2, tipo: 'incidente.estado', datos: { estado: 'en_camino' } });
+    const rechazado = { ...ev, secuencia: 3 };
+    expect((await eventoCad('cad-corregidora', SECRETO_CORR, rechazado)).status).toBe(409);
+    // Al reintentar no se toma como duplicado: se vuelve a evaluar.
+    expect((await eventoCad('cad-corregidora', SECRETO_CORR, rechazado)).status).toBe(409);
+    const reasignar = await eventoCad('cad-corregidora', SECRETO_CORR, { folio, secuencia: 3, tipo: 'unidad.asignada', datos: { unidadId: 'P-2', corporacion: 'policia_municipal', etiqueta: 'Patrulla 2' } });
+    expect(reasignar.status).toBe(409);
+    expect((await http.get(`/v1/reportes/${folio}`).set(auth)).body.unidad.etiqueta).toBe('Patrulla 1');
+    // La secuencia no avanzó con los rechazos.
+    const mensaje = { eventoId: randomUUID(), folio, secuencia: 3, tipo: 'mensaje.operador', datos: { texto: 'hola', autor: 'Op' } };
+    expect((await eventoCad('cad-corregidora', SECRETO_CORR, { ...mensaje, secuencia: 2 })).body.descartado).toBe('secuencia_antigua');
+    expect((await eventoCad('cad-corregidora', SECRETO_CORR, mensaje)).body).toEqual({ aceptado: true });
+  });
+
+  it('al transferir envía el incidente al CAD destino', async () => {
+    const token = await registrar('+524429999993');
+    const auth = { authorization: `Bearer ${token}` };
+    const folio = (await http.post('/v1/reportes').set(auth).send({ incidenteId: 'agresion', ubicacion: { lat: 20.539, lng: -100.442 } })).body.folio;
+    expect((await eventoCad('cad-corregidora', SECRETO_CORR, { folio, secuencia: 1, tipo: 'incidente.recibido', datos: { folioCad: 'CORR-9' } })).status).toBe(202);
+    expect((await eventoCad('cad-corregidora', SECRETO_CORR, { folio, secuencia: 2, tipo: 'incidente.transferido', datos: { cadDestinoId: 'cad-queretaro', motivo: 'Jurisdicción' } })).status).toBe(202);
+    const creados = app.get(DespachadorCadService).bandeja.filter((e) => e.evento.folio === folio && e.evento.tipo === 'incidente.creado');
+    expect(creados.map((e) => e.cadId)).toEqual(['cad-corregidora', 'cad-queretaro']);
+    expect((await eventoCad('cad-queretaro', 'secreto-qro', { folio, secuencia: 1, tipo: 'incidente.recibido', datos: { folioCad: 'QRO-5' } })).status).toBe(202);
+    expect((await http.get(`/v1/reportes/${folio}`).set(auth)).body.estado).toBe('validado');
+  });
+});
+
 describe('evidencia y cadena de custodia', () => {
   it('acepta el archivo si el hash coincide y lo entrega al CAD con enlace firmado', async () => {
     const token = await registrar('+524425555555');
@@ -153,6 +201,18 @@ describe('evidencia y cadena de custodia', () => {
   });
 });
 
+describe('evidencia sin contenido', () => {
+  it('responde 400 si el archivo llega vacío', async () => {
+    const token = await registrar('+524429999994');
+    const auth = { authorization: `Bearer ${token}` };
+    const folio = (await http.post('/v1/reportes').set(auth).send({ incidenteId: 'otro', ubicacion: { lat: 20.539, lng: -100.442 } })).body.folio;
+    const sol = await http.post(`/v1/reportes/${folio}/evidencias`).set(auth).send({ tipo: 'foto', mimeType: 'image/jpeg', bytes: 3, sha256: 'a'.repeat(64), capturadoEn: new Date().toISOString() });
+    const sub = await http.put(new URL(sol.body.subirA).pathname).set(auth);
+    expect(sub.status).toBe(400);
+    expect(sub.body.codigo).toBe('contenido_vacio');
+  });
+});
+
 describe('protecciones operativas', () => {
   it('limita reportes por hora', async () => {
     const token = await registrar('+524427777777');
@@ -170,5 +230,15 @@ describe('protecciones operativas', () => {
     expect(bandeja.map((e) => e.cadId)).toEqual(['cad-queretaro', 'c5-queretaro']);
     // El folio no cambia aunque el incidente pase al C5.
     expect(bandeja[1].evento.folio).toBe(folio);
+  });
+
+  it('escala al C5 si el CAD destino de una transferencia no acusa recibo', async () => {
+    const token = await registrar('+524428888887');
+    const folio = (await http.post('/v1/reportes').set({ authorization: `Bearer ${token}` }).send({ incidenteId: 'agresion', ubicacion: { lat: 20.539, lng: -100.442 } })).body.folio;
+    expect((await eventoCad('cad-corregidora', SECRETO_CORR, { folio, secuencia: 1, tipo: 'incidente.recibido', datos: { folioCad: 'CORR-10' } })).status).toBe(202);
+    expect((await eventoCad('cad-corregidora', SECRETO_CORR, { folio, secuencia: 2, tipo: 'incidente.transferido', datos: { cadDestinoId: 'cad-queretaro', motivo: 'Jurisdicción' } })).status).toBe(202);
+    await new Promise((r) => setTimeout(r, 600));
+    const bandeja = app.get(DespachadorCadService).bandeja.filter((e) => e.evento.folio === folio && e.evento.tipo === 'incidente.creado');
+    expect(bandeja.map((e) => e.cadId)).toEqual(['cad-corregidora', 'cad-queretaro', 'c5-queretaro']);
   });
 });
