@@ -22,7 +22,8 @@ export interface Envio {
 @Injectable()
 export class DespachadorCadService implements OnModuleDestroy {
   private readonly log = new Logger('DespachadorCad');
-  private readonly temporizadores = new Set<NodeJS.Timeout>();
+  /** Un vigilante de acuse por folio: un nuevo envío reemplaza al anterior. */
+  private readonly temporizadores = new Map<string, NodeJS.Timeout>();
   /** Bandeja de salida (en memoria en el scaffold). */
   readonly bandeja: Envio[] = [];
 
@@ -82,8 +83,9 @@ export class DespachadorCadService implements OnModuleDestroy {
   }
 
   private vigilarAcuse(folio: string, cadId: string, ciudadano: Ciudadano) {
+    clearTimeout(this.temporizadores.get(folio));
     const t = setTimeout(() => {
-      this.temporizadores.delete(t);
+      this.temporizadores.delete(folio);
       const r = this.almacen.reporte(folio);
       if (!r || r.folioCad || r.cadId !== cadId || (r.estado !== 'recibido' && r.estado !== 'transferido')) return;
       this.log.warn(`${folio}: ${cadId} no acusó en ${this.config.esperaAcuseSeg}s, se escala al C5`);
@@ -93,7 +95,7 @@ export class DespachadorCadService implements OnModuleDestroy {
       this.enviarCreado(r, ciudadano);
     }, this.config.esperaAcuseSeg * 1000);
     t.unref();
-    this.temporizadores.add(t);
+    this.temporizadores.set(folio, t);
   }
 
   private encolar(cadId: string, evento: EventoHaciaCad) {
