@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ESTADOS_FINALES, ETIQUETAS_CIUDADANO, type EstadoIncidente } from '@pol-iaq/shared/movil';
 import { api, seguir, type ReporteVista } from '../api';
 import { tomarYSubirFoto } from '../evidencia';
+import { avisar } from '../aviso';
 import { colores, e } from '../estilos';
 
 const PASOS: EstadoIncidente[] = ['recibido', 'validado', 'asignado', 'en_camino', 'en_sitio', 'cerrado'];
@@ -35,7 +36,7 @@ export function Seguimiento({ token, folio, alSalir }: { token: string; folio: s
       setR(await api.mensaje(token, folio, texto.trim()));
       setTexto('');
     } catch {
-      Alert.alert('No se envió el mensaje', 'Revisa tu conexión e intenta de nuevo.');
+      avisar('No se envió el mensaje', 'Revisa tu conexión e intenta de nuevo.');
     }
   }
 
@@ -43,16 +44,16 @@ export function Seguimiento({ token, folio, alSalir }: { token: string; folio: s
     try {
       setR(await api.cancelar(token, folio));
     } catch {
-      Alert.alert('No se canceló el reporte', 'Es posible que la unidad ya esté en el lugar. Intenta de nuevo o llama al 911.');
+      avisar('No se canceló el reporte', 'Es posible que la unidad ya esté en el lugar. Intenta de nuevo o llama al 911.');
     }
   }
 
   async function foto() {
     try {
       const res = await tomarYSubirFoto(token, folio);
-      if (res === 'sin_permiso') Alert.alert('Permiso de cámara', 'Activa la cámara en los ajustes para adjuntar fotos.');
+      if (res === 'sin_permiso') avisar('Permiso de cámara', 'Activa la cámara en los ajustes para adjuntar fotos.');
     } catch {
-      Alert.alert('No se subió la foto', 'Revisa tu conexión e intenta de nuevo.');
+      avisar('No se subió la foto', 'Revisa tu conexión e intenta de nuevo.');
     }
   }
 
