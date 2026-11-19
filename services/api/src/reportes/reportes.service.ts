@@ -2,7 +2,7 @@ import { type OnModuleInit, ConflictException, ForbiddenException, HttpException
 import { createHash, randomUUID } from 'node:crypto';
 import {
   canalizar, clasificacionDe, clasificarCnie, esQueja, permiteAnonimo, generarFolio, incidentePorId, puedeTransicionar, resolverEntradas, respuestasDe,
-  validarCodigoCnie, ESTADOS_FINALES, esMalUso, tipoCnie, type ClasificacionCnie, type TipoTelefono,
+  validarCodigoCnie, ESTADOS_FINALES, esMalUso, tipoCnie, coloniaDeTexto, coloniaDerivada, resolverColonia, textoColonia, type ClasificacionCnie, type ColoniaEntrada, type ColoniaFolio, type TipoTelefono,
   type CrearReporte, type EntradaGuardada, type EstadoIncidente, type IncidenteCatalogo, type Opinion, type Prioridad, type ResponderCuestionario, type SolicitarEvidencia, rutaDe, textoRespaldo } from '@pol-iaq/shared';
 import { Almacen } from '../almacen/almacen';
 import type { Ciudadano, Evidencia, Reporte } from '../almacen/modelos';
@@ -15,7 +15,13 @@ import { RegistroCadService } from '../municipios/registro-cad.service';
 const ORDEN: Record<Prioridad, number> = { baja: 0, media: 1, alta: 2 };
 
 /** Alta de una llamada al 911 desde la consola. */
-export interface AltaPor911 { operador: string; operadorNombre: string; tipoTelefono: TipoTelefono; prioridad?: Prioridad; codigoCnie?: string }
+export interface AltaPor911 { operador: string; operadorNombre: string; tipoTelefono: TipoTelefono; prioridad?: Prioridad; codigoCnie?: string; colonia?: ColoniaEntrada }
+
+/** Error de colonia como respuesta 400 con su código y mensaje en español. */
+function coloniaOFallar(r: ReturnType<typeof resolverColonia>): ColoniaFolio {
+  if ('error' in r) throw new BadRequestException({ codigo: r.error, mensaje: r.mensaje });
+  return r.colonia;
+}
 
 /** Recatalogar a Mal Uso del servicio (tipo 7) exige un motivo corto (lo pide el Mensaje 11). */
 export function exigirMotivoMalUso(datos: { codigoCnie: string; motivo?: string }) {
@@ -133,6 +139,12 @@ export class ReportesService implements OnModuleInit {
     const clave = ruta.municipio?.clave ?? null;
     const folio = generarFolio(claveFolio, ahora.getUTCFullYear(), await this.almacen.siguienteConsecutivo(claveFolio ?? '000', ahora.getUTCFullYear()));
     const iso = ahora.toISOString();
+    // Colonia: la que eligió el operador (catálogo SEPOMEX o alta manual), o una mención explícita y única en la
+    // ubicación o la descripción («Col. Centro», «C.P. 76000»). Si no, queda sin colonia: nunca se adivina.
+    const derivada = coloniaDeTexto(datos.ubicacion.referencia, clave) ?? coloniaDeTexto(datos.descripcion, clave);
+    const colonia = alta?.colonia
+      ? coloniaOFallar(resolverColonia(alta.colonia, clave, { actor: `operador:${alta.operador}`, en: iso }))
+      : derivada ? coloniaDerivada(derivada, iso) : null;
 
     const reporte: Reporte = {
       folio,
@@ -144,6 +156,8 @@ export class ReportesService implements OnModuleInit {
       corporacionSugerida: canalizacion.corporaciones[0],
       ubicacion: datos.ubicacion,
       municipioClave: clave,
+      colonia,
+      coloniaCorrecciones: [],
       cadId: ruta.cadId,
       descripcion: datos.descripcion,
       respuestas: todas,
@@ -172,6 +186,28 @@ export class ReportesService implements OnModuleInit {
       const r = (await this.almacen.reporte(folio))!;
       await this.despachador.enviarCreado(r, ciudadano, escenario);
       await this.almacen.guardarReporte(r);
+      this.bus.reporteCambio(r);
+      return r;
+    });
+  }
+
+  /**
+   * El operador asigna o corrige la colonia del folio (catálogo SEPOMEX o alta manual con CP y ubicación). Queda en
+   * el historial de correcciones del folio y en la bitácora. Se permite también con el folio cerrado (sirve a la estadística).
+   */
+  async asignarColonia(folio: string, actor: string, entrada: ColoniaEntrada, motivo?: string) {
+    return this.almacen.conReporte(folio, async () => {
+      const r = await this.almacen.reporte(folio);
+      if (!r) throw new NotFoundException({ codigo: 'folio_no_encontrado' });
+      const en = new Date().toISOString();
+      const nueva = coloniaOFallar(resolverColonia(entrada, r.municipioClave, { actor, en }));
+      const antes = r.colonia ?? null;
+      if (antes && antes.id === nueva.id && antes.cp === nueva.cp && antes.nombre === nueva.nombre) throw new ConflictException({ codigo: 'misma_colonia', mensaje: 'El folio ya tiene esa colonia.' });
+      r.colonia = nueva;
+      r.coloniaCorrecciones = [...(r.coloniaCorrecciones ?? []), { en, actor, de: antes ? textoColonia(antes) : null, a: textoColonia(nueva), motivo: motivo?.trim() || null }];
+      r.actualizadoEn = en;
+      await this.almacen.guardarReporte(r);
+      await this.almacen.auditar({ actor, accion: antes ? 'colonia_corregida' : 'colonia_asignada', folio, detalle: { de: antes?.id ?? antes?.nombre ?? null, a: nueva.id ?? nueva.nombre, fuente: nueva.fuente, cp: nueva.cp, ...(nueva.fuente === 'manual' && { lat: nueva.lat, lng: nueva.lng }) } });
       this.bus.reporteCambio(r);
       return r;
     });

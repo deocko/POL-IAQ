@@ -6,9 +6,13 @@
  * - prioridad: la operativa de POL-IAQ (alta / media / baja) y la oficial del CNIE;
  * - demora: el tiempo desde la creación del folio contra su meta de llegada (semáforo).
  */
+import { coincideTodo, contiene, esNumero, soloDigitos } from './busqueda';
 import type { Prioridad } from './catalogo';
 import type { PrioridadCnie } from './cnie';
+import { claveColonia, SIN_COLONIA, textoColonia, type ColoniaFolio } from './colonias';
 import type { EstadoIncidente } from './estados';
+import { municipioPorClave } from './municipios';
+import { normalizar } from './protocolos';
 
 // ---------------------------------------------------------------------------
 // Semáforo por demora
@@ -124,11 +128,23 @@ export interface FilaBandeja {
   folio: string;
   estado: EstadoIncidente;
   prioridad: Prioridad;
-  cnie: { prioridad: PrioridadCnie | null } | null;
+  cnie: { prioridad: PrioridadCnie | null; tipo?: { codigo: string; nombre: string }; subtipo?: { codigo: string; nombre: string }; incidente?: { codigo: string; nombre: string } | null } | null;
   municipioClave: string | null;
   creadoEn: string;
   asistenciaDirecta?: boolean;
   tiempos: Parameters<typeof semaforoDe>[0]['tiempos'];
+  // Campos para la búsqueda y los filtros de texto (opcionales: la lógica de los filtros rápidos no los usa).
+  folioCad?: string | null;
+  /** Nombre corto del incidente ("nombre del reporte"). */
+  incidente?: string;
+  descripcion?: string | null;
+  ubicacion?: { referencia?: string };
+  /** Lo que el operador ya ve del reportante (el servidor oculta al anónimo y enmascara al seudónimo). */
+  reportante?: { nombre: string; telefono: string; identidad?: string } | null;
+  colonia?: Pick<ColoniaFolio, 'id' | 'nombre' | 'cp' | 'fuente' | 'validada'> | null;
+  unidad?: { etiqueta: string; corporacion?: string } | null;
+  origen?: OrigenFolio | null;
+  ruta?: { canal?: string } | null;
 }
 
 export interface FiltroBandeja {
@@ -141,8 +157,28 @@ export interface FiltroBandeja {
   municipio?: string | null;
   /** Tiempo de espera: color del semáforo. */
   demora?: ColorSemaforo | null;
+  /** Colonia: id del catálogo, `manual:<cp>:<nombre>` o `sin` (sin colonia). */
+  colonia?: string | null;
+  /** Tipo CNIE (1 dígito) o `sin` (sin código CNIE). */
+  cnieTipo?: string | null;
+  /** Por dónde entró: app, llamada 911 o anónimo (089). */
+  canal?: CanalOrigen | null;
+  /** Búsqueda general: cada palabra debe aparecer en algún campo. */
+  texto?: string | null;
+  /** Teléfono del reportante (contiene; con espacios, guiones o +52). */
+  telefono?: string | null;
+  /** Nombre del reportante (contiene). */
+  nombre?: string | null;
+  /** Código postal de la colonia (contiene). */
+  cp?: string | null;
 }
-export type CampoFiltro = keyof FiltroBandeja;
+/** Filtros de lista (valor exacto) que llevan contador por opción. */
+export type CampoFiltro = 'estado' | 'prioridad' | 'prioridadCnie' | 'municipio' | 'demora' | 'colonia' | 'cnieTipo' | 'canal';
+/** Filtros de texto (contiene): no llevan contador por opción. */
+export type CampoTexto = 'texto' | 'telefono' | 'nombre' | 'cp';
+export const CAMPOS_TEXTO: readonly CampoTexto[] = ['texto', 'telefono', 'nombre', 'cp'];
+
+const nombreVisible = (f: FilaBandeja) => (f.reportante?.identidad === 'anonimo' ? '' : f.reportante?.nombre ?? '');
 
 const valor = (f: FilaBandeja, campo: CampoFiltro, ahora: number, u: UmbralesSemaforo): string | null => {
   switch (campo) {
@@ -151,14 +187,94 @@ const valor = (f: FilaBandeja, campo: CampoFiltro, ahora: number, u: UmbralesSem
     case 'prioridadCnie': return f.cnie?.prioridad ?? null;
     case 'municipio': return f.municipioClave ?? '000';
     case 'demora': return semaforoDe(f, ahora, u).color;
+    case 'colonia': return claveColonia(f.colonia);
+    case 'cnieTipo': return f.cnie?.tipo?.codigo ?? SIN_CNIE;
+    case 'canal': return canalOrigen(f);
   }
 };
 
-const CAMPOS: CampoFiltro[] = ['estado', 'prioridad', 'prioridadCnie', 'municipio', 'demora'];
+/** Valor del filtro de tipo CNIE para los folios sin código. */
+export const SIN_CNIE = 'sin';
+
+/** Todo lo que se busca con la barra: lo que el operador ya ve en la fila y en el detalle. */
+export function camposBuscables(f: FilaBandeja): string[] {
+  const c = f.cnie;
+  return [
+    f.folio, f.folioCad ?? '', f.incidente ?? '', nombreVisible(f), f.reportante?.telefono ?? '',
+    c?.incidente ? `${c.incidente.codigo} ${c.incidente.nombre}` : '', c?.subtipo ? `${c.subtipo.codigo} ${c.subtipo.nombre}` : '', c?.tipo ? `${c.tipo.codigo} ${c.tipo.nombre}` : '',
+    f.colonia ? `${f.colonia.nombre} ${f.colonia.cp}` : '', f.municipioClave ? municipioPorClave(f.municipioClave)?.nombre ?? '' : '',
+    f.ubicacion?.referencia ?? '', f.descripcion ?? '', f.unidad?.etiqueta ?? '',
+  ].filter(Boolean);
+}
+
+function pasaTexto(f: FilaBandeja, filtro: FiltroBandeja): boolean {
+  if (filtro.texto?.trim() && !coincideTodo(camposBuscables(f), filtro.texto)) return false;
+  if (filtro.telefono?.trim() && !contiene(f.reportante?.telefono ?? '', filtro.telefono)) return false;
+  if (filtro.nombre?.trim() && !contiene(nombreVisible(f), filtro.nombre)) return false;
+  if (filtro.cp?.trim() && !(f.colonia?.cp ?? '').startsWith(soloDigitos(filtro.cp))) return false;
+  return true;
+}
+
+const CAMPOS: CampoFiltro[] = ['estado', 'prioridad', 'prioridadCnie', 'municipio', 'demora', 'colonia', 'cnieTipo', 'canal'];
 
 /** ¿La fila pasa todos los filtros, salvo (opcional) uno? */
 function pasa(f: FilaBandeja, filtro: FiltroBandeja, ahora: number, u: UmbralesSemaforo, excepto?: CampoFiltro) {
-  return CAMPOS.every((c) => c === excepto || !filtro[c] || valor(f, c, ahora, u) === filtro[c]);
+  return CAMPOS.every((c) => c === excepto || !filtro[c] || valor(f, c, ahora, u) === filtro[c]) && pasaTexto(f, filtro);
+}
+
+/** Cuántos filtros hay aplicados (el estado cuenta solo si no es la vista por defecto). */
+export function filtrosAplicados(filtro: FiltroBandeja & { estado?: string | null }, estadoPorDefecto: string | null = null): number {
+  let n = 0;
+  for (const c of CAMPOS) if (filtro[c] && !(c === 'estado' && filtro.estado === estadoPorDefecto)) n++;
+  for (const c of CAMPOS_TEXTO) if (filtro[c]?.trim()) n++;
+  return n;
+}
+
+/** Colonias presentes en las filas, con su texto («Centro · CP 76000»), para el selector y los chips. */
+export function coloniasDeFilas(filas: FilaBandeja[]): { clave: string; texto: string; manual: boolean }[] {
+  const m = new Map<string, { clave: string; texto: string; manual: boolean }>();
+  for (const f of filas) {
+    const clave = claveColonia(f.colonia);
+    if (!m.has(clave)) m.set(clave, { clave, texto: textoColonia(f.colonia), manual: f.colonia?.fuente === 'manual' });
+  }
+  return [...m.values()].sort((a, b) => Number(a.clave === SIN_COLONIA) - Number(b.clave === SIN_COLONIA) || a.texto.localeCompare(b.texto, 'es'));
+}
+
+export type Sugerencia =
+  | { campo: 'texto' | 'telefono' | 'nombre' | 'cp'; valor: string; etiqueta: string; n: number }
+  | { campo: 'colonia'; valor: string; etiqueta: string; n: number };
+
+/**
+ * Sugerencias de la barra mientras el operador escribe: buscar en todo, o convertir lo escrito en un filtro
+ * (teléfono, nombre, CP o una colonia de las que hay en la bandeja). `n` es cuántos folios deja ver cada una.
+ */
+export function sugerenciasBusqueda(texto: string, filas: FilaBandeja[], limiteColonias = 4): Sugerencia[] {
+  const t = texto.trim();
+  if (!t) return [];
+  const cuenta = (filtro: FiltroBandeja) => filas.filter((f) => pasaTexto(f, filtro)).length;
+  const r: Sugerencia[] = [{ campo: 'texto', valor: t, etiqueta: `Buscar «${t}» en todo`, n: cuenta({ texto: t }) }];
+  if (esNumero(t)) {
+    const d = soloDigitos(t);
+    if (d.length >= 3) r.push({ campo: 'telefono', valor: d, etiqueta: `Teléfono con ${d}`, n: cuenta({ telefono: d }) });
+    if (/^76\d{0,3}$/.test(d) && d.length >= 3) r.push({ campo: 'cp', valor: d, etiqueta: `Código postal ${d.length === 5 ? d : `${d}…`}`, n: cuenta({ cp: d }) });
+  } else {
+    const nN = cuenta({ nombre: t });
+    if (nN) r.push({ campo: 'nombre', valor: t, etiqueta: `Nombre de quien reporta: «${t}»`, n: nN });
+  }
+  const q = normalizar(t);
+  const porClave = new Map<string, { texto: string; n: number }>();
+  for (const f of filas) {
+    if (!f.colonia) continue;
+    const ok = esNumero(t) ? f.colonia.cp.startsWith(soloDigitos(t)) : normalizar(f.colonia.nombre).includes(q);
+    if (!ok) continue;
+    const k = claveColonia(f.colonia);
+    const x = porClave.get(k) ?? { texto: textoColonia(f.colonia), n: 0 };
+    x.n++;
+    porClave.set(k, x);
+  }
+  [...porClave.entries()].sort((a, b) => b[1].n - a[1].n || a[1].texto.localeCompare(b[1].texto, 'es')).slice(0, limiteColonias)
+    .forEach(([k, x]) => r.push({ campo: 'colonia', valor: k, etiqueta: `Colonia ${x.texto}`, n: x.n }));
+  return r;
 }
 
 export function filtrarBandeja<T extends FilaBandeja>(filas: T[], filtro: FiltroBandeja, ahora: number, u: UmbralesSemaforo = UMBRALES_SEMAFORO_PREDETERMINADOS): T[] {

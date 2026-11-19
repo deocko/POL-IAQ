@@ -32,6 +32,9 @@ export function vistaOperador(r: Reporte, ciudadano: Ciudadano | undefined, prot
     folioCad: r.folioCad ?? null,
     cadId: r.cadId,
     municipioClave: r.municipioClave,
+    /** Colonia del folio (SEPOMEX o manual por validar); null = sin colonia. */
+    colonia: r.colonia ?? null,
+    coloniaCorrecciones: r.coloniaCorrecciones ?? [],
     incidenteId: r.incidenteId,
     incidente: incidente?.nombreCorto ?? r.incidenteId,
     categoria: incidente?.categoria ?? null,

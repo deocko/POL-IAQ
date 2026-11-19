@@ -25,3 +25,5 @@ export * from './sesnsp';
 export * from './xlsx';
 export * from './bandeja';
 export * from './folios';
+export * from './busqueda';
+export * from './colonias';

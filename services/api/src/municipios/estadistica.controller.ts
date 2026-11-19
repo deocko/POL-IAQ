@@ -48,7 +48,7 @@ export class EstadisticaController {
     const salida = await Promise.all(filas.map(async (x) => {
       const r = porFolio.get(x.folio)!;
       const c = await this.almacen.ciudadano(r.ciudadanoId);
-      return filaFolio({ ...x, cnie: r.cnie, unidad: r.unidad, origen: r.origen ?? 'app', ruta: r.ruta, tipoTelefono: r.tipoTelefono ?? null, reportante: c ? reportanteVisible(r, c) : null }, ahora);
+      return filaFolio({ ...x, cnie: r.cnie, colonia: r.colonia ?? null, unidad: r.unidad, origen: r.origen ?? 'app', ruta: r.ruta, tipoTelefono: r.tipoTelefono ?? null, reportante: c ? reportanteVisible(r, c) : null }, ahora);
     }));
     await this.almacen.auditar({ actor: `operador:${req.operador.usuario}`, accion: 'folios_consultados', detalle: { cadId: q.cadId ?? null, municipio: q.municipio ?? null, periodo: q.periodo ?? null, fecha: q.fecha ?? null, filas: salida.length } });
     return { filas: salida };
