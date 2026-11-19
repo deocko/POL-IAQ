@@ -1,15 +1,20 @@
 'use client';
 
 /**
- * Bandeja del operador: filtros rápidos con contador (estado, prioridad operativa y CNIE, municipio y
- * tiempo de espera), orden por prioridad y demora, semáforo por demora y punto de prioridad en cada
- * fila. También la recatalogación a «Mal Uso del servicio» y los umbrales del semáforo.
+ * Bandeja del operador: una barra de búsqueda (nombre, teléfono, folio, colonia, incidente…), filtros rápidos con
+ * contador (estado, prioridad, colonia y teléfono), «Más filtros» con el resto de variables (prioridad CNIE, espera,
+ * tipo CNIE, canal, municipio, nombre, código postal), los filtros aplicados como chips removibles y «Limpiar».
+ * Orden por prioridad y demora, semáforo por demora y punto de prioridad en cada fila. También la recatalogación a
+ * «Mal Uso del servicio» y los umbrales del semáforo.
+ *
+ * Todo se filtra en el navegador sobre los folios que el API ya le entrega al operador (solo los de sus CAD): ningún
+ * filtro trae folios de otros municipios.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
-  ETIQUETA_SEMAFORO, GRUPOS_ESTADO, INCIDENTES_MAL_USO, MUNICIPIOS_QRO, ORDENES_BANDEJA, UMBRALES_SEMAFORO_PREDETERMINADOS,
-  contadoresBandeja, duracionTexto, esMalUso, filtrarBandeja, grupoEstado, nombreLegible, ordenarBandeja, semaforoDe, tipoCnie, validarUmbrales,
-  type ColorSemaforo, type FiltroBandeja, type OrdenBandeja, type Semaforo, type UmbralesSemaforo,
+  CANALES_ORIGEN, ETIQUETA_CANAL, ETIQUETA_SEMAFORO, GRUPOS_ESTADO, INCIDENTES_MAL_USO, MUNICIPIOS_QRO, ORDENES_BANDEJA, SIN_CNIE, SIN_COLONIA, TIPOS_CNIE, UMBRALES_SEMAFORO_PREDETERMINADOS,
+  coloniasDeFilas, contadoresBandeja, duracionTexto, esMalUso, filtrarBandeja, filtrosAplicados, grupoEstado, nombreLegible, ordenarBandeja, semaforoDe, sugerenciasBusqueda, tipoCnie, validarUmbrales,
+  type CanalOrigen, type ColorSemaforo, type FiltroBandeja, type OrdenBandeja, type Semaforo, type Sugerencia, type UmbralesSemaforo,
 } from '@pol-iaq/shared/movil';
 import { DEMO, hora, type Accion, type Reporte } from './consola';
 
@@ -19,6 +24,9 @@ export interface FiltroVista extends Omit<FiltroBandeja, 'estado'> { estado: Est
 export const FILTRO_INICIAL: FiltroVista = { estado: 'activos' };
 
 const aFiltro = (f: FiltroVista): FiltroBandeja => ({ ...f, estado: f.estado === 'activos' || f.estado === 'todos' ? null : f.estado });
+
+/** Cuántos filtros hay aplicados («Activos» es la vista por defecto y no cuenta). */
+export const cuantosFiltros = (f: FiltroVista) => filtrosAplicados(f, 'activos');
 
 /** Aplica los filtros y el orden; devuelve también los contadores de cada opción. */
 export function usarBandeja(reportes: Reporte[], filtro: FiltroVista, orden: OrdenBandeja, ahora: number, umbrales: UmbralesSemaforo) {
@@ -33,11 +41,14 @@ export function usarBandeja(reportes: Reporte[], filtro: FiltroVista, orden: Ord
     const estado: Record<EstadoVista, number> = {
       activos: (ce.nuevos ?? 0) + (ce.pendientes ?? 0), nuevos: ce.nuevos ?? 0, pendientes: ce.pendientes ?? 0, atendidos: ce.atendidos ?? 0, todos: ce['*'] ?? 0,
     };
-    return { lista, contadores: { ...c, estado } };
+    // Las sugerencias de la barra cuentan sobre lo que dejan ver los demás filtros (sin la búsqueda misma).
+    const paraSugerir = filtrarBandeja(conEstado, { ...base, texto: null }, ahora, umbrales);
+    return { lista, contadores: { ...c, estado }, colonias: coloniasDeFilas(reportes), paraSugerir };
   }, [reportes, filtro, orden, ahora, umbrales]);
 }
 
-type Contadores = ReturnType<typeof usarBandeja>['contadores'];
+type Datos = ReturnType<typeof usarBandeja>;
+type Contadores = Datos['contadores'];
 
 function Boton<T extends string>({ valor, actual, n, alElegir, children, clase = '' }: { valor: T | null; actual: T | null | undefined; n: number; alElegir: (v: T | null) => void; children: React.ReactNode; clase?: string }) {
   const sel = (actual ?? null) === valor;
@@ -48,75 +59,202 @@ function Boton<T extends string>({ valor, actual, n, alElegir, children, clase =
   );
 }
 
-export function FiltrosBandeja({ filtro, alCambiar, orden, alOrden, contadores, supervision, umbrales, sinQuitar = false }: {
-  filtro: FiltroVista; alCambiar: (f: FiltroVista) => void; orden: OrdenBandeja; alOrden: (o: OrdenBandeja) => void; contadores: Contadores; supervision: boolean; umbrales: UmbralesSemaforo;
+const NOMBRE_SUGERENCIA: Record<Sugerencia['campo'], string> = { texto: 'Buscar', telefono: 'Teléfono', nombre: 'Nombre', cp: 'Código postal', colonia: 'Colonia' };
+
+/**
+ * Barra única de búsqueda. Lo escrito filtra al instante en todos los campos; las sugerencias lo convierten en un
+ * filtro preciso (teléfono, nombre, código postal o una colonia de la bandeja), que queda como chip.
+ * Teclado: «/» enfoca la barra, ↑/↓ recorren las sugerencias, Enter aplica, Esc cierra.
+ */
+export function BarraBusqueda({ filtro, alCambiar, filas }: { filtro: FiltroVista; alCambiar: (f: FiltroVista) => void; filas: Reporte[] }) {
+  const id = useId();
+  const entrada = useRef<HTMLInputElement>(null);
+  const [abierta, setAbierta] = useState(false);
+  const [activa, setActiva] = useState(-1);
+  const texto = filtro.texto ?? '';
+  const sugerencias = useMemo(() => (abierta ? sugerenciasBusqueda(texto, filas) : []), [abierta, texto, filas]);
+  useEffect(() => {
+    const tecla = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || (t && (t.closest('input, textarea, select, [contenteditable="true"]')))) return;
+      e.preventDefault();
+      entrada.current?.focus();
+    };
+    window.addEventListener('keydown', tecla);
+    return () => window.removeEventListener('keydown', tecla);
+  }, []);
+  const elegir = (s: Sugerencia) => {
+    setAbierta(false); setActiva(-1);
+    if (s.campo === 'texto') return;
+    alCambiar({ ...filtro, texto: null, [s.campo]: s.valor });
+    entrada.current?.focus();
+  };
+  const listaId = `${id}-sugerencias`;
+  return (
+    <div className="c-busqueda" role="search">
+      <label htmlFor={`${id}-q`} className="solo-lector">Buscar en la bandeja</label>
+      <span className="c-busqueda-icono" aria-hidden="true">⌕</span>
+      <input
+        id={`${id}-q`} ref={entrada} type="search" value={texto} autoComplete="off" spellCheck={false}
+        placeholder="Nombre, teléfono, folio, colonia…"
+        role="combobox" aria-expanded={abierta && sugerencias.length > 0} aria-controls={listaId} aria-autocomplete="list"
+        aria-activedescendant={activa >= 0 ? `${listaId}-${activa}` : undefined}
+        onChange={(e) => { alCambiar({ ...filtro, texto: e.target.value || null }); setAbierta(true); setActiva(-1); }}
+        onFocus={() => setAbierta(true)}
+        onBlur={() => setTimeout(() => setAbierta(false), 120)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') { e.preventDefault(); setAbierta(true); setActiva((a) => Math.min(a + 1, sugerencias.length - 1)); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setActiva((a) => Math.max(a - 1, -1)); }
+          else if (e.key === 'Enter') { e.preventDefault(); if (activa >= 0 && sugerencias[activa]) elegir(sugerencias[activa]); else setAbierta(false); }
+          else if (e.key === 'Escape') { if (abierta) { e.preventDefault(); setAbierta(false); } }
+        }}
+        data-testid="buscar-bandeja"
+      />
+      {texto && <button type="button" className="c-busqueda-borrar" aria-label="Borrar la búsqueda" onClick={() => { alCambiar({ ...filtro, texto: null }); entrada.current?.focus(); }}>×</button>}
+      {abierta && sugerencias.length > 0 && (
+        <ul id={listaId} className="c-sugerencias" role="listbox" aria-label="Sugerencias" data-testid="sugerencias">
+          {sugerencias.map((s, i) => (
+            <li key={`${s.campo}-${s.valor}`} id={`${listaId}-${i}`} role="option" aria-selected={i === activa} className={i === activa ? 'activa' : ''}
+              aria-label={`${s.etiqueta}: ${s.n} ${s.n === 1 ? 'folio' : 'folios'}`}
+              onMouseDown={(e) => { e.preventDefault(); elegir(s); }} data-sugerencia={s.campo}>
+              <span className="c-sugerencia-tipo">{NOMBRE_SUGERENCIA[s.campo]}</span>
+              <span className="c-sugerencia-texto">{s.campo === 'texto' ? `«${s.valor}» en todos los campos` : s.etiqueta.replace(/^(Teléfono con|Nombre de quien reporta:|Código postal|Colonia) /, '')}</span>
+              <span className="c-filtro-n">{s.n}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Campo de texto que filtra al escribir (teléfono, nombre, código postal). */
+function CampoTexto({ etiqueta, valor, alCambiar, placeholder, modo, testid }: { etiqueta: string; valor: string | null | undefined; alCambiar: (v: string | null) => void; placeholder: string; modo?: 'tel' | 'numeric' | 'text'; testid: string }) {
+  return (
+    <label className="c-campo-linea c-campo-texto">{etiqueta}
+      <input type="search" value={valor ?? ''} onChange={(e) => alCambiar(e.target.value || null)} placeholder={placeholder} inputMode={modo} autoComplete="off" data-testid={testid} />
+    </label>
+  );
+}
+
+export function FiltrosBandeja({ filtro, alCambiar, orden, alOrden, contadores, colonias, variosMunicipios, umbrales, sinQuitar = false }: {
+  filtro: FiltroVista; alCambiar: (f: FiltroVista) => void; orden: OrdenBandeja; alOrden: (o: OrdenBandeja) => void; contadores: Contadores; colonias: Datos['colonias'];
+  /** Supervisión y CQ CIAS: ven varios municipios y pueden filtrar por municipio. */
+  variosMunicipios: boolean;
+  umbrales: UmbralesSemaforo;
   /** En el panel de móvil «Limpiar» ya quita los filtros. */
   sinQuitar?: boolean;
 }) {
   const set = <K extends keyof FiltroVista>(k: K) => (v: FiltroVista[K] | null) => alCambiar({ ...filtro, [k]: v ?? (k === 'estado' ? 'activos' : null) });
   const pct = (x: number) => `${Math.round(x * 100)} %`;
-  const hayFiltros = filtro.estado !== 'activos' || filtro.prioridad || filtro.prioridadCnie || filtro.municipio || filtro.demora;
+  const enMas = Number(!!filtro.prioridadCnie) + Number(!!filtro.demora) + Number(!!filtro.cnieTipo) + Number(!!filtro.canal) + Number(!!filtro.municipio) + Number(!!filtro.nombre?.trim()) + Number(!!filtro.cp?.trim());
+  const [mas, setMas] = useState(enMas > 0);
+  const idMas = useId();
+  const hayFiltros = cuantosFiltros(filtro) > 0;
+  const nColonia = (k: string) => contadores.colonia[k] ?? 0;
   return (
-    <div className="c-filtros-bandeja" role="group" aria-label="Filtros rápidos de la bandeja" data-testid="filtros-bandeja">
-      <div className="c-grupo-filtro" role="group" aria-label="Estado">
-        <span className="c-grupo-titulo">Estado</span>
-        {(['activos', ...GRUPOS_ESTADO.map((g) => g.id), 'todos'] as EstadoVista[]).map((e) => (
-          <Boton key={e} valor={e} actual={filtro.estado} n={contadores.estado[e]} alElegir={(v) => set('estado')(v ?? 'activos')}>
-            {e === 'activos' ? 'Activos' : e === 'todos' ? 'Todos' : GRUPOS_ESTADO.find((g) => g.id === e)!.nombre}
-          </Boton>
-        ))}
-      </div>
-      <div className="c-grupo-filtro" role="group" aria-label="Prioridad operativa">
-        <span className="c-grupo-titulo" title="La que usa POL-IAQ para despachar, según las respuestas">Prioridad</span>
-        {(['alta', 'media', 'baja'] as const).map((p) => (
-          <Boton key={p} valor={p} actual={filtro.prioridad} n={contadores.prioridad[p] ?? 0} alElegir={set('prioridad')}><span className={`c-prio c-prio-${p}`} aria-hidden="true" />{p}</Boton>
-        ))}
-      </div>
-      <div className="c-grupo-filtro" role="group" aria-label="Prioridad CNIE">
-        <span className="c-grupo-titulo" title="Prioridad oficial del CNIE V 3.0">CNIE</span>
-        {(['ALTA', 'MEDIA', 'BAJA'] as const).map((p) => (
-          <Boton key={p} valor={p} actual={filtro.prioridadCnie} n={contadores.prioridadCnie[p] ?? 0} alElegir={set('prioridadCnie')}>{p.toLowerCase()}</Boton>
-        ))}
-      </div>
-      <div className="c-grupo-filtro" role="group" aria-label="Tiempo de espera">
-        <span className="c-grupo-titulo" title={`Verde: menos del ${pct(umbrales.amarillo)} de la meta de llegada. Amarillo: del ${pct(umbrales.amarillo)} al ${pct(umbrales.rojo)}. Rojo: más del ${pct(umbrales.rojo)}.`}>Espera</span>
-        {(['verde', 'amarillo', 'rojo'] as ColorSemaforo[]).map((c) => (
-          <Boton key={c} valor={c} actual={filtro.demora} n={contadores.demora[c] ?? 0} alElegir={set('demora')}><span className={`c-sem c-sem-${c}`} aria-hidden="true" />{ETIQUETA_SEMAFORO[c]}</Boton>
-        ))}
-      </div>
-      <div className="c-grupo-filtro c-grupo-select">
-        {supervision && (
-          <label className="c-campo-linea">Municipio
-            <select value={filtro.municipio ?? ''} onChange={(e) => set('municipio')(e.target.value || null)} data-testid="filtro-municipio">
-              <option value="">{`Todos (${contadores.municipio['*'] ?? 0})`}</option>
-              {MUNICIPIOS_QRO.map((m) => <option key={m.clave} value={m.clave}>{`${m.clave} · ${m.nombre} (${contadores.municipio[m.clave] ?? 0})`}</option>)}
-              <option value="000">{`Fuera de Querétaro (${contadores.municipio['000'] ?? 0})`}</option>
+    <div className="c-filtros-bandeja" role="group" aria-label="Filtros de la bandeja" data-testid="filtros-bandeja">
+      <div className="c-filtros-rapidos">
+        <div className="c-grupo-filtro" role="group" aria-label="Estado">
+          <span className="c-grupo-titulo">Estado</span>
+          {(['activos', ...GRUPOS_ESTADO.map((g) => g.id), 'todos'] as EstadoVista[]).map((e) => (
+            <Boton key={e} valor={e} actual={filtro.estado} n={contadores.estado[e]} alElegir={(v) => set('estado')(v ?? 'activos')}>
+              {e === 'activos' ? 'Activos' : e === 'todos' ? 'Todos' : GRUPOS_ESTADO.find((g) => g.id === e)!.nombre}
+            </Boton>
+          ))}
+        </div>
+        <div className="c-grupo-filtro" role="group" aria-label="Prioridad operativa">
+          <span className="c-grupo-titulo" title="La que usa POL-IAQ para despachar, según las respuestas">Prioridad</span>
+          {(['alta', 'media', 'baja'] as const).map((p) => (
+            <Boton key={p} valor={p} actual={filtro.prioridad} n={contadores.prioridad[p] ?? 0} alElegir={set('prioridad')}><span className={`c-prio c-prio-${p}`} aria-hidden="true" />{p}</Boton>
+          ))}
+        </div>
+        <div className="c-grupo-filtro c-grupo-select">
+          <label className="c-campo-linea">Colonia
+            <select value={filtro.colonia ?? ''} onChange={(e) => set('colonia')(e.target.value || null)} data-testid="filtro-colonia">
+              <option value="">{`Todas (${contadores.colonia['*'] ?? 0})`}</option>
+              {colonias.map((c) => <option key={c.clave} value={c.clave}>{`${c.texto} (${nColonia(c.clave)})`}</option>)}
             </select>
           </label>
-        )}
-        <label className="c-campo-linea">Ordenar
-          <select value={orden} onChange={(e) => alOrden(e.target.value as OrdenBandeja)} data-testid="orden-bandeja">
-            {ORDENES_BANDEJA.map((o) => <option key={o.id} value={o.id}>{o.nombre}</option>)}
-          </select>
-        </label>
-        {hayFiltros && !sinQuitar && <button type="button" className="c-enlace" onClick={() => alCambiar(FILTRO_INICIAL)}>Quitar filtros</button>}
+          <CampoTexto etiqueta="Teléfono" valor={filtro.telefono} alCambiar={set('telefono')} placeholder="Dígitos" modo="tel" testid="filtro-telefono" />
+        </div>
+        <div className="c-grupo-filtro c-grupo-acciones">
+          <button type="button" className={`c-filtro c-mas-filtros ${enMas ? 'sel' : ''}`} aria-expanded={mas} aria-controls={idMas} onClick={() => setMas((m) => !m)} data-testid="mas-filtros">
+            {mas ? 'Menos filtros' : 'Más filtros'}{enMas > 0 && <span className="c-filtro-n">{enMas}</span>}
+          </button>
+          <label className="c-campo-linea">Ordenar
+            <select value={orden} onChange={(e) => alOrden(e.target.value as OrdenBandeja)} data-testid="orden-bandeja">
+              {ORDENES_BANDEJA.map((o) => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+            </select>
+          </label>
+          {hayFiltros && !sinQuitar && <button type="button" className="c-enlace c-limpiar" onClick={() => alCambiar(FILTRO_INICIAL)} data-testid="limpiar-bandeja">Limpiar</button>}
+        </div>
+      </div>
+      <div id={idMas} className="c-filtros-mas" hidden={!mas} data-testid="filtros-mas">
+        <div className="c-grupo-filtro" role="group" aria-label="Prioridad CNIE">
+          <span className="c-grupo-titulo" title="Prioridad oficial del CNIE V 3.0">CNIE</span>
+          {(['ALTA', 'MEDIA', 'BAJA'] as const).map((p) => (
+            <Boton key={p} valor={p} actual={filtro.prioridadCnie} n={contadores.prioridadCnie[p] ?? 0} alElegir={set('prioridadCnie')}>{p.toLowerCase()}</Boton>
+          ))}
+        </div>
+        <div className="c-grupo-filtro" role="group" aria-label="Tiempo de espera">
+          <span className="c-grupo-titulo" title={`Verde: menos del ${pct(umbrales.amarillo)} de la meta de llegada. Amarillo: del ${pct(umbrales.amarillo)} al ${pct(umbrales.rojo)}. Rojo: más del ${pct(umbrales.rojo)}.`}>Espera</span>
+          {(['verde', 'amarillo', 'rojo'] as ColorSemaforo[]).map((c) => (
+            <Boton key={c} valor={c} actual={filtro.demora} n={contadores.demora[c] ?? 0} alElegir={set('demora')}><span className={`c-sem c-sem-${c}`} aria-hidden="true" />{ETIQUETA_SEMAFORO[c]}</Boton>
+          ))}
+        </div>
+        <div className="c-grupo-filtro" role="group" aria-label="Por dónde llegó">
+          <span className="c-grupo-titulo">Llegó por</span>
+          {CANALES_ORIGEN.map((c) => (
+            <Boton key={c} valor={c} actual={filtro.canal} n={contadores.canal[c] ?? 0} alElegir={set('canal') as (v: CanalOrigen | null) => void}>{ETIQUETA_CANAL[c]}</Boton>
+          ))}
+        </div>
+        <div className="c-grupo-filtro c-grupo-select">
+          <label className="c-campo-linea">Tipo de incidente
+            <select value={filtro.cnieTipo ?? ''} onChange={(e) => set('cnieTipo')(e.target.value || null)} data-testid="filtro-tipo-cnie">
+              <option value="">{`Todos (${contadores.cnieTipo['*'] ?? 0})`}</option>
+              {TIPOS_CNIE.map((t) => <option key={t.codigo} value={t.codigo}>{`${t.codigo} · ${nombreLegible(t.nombre)} (${contadores.cnieTipo[t.codigo] ?? 0})`}</option>)}
+              <option value={SIN_CNIE}>{`Sin código CNIE (${contadores.cnieTipo[SIN_CNIE] ?? 0})`}</option>
+            </select>
+          </label>
+          {variosMunicipios && (
+            <label className="c-campo-linea">Municipio
+              <select value={filtro.municipio ?? ''} onChange={(e) => set('municipio')(e.target.value || null)} data-testid="filtro-municipio">
+                <option value="">{`Todos (${contadores.municipio['*'] ?? 0})`}</option>
+                {MUNICIPIOS_QRO.map((m) => <option key={m.clave} value={m.clave}>{`${m.clave} · ${m.nombre} (${contadores.municipio[m.clave] ?? 0})`}</option>)}
+                <option value="000">{`Fuera de Querétaro (${contadores.municipio['000'] ?? 0})`}</option>
+              </select>
+            </label>
+          )}
+          <CampoTexto etiqueta="Nombre de quien reporta" valor={filtro.nombre} alCambiar={set('nombre')} placeholder="Nombre" testid="filtro-nombre" />
+          <CampoTexto etiqueta="Código postal" valor={filtro.cp} alCambiar={(v) => set('cp')(v ? v.replace(/\D/g, '').slice(0, 5) || null : null)} placeholder="76…" modo="numeric" testid="filtro-cp" />
+        </div>
       </div>
     </div>
   );
 }
 
-/** Punto de prioridad: color + etiqueta (alta / media / baja). */
-/** Móvil: filtros activos como chips removibles arriba de la lista (cada «×» quita solo ese filtro). */
-export function ChipsFiltrosActivos({ filtro, alCambiar }: { filtro: FiltroVista; alCambiar: (f: FiltroVista) => void }) {
+/**
+ * Filtros aplicados como chips removibles (cada «×» quita solo ese filtro) y «Limpiar todo». En móvil van en la
+ * barra fija, arriba de la lista; en tablet y escritorio, debajo de los filtros.
+ */
+export function ChipsFiltrosActivos({ filtro, alCambiar, colonias }: { filtro: FiltroVista; alCambiar: (f: FiltroVista) => void; colonias: Datos['colonias'] }) {
   const chips: { clave: keyof FiltroVista; texto: string }[] = [];
+  if (filtro.texto?.trim()) chips.push({ clave: 'texto', texto: `Búsqueda: «${filtro.texto.trim()}»` });
   if (filtro.estado !== 'activos') chips.push({ clave: 'estado', texto: `Estado: ${filtro.estado === 'todos' ? 'Todos' : GRUPOS_ESTADO.find((g) => g.id === filtro.estado)?.nombre ?? filtro.estado}` });
   if (filtro.prioridad) chips.push({ clave: 'prioridad', texto: `Prioridad: ${filtro.prioridad}` });
+  if (filtro.colonia) chips.push({ clave: 'colonia', texto: filtro.colonia === SIN_COLONIA ? 'Sin colonia' : `Colonia: ${colonias.find((c) => c.clave === filtro.colonia)?.texto ?? filtro.colonia}` });
+  if (filtro.telefono?.trim()) chips.push({ clave: 'telefono', texto: `Teléfono: ${filtro.telefono.trim()}` });
+  if (filtro.nombre?.trim()) chips.push({ clave: 'nombre', texto: `Nombre: ${filtro.nombre.trim()}` });
+  if (filtro.cp?.trim()) chips.push({ clave: 'cp', texto: `CP: ${filtro.cp.trim()}` });
   if (filtro.prioridadCnie) chips.push({ clave: 'prioridadCnie', texto: `CNIE: ${filtro.prioridadCnie.toLowerCase()}` });
   if (filtro.demora) chips.push({ clave: 'demora', texto: `Espera: ${ETIQUETA_SEMAFORO[filtro.demora]}` });
+  if (filtro.cnieTipo) chips.push({ clave: 'cnieTipo', texto: filtro.cnieTipo === SIN_CNIE ? 'Sin código CNIE' : `Tipo: ${nombreLegible(TIPOS_CNIE.find((t) => t.codigo === filtro.cnieTipo)?.nombre ?? filtro.cnieTipo)}` });
+  if (filtro.canal) chips.push({ clave: 'canal', texto: `Llegó por: ${ETIQUETA_CANAL[filtro.canal]}` });
   if (filtro.municipio) chips.push({ clave: 'municipio', texto: filtro.municipio === '000' ? 'Fuera de Querétaro' : `Municipio: ${MUNICIPIOS_QRO.find((m) => m.clave === filtro.municipio)?.nombre ?? filtro.municipio}` });
   if (!chips.length) return null;
   return (
-    <ul className="c-chips-activos" aria-label="Filtros activos" data-testid="chips-filtros">
+    <ul className="c-chips-activos" aria-label="Filtros aplicados" data-testid="chips-filtros">
       {chips.map((c) => (
         <li key={c.clave}>
           <button type="button" className="c-chip-quitar" aria-label={`Quitar filtro ${c.texto}`} onClick={() => alCambiar({ ...filtro, [c.clave]: c.clave === 'estado' ? 'activos' : null })}>
@@ -124,10 +262,12 @@ export function ChipsFiltrosActivos({ filtro, alCambiar }: { filtro: FiltroVista
           </button>
         </li>
       ))}
+      <li><button type="button" className="c-enlace c-limpiar-todo" onClick={() => alCambiar(FILTRO_INICIAL)} data-testid="limpiar-todo">Limpiar todo</button></li>
     </ul>
   );
 }
 
+/** Punto de prioridad: color + etiqueta (alta / media / baja). */
 export function PuntoPrioridad({ p, cnie }: { p: Reporte['prioridad']; cnie?: string | null }) {
   return (
     <span className={`c-prio-chip c-prio-${p}`} data-testid="punto-prioridad" data-prioridad={p} title={`Prioridad operativa ${p}${cnie ? ` · CNIE ${cnie}` : ''}`}>

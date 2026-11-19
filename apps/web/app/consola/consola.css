@@ -382,3 +382,63 @@ details.c-tarjeta > summary { cursor: pointer; font-weight: 700; min-height: var
   .c-hoja-pie { display: flex; gap: var(--e2); padding: var(--e2) var(--pad) calc(var(--e2) + env(safe-area-inset-bottom)); border-top: 1px solid var(--borde); background: var(--tarjeta); }
   .c-hoja-pie > * { flex: 1 1 0; }
 }
+
+/* ── Filtros de la bandeja: búsqueda, colonia, teléfono y «Más filtros» ────────────────────
+ * A simple vista: la barra de búsqueda (siempre fija con la barra de la bandeja), los filtros rápidos (estado,
+ * prioridad, colonia, teléfono) y «Más filtros», que despliega el resto. Los filtros aplicados se ven como chips
+ * removibles en todos los tamaños, con «Limpiar todo». En móvil los filtros siguen en el panel superpuesto. */
+.c-busqueda { position: relative; flex: 1 1 100%; display: flex; align-items: center; min-width: 0; }
+.c-busqueda input { width: 100%; padding-left: 2.25rem; padding-right: 2.75rem; border-radius: var(--r-pill); }
+.c-busqueda input::-webkit-search-cancel-button { display: none; }
+.c-busqueda-icono { position: absolute; left: .85rem; font-size: 1.1rem; color: var(--suave); pointer-events: none; }
+.c-busqueda-borrar { position: absolute; right: 2px; min-width: var(--toque); min-height: var(--toque); border: 0; background: transparent; color: var(--suave); font: inherit; font-size: 1.35rem; line-height: 1; border-radius: 50%; cursor: pointer; }
+.c-sugerencias { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 40; margin: 0; padding: 4px; list-style: none; background: var(--tarjeta); border: 1px solid var(--borde-fuerte); border-radius: var(--r-m); box-shadow: var(--sombra-alta); max-height: min(60vh, 420px); overflow-y: auto; }
+.c-sugerencias li { display: flex; align-items: center; gap: var(--e2); min-height: var(--toque); padding: 4px var(--e3); border-radius: var(--r-s); cursor: pointer; }
+.c-sugerencias li.activa, .c-sugerencias li:hover { background: var(--primario-suave); }
+.c-sugerencia-tipo { flex: none; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); min-width: 6.5em; }
+.c-sugerencia-texto { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+.c-chips-activos { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2); width: 100%; margin: 0; padding: 0; list-style: none; }
+.c-chip-quitar { display: inline-flex; align-items: center; gap: var(--e1); min-height: 36px; max-width: 100%; padding: 0 4px 0 12px; font: inherit; font-size: .85rem; font-weight: 600; border-radius: var(--r-pill); border: 1px solid var(--primario); background: var(--superficie); color: var(--texto); cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+.c-chip-quitar span { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; border-radius: 50%; font-size: 1.1rem; line-height: 1; color: var(--primario); }
+.c-chip-quitar:hover span { background: var(--primario-suave); }
+.c-limpiar-todo, .c-limpiar { min-height: var(--toque); font-weight: 700; }
+
+.c-filtros-bandeja { flex-direction: column; align-items: stretch; gap: var(--e2); }
+.c-filtros-rapidos, .c-filtros-mas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2) var(--e4); min-width: 0; }
+.c-filtros-mas { border-top: 1px dashed var(--borde); padding-top: var(--e2); }
+.c-filtros-mas[hidden] { display: none; }
+.c-grupo-acciones { margin-left: auto; gap: var(--e3); }
+.c-mas-filtros { font-weight: 700; }
+.c-campo-linea select { max-width: min(100%, 18rem); }
+.c-campo-texto input { width: 9.5rem; min-height: 36px; padding: .4rem .7rem; }
+.c-filtros-bandeja .c-campo-linea select { min-height: 36px; padding: .3rem .6rem; }
+
+/* Colonia en el alta 911 y en el detalle del folio */
+.c-colonia { display: grid; gap: var(--e1); margin: var(--e2) 0; }
+.c-colonia-elegida { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e1) var(--e3); margin-top: var(--e2); }
+.c-colonia-elegida .c-pequeno { flex-basis: 100%; }
+.c-colonia-captura { display: grid; gap: var(--e1); margin-top: var(--e2); }
+.c-colonia-captura > .c-enlace { justify-self: start; min-height: var(--toque); }
+.c-colonia-manual { gap: var(--e2); }
+.c-colonia-editar { margin-top: var(--e1); }
+
+@media (min-width: 768px) {
+  /* Tablet y escritorio: la barra de la bandeja queda en dos renglones (título + acciones; búsqueda + chips). */
+  .c-barra-bandeja .c-busqueda { order: 3; }
+  .c-barra-bandeja .c-chips-activos { order: 4; }
+}
+@media (min-width: 768px) and (max-width: 1279.98px) {
+  .c-filtros-rapidos { gap: var(--e2) var(--e3); }
+  .c-grupo-acciones { margin-left: 0; }
+}
+@media (max-width: 767.98px) {
+  .c-chip-quitar { min-height: var(--toque); }
+  .c-chip-quitar span { width: 32px; height: 32px; }
+  .c-hoja .c-filtros-rapidos, .c-hoja .c-filtros-mas { flex-direction: column; align-items: stretch; gap: var(--e4); }
+  .c-hoja .c-grupo-acciones { margin-left: 0; flex-direction: column; align-items: stretch; }
+  .c-hoja .c-campo-texto input, .c-hoja .c-campo-linea select { width: 100%; max-width: 100%; min-height: var(--toque); }
+  .c-hoja .c-mas-filtros { justify-content: center; }
+  .c-sugerencia-tipo { min-width: 5.5em; }
+}
+.c-colonia > .c-enlace { justify-self: start; min-height: var(--toque); }

@@ -111,6 +111,7 @@ export type OrigenFolio = 'app' | '911';
 export type TipoTelefono = 'celular' | 'fijo';
 /** Canal que se muestra y se filtra en los reportes: app, 911 (llamada) o anónimo (089). */
 export type CanalOrigen = 'app' | '911' | 'anonimo';
+export const CANALES_ORIGEN: readonly CanalOrigen[] = ['app', '911', 'anonimo'];
 export const ETIQUETA_CANAL: Record<CanalOrigen, string> = { app: 'App', '911': 'Llamada 911', anonimo: 'Anónimo (089)' };
 export const ETIQUETA_TIPO_TELEFONO: Record<TipoTelefono, string> = { celular: 'Celular', fijo: 'Fijo' };
 
@@ -223,7 +224,7 @@ function pasa(f: FilaBandeja, filtro: FiltroBandeja, ahora: number, u: UmbralesS
 }
 
 /** Cuántos filtros hay aplicados (el estado cuenta solo si no es la vista por defecto). */
-export function filtrosAplicados(filtro: FiltroBandeja & { estado?: string | null }, estadoPorDefecto: string | null = null): number {
+export function filtrosAplicados(filtro: Omit<FiltroBandeja, 'estado'> & { estado?: string | null }, estadoPorDefecto: string | null = null): number {
   let n = 0;
   for (const c of CAMPOS) if (filtro[c] && !(c === 'estado' && filtro.estado === estadoPorDefecto)) n++;
   for (const c of CAMPOS_TEXTO) if (filtro[c]?.trim()) n++;

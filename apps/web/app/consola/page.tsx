@@ -6,7 +6,7 @@ import './consola.css';
 import {
   buscarCnie, duracionTexto, estimarRuta, etiquetaCnie, incidenteCnie, nombreLegible, subtipoPermiteAnonimo, type GrupoCnie, type IncidenteCnie, type TiempoEtapa,
   puedeDespachar, etaSuperaMeta,
-  municipioPorClave, NOMBRE_RESPALDO_ESTATAL, TEXTO_ANONIMA_089, UMBRALES_SEMAFORO_PREDETERMINADOS, esMalUso, tipoCnie, type OrdenBandeja,
+  CAD_ESTATAL_ID, municipioPorClave, NOMBRE_RESPALDO_ESTATAL, TEXTO_ANONIMA_089, UMBRALES_SEMAFORO_PREDETERMINADOS, esMalUso, tipoCnie, type ColoniaEntrada, type OrdenBandeja,
 } from '@pol-iaq/shared/movil';
 import { Mapa } from '../../lib/mapa/Mapa';
 import { SelectorTema } from '../../lib/tema';
@@ -19,8 +19,9 @@ import {
   type Accion, type Reporte, type Tablero, type UnidadDisponible, type Yo,
 } from './consola';
 import { FormUnidad, VistaMunicipios, VistaReportes, VistaSesnsp, tipoDeUnidad } from './municipios';
-import { ChipsFiltrosActivos, FILTRO_INICIAL, FiltrosBandeja, PuntoPrioridad, RecatalogarMalUso, ResumenBandeja, Semaforo, UmbralesSemaforoForm, semaforoReporte, usarBandeja, type FiltroVista } from './bandeja';
+import { BarraBusqueda, ChipsFiltrosActivos, FILTRO_INICIAL, FiltrosBandeja, cuantosFiltros, PuntoPrioridad, RecatalogarMalUso, ResumenBandeja, Semaforo, UmbralesSemaforoForm, semaforoReporte, usarBandeja, type FiltroVista } from './bandeja';
 import { Alta911, textoOrigen } from './alta911';
+import { ColoniaDelFolio } from './colonia';
 
 const CLAVE_SESION = 'poliaq.consola.token';
 
@@ -131,6 +132,10 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
   const [ahora, setAhora] = useState(() => ahoraMs());
   const [vista, setVista] = useState<'bandeja' | 'unidades' | 'tiempos' | 'reportes' | 'sesnsp' | 'municipios'>('bandeja');
   const supervision = yo.operador.cads.includes('*');
+  // Supervisión y CQ CIAS ven varios municipios: solo ellos tienen el filtro de municipio.
+  const variosMunicipios = supervision || yo.operador.cads.includes(CAD_ESTATAL_ID);
+  // Municipios donde el operador busca colonias (null = todos).
+  const municipiosOperador = useMemo(() => (variosMunicipios ? null : yo.cads.filter((c) => c.mio && c.clave).map((c) => c.clave!)), [variosMunicipios, yo.cads]);
   const nombreCad = useCallback((id: string) => yo.cads.find((c) => c.id === id)?.nombre ?? id, [yo.cads]);
 
   const cargar = useCallback(async () => {
@@ -176,7 +181,7 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
   const umbrales = yo.semaforo ?? UMBRALES_SEMAFORO_PREDETERMINADOS;
   // Operador de un municipio: solo sus CAD (el API ya lo filtra); supervisión filtra por municipio sin salir de la bandeja.
   const todosLosReportes = useMemo(() => [...reportes.values()], [reportes]);
-  const { lista, contadores } = usarBandeja(todosLosReportes, filtro, orden, ahora, umbrales);
+  const { lista, contadores, colonias, paraSugerir } = usarBandeja(todosLosReportes, filtro, orden, ahora, umbrales);
   // Los contadores del panel reflejan el borrador, igual que los de la franja reflejan el filtro aplicado.
   const deBorrador = usarBandeja(todosLosReportes, borrador?.filtro ?? filtro, borrador?.orden ?? orden, ahora, umbrales);
   const panelAbierto = esMovil && vista === 'bandeja' && borrador !== null;
@@ -191,6 +196,20 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
   }, [panelAbierto]);
   const actual = sel ? reportes.get(sel) ?? null : null;
   const nuevos = todosLosReportes.filter((r) => r.estado === 'recibido' && r.operable).length;
+
+  async function guardarColonia(e: ColoniaEntrada, motivo: string) {
+    if (!actual) return false;
+    setAviso('');
+    try {
+      const v = await api.colonia(token, actual.folio, e, motivo);
+      setReportes((m) => (esMasViejo(v, m.get(v.folio)) ? m : new Map(m).set(v.folio, v)));
+      return true;
+    } catch (err) {
+      setAviso(mensajeDe(err));
+      if (err instanceof ErrorApi && err.status === 401) alSalir();
+      return false;
+    }
+  }
 
   async function actuar(a: Accion) {
     if (!actual) return false;
@@ -227,7 +246,7 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
     setSel(folio); setAlta(conAlta);
     if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767.98px)').matches) window.scrollTo({ top: 0 });
   };
-  const filtrosActivos = Number(filtro.estado !== 'activos') + Number(!!filtro.prioridad) + Number(!!filtro.prioridadCnie) + Number(!!filtro.municipio) + Number(!!filtro.demora);
+  const filtrosActivos = cuantosFiltros(filtro);
 
   const misCads = yo.cads.filter((c) => c.mio);
   return (
@@ -279,10 +298,11 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
           </button>
           <button className="c-boton" onClick={() => abrir(null, true)} data-testid="iniciar-reporte">Iniciar nuevo reporte</button>
         </div>
-        {esMovil && <ChipsFiltrosActivos filtro={filtro} alCambiar={setFiltro} />}
+        <BarraBusqueda filtro={filtro} alCambiar={setFiltro} filas={paraSugerir} />
+        <ChipsFiltrosActivos filtro={filtro} alCambiar={setFiltro} colonias={colonias} />
       </div>}
       {vista === 'bandeja' && !esMovil && <div id="franja-filtros" className="c-franja-filtros">
-        <FiltrosBandeja filtro={filtro} alCambiar={setFiltro} orden={orden} alOrden={setOrden} contadores={contadores} supervision={supervision} umbrales={umbrales} />
+        <FiltrosBandeja filtro={filtro} alCambiar={setFiltro} orden={orden} alOrden={setOrden} contadores={contadores} colonias={colonias} variosMunicipios={variosMunicipios} umbrales={umbrales} />
         {supervision && <UmbralesSemaforoForm key={`${umbrales.amarillo}-${umbrales.rojo}`} actuales={umbrales} alGuardar={async (u) => { try { await api.fijarUmbrales(token, u); await cargar(); return null; } catch (e) { return mensajeDe(e); } }} />}
       </div>}
       {panelAbierto && borrador && (
@@ -295,7 +315,7 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
             </div>
             <div className="c-hoja-cuerpo">
               <FiltrosBandeja filtro={borrador.filtro} alCambiar={(f) => setBorrador({ ...borrador, filtro: f })} orden={borrador.orden} alOrden={(o) => setBorrador({ ...borrador, orden: o })}
-                contadores={deBorrador.contadores} supervision={supervision} umbrales={umbrales} sinQuitar />
+                contadores={deBorrador.contadores} colonias={deBorrador.colonias} variosMunicipios={variosMunicipios} umbrales={umbrales} sinQuitar />
               {supervision && <UmbralesSemaforoForm key={`${umbrales.amarillo}-${umbrales.rojo}`} actuales={umbrales} alGuardar={async (u) => { try { await api.fijarUmbrales(token, u); await cargar(); return null; } catch (e) { return mensajeDe(e); } }} />}
             </div>
             <div className="c-hoja-pie">
@@ -344,14 +364,15 @@ function Mesa({ token, yo: yoInicial, alSalir }: { token: string; yo: Yo; alSali
         </section>
 
         {alta ? (
-          <Alta911 token={token} alCancelar={() => setAlta(false)} alCrear={(r, nuevo) => {
+          <Alta911 token={token} municipios={municipiosOperador} alCancelar={() => setAlta(false)} alCrear={(r, nuevo) => {
             setReportes((m) => new Map(m).set(r.folio, r));
             setAlta(false); setSel(r.folio); setFiltro(FILTRO_INICIAL);
             setAviso('');
             setCreado(`Folio ${r.folio} creado por llamada al 911${nuevo ? '; el reportante quedó dado de alta' : ''}.`);
           }} />
         ) : actual ? (
-          <Detalle key={actual.folio} r={actual} ahora={ahora} unidades={unidades} yo={yo} nombreCad={nombreCad} actuar={actuar} alCerrar={() => setSel(null)} />
+          <Detalle key={actual.folio} r={actual} ahora={ahora} unidades={unidades} yo={yo} nombreCad={nombreCad} actuar={actuar} alCerrar={() => setSel(null)}
+            municipios={municipiosOperador} alGuardarColonia={guardarColonia} />
         ) : (
           <ResumenBandeja reportes={todosLosReportes} contadores={contadores} ahora={ahora} umbrales={umbrales}
             alFiltrar={(f) => setFiltro(f)} alAbrir={(f) => abrir(f)} alIniciar={() => abrir(null, true)} />
@@ -367,10 +388,11 @@ function Cuenta({ hasta, ahora }: { hasta: string; ahora: number }) {
 }
 
 function Detalle({
-  r, ahora, unidades, yo, nombreCad, actuar, alCerrar,
+  r, ahora, unidades, yo, nombreCad, actuar, alCerrar, municipios, alGuardarColonia,
 }: {
   r: Reporte; ahora: number; unidades: UnidadDisponible[]; yo: Yo; nombreCad: (id: string) => string;
   actuar: (a: Accion) => Promise<boolean>; alCerrar: () => void;
+  municipios: readonly string[] | null; alGuardarColonia: (e: ColoniaEntrada, motivo: string) => Promise<boolean>;
 }) {
   const [ocupado, setOcupado] = useState(false);
   const [unidadId, setUnidadId] = useState('');
@@ -461,6 +483,7 @@ function Detalle({
         <div className="c-tarjeta">
           <h3>Ubicación</h3>
           {r.ubicacion.referencia && <div>{r.ubicacion.referencia}</div>}
+          <ColoniaDelFolio r={r} municipios={municipios} ocupado={ocupado} alGuardar={async (e, m) => { setOcupado(true); try { return await alGuardarColonia(e, m); } finally { setOcupado(false); } }} />
           <div className="suave c-pequeno">{r.ubicacion.lat.toFixed(5)}, {r.ubicacion.lng.toFixed(5)}{r.ubicacion.precisionMetros ? ` · ±${Math.round(r.ubicacion.precisionMetros)} m` : ''}</div>
           <a href={mapa} target="_blank" rel="noreferrer">Abrir en OpenStreetMap</a>
         </div>

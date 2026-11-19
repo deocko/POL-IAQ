@@ -4,22 +4,24 @@
  * «Iniciar nuevo reporte»: alta en la consola de un reporte que llegó por teléfono al 911.
  * Mismo procedimiento de preguntas y respuestas que la app ciudadana, capturado por el operador:
  * 1) número (¿ya es reportante?), 2) tipo de incidente y descripción, 3) ubicación, 4) preguntas del
- * protocolo, 5) clasificación CNIE y prioridad, 6) ¿celular o fijo? El folio sale con el mismo
+ * protocolo, 5) clasificación CNIE y prioridad, 6) ¿celular o fijo? En la ubicación se elige la colonia (catálogo
+ * SEPOMEX) o se agrega a mano con su CP y su ubicación, marcada «manual». El folio sale con el mismo
  * formato, enrutado e historial que uno de la app, marcado con origen 911.
  */
 import { useMemo, useState } from 'react';
 import {
-  CATALOGO_SEMILLA, buscarCnie, canalizar, clasificarCnie, esMalUso, etiquetaCnie, incidenteCnie, nombreLegible,
-  type IncidenteCnie, type TipoTelefono,
+  CATALOGO_SEMILLA, buscarCnie, canalizar, clasificarCnie, coloniaPorId, esMalUso, etiquetaCnie, incidenteCnie, municipioEn, nombreLegible,
+  type ColoniaEntrada, type IncidenteCnie, type TipoTelefono,
 } from '@pol-iaq/shared/movil';
 import * as demo from '../../lib/demo/motor';
 import { DEMO, ErrorApi, ERRORES, api, type ConsultaReportante, type Prioridad, type Reporte } from './consola';
+import { CapturaColonia, textoEntrada } from './colonia';
 
 type Respuesta = string | number | boolean;
 const mensaje = (e: unknown) => (e instanceof ErrorApi ? ERRORES[e.codigo] ?? e.mensaje ?? `Error (${e.codigo})` : 'Sin conexión con el API.');
 const PASOS = ['Teléfono', 'Incidente', 'Ubicación', 'Preguntas', 'Clasificación', 'Tipo de línea'] as const;
 
-export function Alta911({ token, alCrear, alCancelar }: { token: string; alCrear: (r: Reporte, nuevo: boolean) => void; alCancelar: () => void }) {
+export function Alta911({ token, municipios, alCrear, alCancelar }: { token: string; municipios: readonly string[] | null; alCrear: (r: Reporte, nuevo: boolean) => void; alCancelar: () => void }) {
   const [paso, setPaso] = useState(0);
   const [telefono, setTelefono] = useState('');
   const [consulta, setConsulta] = useState<ConsultaReportante | null>(null);
@@ -30,6 +32,7 @@ export function Alta911({ token, alCrear, alCancelar }: { token: string; alCrear
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
   const [referencia, setReferencia] = useState('');
+  const [colonia, setColonia] = useState<ColoniaEntrada | null>(null);
   const [respuestas, setRespuestas] = useState<Record<string, Respuesta>>({});
   const [busquedaCnie, setBusquedaCnie] = useState('');
   const [codigoCnie, setCodigoCnie] = useState<IncidenteCnie | null>(null);
@@ -45,6 +48,11 @@ export function Alta911({ token, alCrear, alCancelar }: { token: string; alCrear
   const prioridadAuto = incidente ? canalizar(demo.PROTOCOLO, incidente, vigentes).prioridad : null;
   const resultadosCnie = useMemo(() => buscarCnie(busquedaCnie, 8).filter((i) => !esMalUso(i.codigo)), [busquedaCnie]);
   const destino = DEMO ? demo.destinoDeLugar(lugarId).texto : null;
+  // Municipio de la ubicación: con él, el selector solo ofrece las colonias de ese municipio.
+  const lugar = DEMO ? demo.LUGARES_DEMO.find((l) => l.id === lugarId) : null;
+  const municipioUbicacion = DEMO ? lugar?.clave ?? null : (lat && lng && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) ? municipioEn(Number(lat), Number(lng))?.clave ?? null : null);
+  const coloniaDelLugar = lugar?.coloniaId ? coloniaPorId(lugar.coloniaId) : null;
+  const coloniaResumen = colonia ? textoEntrada(colonia) : coloniaDelLugar ? `${coloniaDelLugar.nombre} · CP ${coloniaDelLugar.cp}` : 'sin colonia';
 
   const responder = (id: string, v: Respuesta | undefined) => setRespuestas((r) => {
     const n = { ...r };
@@ -82,6 +90,7 @@ export function Alta911({ token, alCrear, alCancelar }: { token: string; alCrear
         respuestas: Object.entries(vigentes).map(([preguntaId, respuesta]) => ({ preguntaId, respuesta })),
         ...(prioridad && { prioridad }),
         ...(codigoCnie && { codigoCnie: codigoCnie.codigo }),
+        ...(colonia && { colonia }),
       });
       alCrear(reporte, reportanteNuevo);
     } catch (err) { setError(mensaje(err)); } finally { setOcupado(false); }
@@ -146,12 +155,18 @@ export function Alta911({ token, alCrear, alCancelar }: { token: string; alCrear
               </select>
             </label>
             {destino && <p className="c-nota c-pequeno" data-testid="alta-destino">{`${destino}. El folio sale con la clave de ese municipio.`}</p>}
+            <CapturaColonia key={`col-${lugarId}`} municipioClave={municipioUbicacion} municipios={municipios} valor={colonia} alElegir={setColonia} etiqueta="Colonia (opcional)" />
+            {!colonia && <p className="suave c-pequeno">{coloniaDelLugar ? `Si no eliges otra, se guarda la del lugar de prueba: ${coloniaDelLugar.nombre} · CP ${coloniaDelLugar.cp}.` : 'Si no la eliges, el folio queda «Sin colonia» y se puede asignar después.'}</p>}
           </div>
         ) : (
-          <div className="c-form">
-            <label className="c-campo">Latitud<input value={lat} onChange={(e) => setLat(e.target.value)} inputMode="decimal" /></label>
-            <label className="c-campo">Longitud<input value={lng} onChange={(e) => setLng(e.target.value)} inputMode="decimal" /></label>
-            <label className="c-campo">Referencia<input value={referencia} onChange={(e) => setReferencia(e.target.value)} maxLength={280} /></label>
+          <div className="c-form-columna">
+            <div className="c-form">
+              <label className="c-campo">Latitud<input value={lat} onChange={(e) => { setLat(e.target.value); setColonia(null); }} inputMode="decimal" /></label>
+              <label className="c-campo">Longitud<input value={lng} onChange={(e) => { setLng(e.target.value); setColonia(null); }} inputMode="decimal" /></label>
+              <label className="c-campo">Referencia<input value={referencia} onChange={(e) => setReferencia(e.target.value)} maxLength={280} /></label>
+            </div>
+            <CapturaColonia municipioClave={municipioUbicacion} municipios={municipios} valor={colonia} alElegir={setColonia} etiqueta="Colonia (opcional)" />
+            {!colonia && <p className="suave c-pequeno">{'Si no la eliges, el folio queda «Sin colonia» (salvo que la referencia diga «Col. …» o «C.P. …») y se puede asignar después.'}</p>}
           </div>
         ))}
 
@@ -215,6 +230,7 @@ export function Alta911({ token, alCrear, alCancelar }: { token: string; alCrear
               <div>{`${nombre.trim()} · ${consulta?.telefono} · ${consulta?.registrado ? 'reportante registrado' : 'se dará de alta como reportante'}`}</div>
               <div>{`${incidente?.nombreCiudadano ?? ''} · ${cnieFinal}`}</div>
               <div>{`Prioridad ${prioridad || prioridadAuto}${DEMO ? ` · ${demo.LUGARES_DEMO.find((l) => l.id === lugarId)?.nombre}` : ''}`}</div>
+              <div data-testid="alta-resumen-colonia">{`Colonia: ${coloniaResumen}`}</div>
             </div>
           </div>
         )}
