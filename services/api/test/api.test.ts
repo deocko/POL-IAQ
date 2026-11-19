@@ -231,4 +231,14 @@ describe('protecciones operativas', () => {
     // El folio no cambia aunque el incidente pase al C5.
     expect(bandeja[1].evento.folio).toBe(folio);
   });
+
+  it('escala al C5 si el CAD destino de una transferencia no acusa recibo', async () => {
+    const token = await registrar('+524428888887');
+    const folio = (await http.post('/v1/reportes').set({ authorization: `Bearer ${token}` }).send({ incidenteId: 'agresion', ubicacion: { lat: 20.539, lng: -100.442 } })).body.folio;
+    expect((await eventoCad('cad-corregidora', SECRETO_CORR, { folio, secuencia: 1, tipo: 'incidente.recibido', datos: { folioCad: 'CORR-10' } })).status).toBe(202);
+    expect((await eventoCad('cad-corregidora', SECRETO_CORR, { folio, secuencia: 2, tipo: 'incidente.transferido', datos: { cadDestinoId: 'cad-queretaro', motivo: 'Jurisdicción' } })).status).toBe(202);
+    await new Promise((r) => setTimeout(r, 600));
+    const bandeja = app.get(DespachadorCadService).bandeja.filter((e) => e.evento.folio === folio && e.evento.tipo === 'incidente.creado');
+    expect(bandeja.map((e) => e.cadId)).toEqual(['cad-corregidora', 'cad-queretaro', 'c5-queretaro']);
+  });
 });

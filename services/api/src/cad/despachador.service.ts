@@ -85,7 +85,7 @@ export class DespachadorCadService implements OnModuleDestroy {
     const t = setTimeout(() => {
       this.temporizadores.delete(t);
       const r = this.almacen.reporte(folio);
-      if (!r || r.folioCad || r.cadId !== cadId || r.estado !== 'recibido') return;
+      if (!r || r.folioCad || r.cadId !== cadId || (r.estado !== 'recibido' && r.estado !== 'transferido')) return;
       this.log.warn(`${folio}: ${cadId} no acusó en ${this.config.esperaAcuseSeg}s, se escala al C5`);
       this.almacen.auditar({ actor: 'sistema', accion: 'escalado_c5_sin_acuse', folio, detalle: { cadId } });
       r.cadId = CAD_ESTATAL_ID;
