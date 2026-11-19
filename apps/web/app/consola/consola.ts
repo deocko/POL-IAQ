@@ -3,7 +3,7 @@
 import { io } from 'socket.io-client';
 import * as demo from '../../lib/demo/motor';
 import { horaLocal } from '../../lib/hora';
-import type { FilaFolio, OrigenFolio, TipoTelefono, UmbralesSemaforo } from '@pol-iaq/shared/movil';
+import type { ColoniaEntrada, ColoniaFolio, CorreccionColonia, FilaFolio, OrigenFolio, TipoTelefono, UmbralesSemaforo } from '@pol-iaq/shared/movil';
 import type { ClasificacionCnie, Estadistica, FilaSesnsp, AjusteSesnsp, GrupoCnie, MetasTiempo, OpinionGuardada, Periodo, ResumenEtapa, TiemposReporte, TipoUnidad, RutaFolio } from '@pol-iaq/shared/movil';
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -27,6 +27,9 @@ export interface Reporte {
   cadId: string;
   /** Clave INEGI de 5 dígitos (22001–22018). */
   municipioClave: string | null;
+  /** Colonia (catálogo SEPOMEX o alta manual por validar); null = sin colonia. */
+  colonia?: ColoniaFolio | null;
+  coloniaCorrecciones?: CorreccionColonia[];
   incidenteId: string;
   incidente: string;
   categoria: string | null;
@@ -135,6 +138,8 @@ export interface Alta911 {
   respuestas: { preguntaId: string; respuesta: string | number | boolean }[];
   prioridad?: Prioridad;
   codigoCnie?: string;
+  /** Colonia del catálogo o alta manual (CP + ubicación). */
+  colonia?: ColoniaEntrada;
 }
 export type ConsultaReportante = { telefono: string; registrado: true; reportante: { nombre: string; registradoEn: string; origen: OrigenFolio; folios: number } } | { telefono: string; registrado: false; reportante: null };
 
@@ -170,6 +175,7 @@ const apiDemo = {
   reportes: (t: string, todos: boolean) => enDemo<{ reportes: Reporte[] }>(() => demo.operador.reportes(t, todos)),
   unidades: (t: string) => enDemo<{ unidades: UnidadDisponible[] }>(() => demo.operador.unidades(t)),
   accion: (t: string, folio: string, a: Accion) => enDemo<Reporte>(() => demo.operador.accion(t, folio, a)),
+  colonia: (t: string, folio: string, colonia: ColoniaEntrada, motivo?: string) => enDemo<Reporte>(() => demo.operador.colonia(t, folio, colonia, motivo)),
   tiempos: (t: string) => enDemo<Tablero>(() => demo.operador.tiempos(t)),
   cads: (t: string) => enDemo<{ cads: VistaCad[]; ambiente: string }>(() => demo.admin.cads(t)),
   guardarCad: (t: string, a: AltaCad) => enDemo<VistaCad>(() => demo.admin.guardar(t, a)),
@@ -210,6 +216,7 @@ const apiReal = {
   reportes: (t: string, todos: boolean) => llamar<{ reportes: Reporte[] }>(`/v1/operador/reportes${todos ? '?todos=1' : ''}`, t),
   unidades: (t: string) => llamar<{ unidades: UnidadDisponible[] }>('/v1/operador/unidades', t),
   accion: (t: string, folio: string, a: Accion) => llamar<Reporte>(`/v1/operador/reportes/${encodeURIComponent(folio)}/acciones`, t, { method: 'POST', body: JSON.stringify(a) }),
+  colonia: (t: string, folio: string, colonia: ColoniaEntrada, motivo?: string) => llamar<Reporte>(`/v1/operador/reportes/${encodeURIComponent(folio)}/colonia`, t, { method: 'POST', body: JSON.stringify({ colonia, ...(motivo?.trim() && { motivo: motivo.trim() }) }) }),
   tiempos: (t: string) => llamar<Tablero>('/v1/operador/tiempos', t),
   cads: (t: string) => llamar<{ cads: VistaCad[]; ambiente: string }>('/v1/admin/cads', t),
   guardarCad: (t: string, a: AltaCad) => llamar<VistaCad>(`/v1/admin/cads/${a.cadId}`, t, { method: 'PUT', body: JSON.stringify((({ cadId: _c, ...x }) => x)(a)) }),
@@ -292,6 +299,10 @@ export const CORPORACION: Record<string, string> = {
 };
 
 export const ERRORES: Record<string, string> = {
+  colonia_desconocida: 'Esa colonia no está en el catálogo.',
+  colonia_otro_municipio: 'Esa colonia es de otro municipio.',
+  ubicacion_fuera: 'La ubicación de la colonia queda fuera de Querétaro.',
+  misma_colonia: 'El folio ya tiene esa colonia.',
   credenciales_invalidas: 'Usuario o clave incorrectos.',
   demasiados_intentos: 'Demasiados intentos. Espera 15 minutos.',
   no_autenticado: 'Tu sesión venció. Vuelve a entrar.',

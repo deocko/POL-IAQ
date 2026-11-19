@@ -4,7 +4,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
-  CORPORACIONES, ESTADOS_FINALES, METAS_PROVISIONALES, TIPOS_UNIDAD, UbicacionSchema, ValorRespuestaSchema, esMalUso, agruparPorCnie, candidatasPorCercania, medirTiempos, puedeDespachar, minutosDe, resumirTiempos, subtipoCnie, type EventoDesdeCad, type UnidadAvl,
+  CORPORACIONES, ColoniaEntradaSchema, ESTADOS_FINALES, METAS_PROVISIONALES, TIPOS_UNIDAD, UbicacionSchema, ValorRespuestaSchema, esMalUso, agruparPorCnie, candidatasPorCercania, medirTiempos, puedeDespachar, minutosDe, resumirTiempos, subtipoCnie, type EventoDesdeCad, type UnidadAvl,
 } from '@pol-iaq/shared';
 import { AvlService, RutasService } from '../despacho/avl.service';
 import { Almacen } from '../almacen/almacen';
@@ -67,7 +67,12 @@ const Alta911Schema = z.object({
   respuestas: z.array(z.object({ preguntaId: z.string().min(1).max(60), respuesta: ValorRespuestaSchema })).max(40).default([]),
   prioridad: z.enum(['alta', 'media', 'baja']).optional(),
   codigoCnie: z.string().trim().max(10).optional(),
+  /** Colonia del catálogo SEPOMEX o alta manual (CP + ubicación); sin ella, se deriva de la referencia si es explícita. */
+  colonia: ColoniaEntradaSchema.optional(),
 });
+
+/** Asignar o corregir la colonia del folio. */
+const ColoniaSchema = z.object({ colonia: ColoniaEntradaSchema, motivo: z.string().trim().max(200).optional() });
 
 const UnidadSchema = z.object({
   unidadId: z.string().trim().regex(/^[A-Za-z0-9-]{1,30}$/, 'Clave de unidad: letras, números y guiones'),
@@ -145,7 +150,7 @@ export class OperadorController {
       ...(body.respuestas.length && { cuestionario: { via: 'texto' as const, entradas: body.respuestas } }),
       ocultarIdentidadAUnidad: false,
       identidad: 'completa',
-    }, { operador: op.usuario, operadorNombre: op.nombre, tipoTelefono: body.tipoTelefono, prioridad: body.prioridad, codigoCnie: body.codigoCnie });
+    }, { operador: op.usuario, operadorNombre: op.nombre, tipoTelefono: body.tipoTelefono, prioridad: body.prioridad, codigoCnie: body.codigoCnie, colonia: body.colonia });
     return { reporte: await this.vista(r), reportanteNuevo: !previo };
   }
 
@@ -264,6 +269,17 @@ export class OperadorController {
     const conRuta = await Promise.all(previas.map(async (c) => ({ ...c, ruta: await this.rutas.ruta(c.unidad.posicion!, r.ubicacion) })));
     const delTipo = conRuta.filter((c) => c.delTipo);
     return (delTipo.length ? delTipo : conRuta).sort((a, b) => a.ruta.segundos - b.ruta.segundos)[0];
+  }
+
+  /** Colonia del folio: del catálogo SEPOMEX o manual (CP + ubicación, queda «por validar»). */
+  @Post('reportes/:folio/colonia')
+  @HttpCode(200)
+  @UseGuards(OperadorGuard)
+  async colonia(@Req() req: { operador: OperadorSesion }, @Param('folio') folio: string, @Body(new ZodPipe(ColoniaSchema)) body: z.infer<typeof ColoniaSchema>) {
+    const actual = await this.almacen.reporte(folio);
+    if (!actual || !puedeVer(req.operador, actual.cadId)) throw new NotFoundException({ codigo: 'folio_no_encontrado' });
+    if (!consolaOpera(this.config, actual.cadId)) throw new ConflictException({ codigo: 'cad_con_sistema_propio', mensaje: 'Este CAD despacha en su propio sistema; la consola solo lo muestra.' });
+    return this.vista(await this.reportesSrv.asignarColonia(folio, `operador:${req.operador.usuario}`, body.colonia, body.motivo));
   }
 
   @Post('reportes/:folio/acciones')

@@ -11,7 +11,7 @@ import { canalOrigen, ETIQUETA_CANAL, ETIQUETA_TIPO_TELEFONO, type CanalOrigen, 
 import type { EstadoIncidente } from './estados';
 import { CORPORACIONES } from './interconexion';
 import { municipioPorClave, nombreDeCad } from './municipios';
-import { normalizar } from './protocolos';
+import { contiene, palabrasDe } from './busqueda';
 import type { TiemposReporte } from './tiempos';
 import { csvDeFilas, libroXlsx } from './xlsx';
 
@@ -22,6 +22,11 @@ export interface FilaFolio {
   fecha: string;
   municipioClave: string;
   municipio: string;
+  /** «Centro» (o vacío sin colonia) y su código postal. */
+  colonia: string;
+  cp: string;
+  /** La colonia la dio de alta un operador y falta validarla. */
+  coloniaManual: boolean;
   cadId: string;
   cad: string;
   cnieTipo: string; cnieTipoNombre: string;
@@ -56,6 +61,7 @@ export interface DatosFolio {
   tipoTelefono?: TipoTelefono | null;
   /** Lo que el operador ve del reportante (ya filtrado por identidad). */
   reportante: { nombre: string; telefono: string; identidad?: string } | null;
+  colonia?: { nombre: string; cp: string; fuente: string; validada: boolean } | null;
   tiempos: TiemposReporte;
 }
 
@@ -78,6 +84,9 @@ export function filaFolio(d: DatosFolio, ahora: number): FilaFolio {
     fecha: fechaHora(d.creadoEn),
     municipioClave: d.municipioClave ?? '',
     municipio: d.municipioClave ? municipioPorClave(d.municipioClave)?.nombre ?? d.municipioClave : 'Fuera de Querétaro',
+    colonia: d.colonia?.nombre ?? '',
+    cp: d.colonia?.cp ?? '',
+    coloniaManual: d.colonia?.fuente === 'manual' && !d.colonia.validada,
     cadId: d.cadId,
     cad: nombreDeCad(d.cadId),
     cnieTipo: d.cnie?.tipo.codigo ?? '', cnieTipoNombre: d.cnie?.tipo.nombre ?? '',
@@ -103,7 +112,7 @@ export function filaFolio(d: DatosFolio, ahora: number): FilaFolio {
 // ---------------------------------------------------------------------------
 
 export type ColumnaFolio =
-  | 'folio' | 'fecha' | 'municipio' | 'cnieTipo' | 'cnieSubtipo' | 'cnieIncidente' | 'estado' | 'prioridad' | 'prioridadCnie'
+  | 'folio' | 'fecha' | 'municipio' | 'colonia' | 'cp' | 'cnieTipo' | 'cnieSubtipo' | 'cnieIncidente' | 'estado' | 'prioridad' | 'prioridadCnie'
   | 'unidad' | 'corporacion' | 'canal' | 'tipoTelefono' | 'nombre' | 'telefono' | 'demora';
 
 /** `opciones`: filtro de lista (valor exacto); sin opciones: filtro de texto (contiene). */
@@ -116,6 +125,8 @@ export const COLUMNAS_FOLIO: readonly { id: ColumnaFolio; nombre: string; lista?
   { id: 'tipoTelefono', nombre: 'Tipo de teléfono', lista: true },
   { id: 'demora', nombre: 'Demora' },
   { id: 'municipio', nombre: 'Municipio', lista: true },
+  { id: 'colonia', nombre: 'Colonia', lista: true },
+  { id: 'cp', nombre: 'Código postal' },
   { id: 'cnieTipo', nombre: 'CNIE tipo', lista: true },
   { id: 'cnieSubtipo', nombre: 'CNIE subtipo', lista: true },
   { id: 'cnieIncidente', nombre: 'CNIE incidente' },
@@ -130,6 +141,7 @@ export const COLUMNAS_FOLIO: readonly { id: ColumnaFolio; nombre: string; lista?
 export function textoCelda(f: FilaFolio, c: ColumnaFolio): string {
   switch (c) {
     case 'municipio': return f.municipioClave ? `${f.municipioClave} ${f.municipio}` : f.municipio;
+    case 'colonia': return f.colonia ? `${f.colonia}${f.coloniaManual ? ' (manual)' : ''}` : 'Sin colonia';
     case 'cnieTipo': return f.cnieTipo ? `${f.cnieTipo} ${f.cnieTipoNombre}` : 'Sin clasificar';
     case 'cnieSubtipo': return f.cnieSubtipo ? `${f.cnieSubtipo} ${f.cnieSubtipoNombre}` : '';
     case 'cnieIncidente': return f.cnieIncidente ? `${f.cnieIncidente} ${f.cnieIncidenteNombre}` : '';
@@ -138,17 +150,6 @@ export function textoCelda(f: FilaFolio, c: ColumnaFolio): string {
     case 'demora': return f.demoraSegundos == null ? '' : `${Math.round(f.demoraSegundos / 60)} min`;
     default: return String(f[c] ?? '');
   }
-}
-
-const soloDigitos = (s: string) => s.replace(/\D/g, '');
-
-/** ¿La celda contiene el texto? Sin acentos ni mayúsculas; un número también se busca solo en los dígitos (teléfonos con espacios o guiones). */
-function contiene(celda: string, buscado: string): boolean {
-  const q = normalizar(buscado);
-  if (!q) return true;
-  if (normalizar(celda).includes(q)) return true;
-  const d = soloDigitos(buscado);
-  return d.length >= 3 && d.length === buscado.replace(/[\s()+.-]/g, '').length && soloDigitos(celda).includes(d);
 }
 
 export interface ConsultaFolios {
@@ -169,7 +170,7 @@ const valorOrden = (f: FilaFolio, c: ColumnaFolio): string | number => {
 
 /** Aplica búsqueda, filtros por columna y orden. La paginación se hace aparte (`pagina`). */
 export function consultarFolios(filas: FilaFolio[], q: ConsultaFolios): FilaFolio[] {
-  const palabras = (q.texto ?? '').trim().split(/\s+/).filter(Boolean);
+  const palabras = palabrasDe(q.texto);
   const listas = new Set(COLUMNAS_FOLIO.filter((c) => c.lista).map((c) => c.id));
   const filtros = Object.entries(q.columnas ?? {}).filter(([, v]) => v) as [ColumnaFolio, string][];
   const r = filas.filter((f) => {
@@ -215,6 +216,9 @@ const EXPORTA: { col: string; v: (f: FilaFolio) => string | number | null }[] = 
   { col: 'fecha_local', v: (f) => f.fecha },
   { col: 'municipio_clave', v: (f) => f.municipioClave },
   { col: 'municipio', v: (f) => f.municipio },
+  { col: 'colonia', v: (f) => f.colonia },
+  { col: 'codigo_postal', v: (f) => f.cp },
+  { col: 'colonia_manual_por_validar', v: (f) => (f.coloniaManual ? 'si' : '') },
   { col: 'cad_responsable', v: (f) => f.cad },
   { col: 'cnie_tipo', v: (f) => f.cnieTipo },
   { col: 'cnie_subtipo', v: (f) => f.cnieSubtipo },

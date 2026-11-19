@@ -1,4 +1,4 @@
-import type { ClasificacionCnie, Identidad, OpinionGuardada, OrigenFolio, RutaFolio, TipoTelefono } from '@pol-iaq/shared';
+import type { ClasificacionCnie, ColoniaFolio, CorreccionColonia, Identidad, OpinionGuardada, OrigenFolio, RutaFolio, TipoTelefono } from '@pol-iaq/shared';
 import type { CasoPruebaCad, ContactoTecnico, EstadoCad, ModoCad, ResultadoCaso, TipoUnidad } from '@pol-iaq/shared';
 import type { Canalizacion, Corporacion, Cuestionario, EstadoIncidente, EventoHaciaCad, Prioridad, Ubicacion } from '@pol-iaq/shared';
 
@@ -61,6 +61,10 @@ export interface Reporte {
   ubicacion: Ubicacion;
   /** Clave INEGI de 5 dígitos del municipio (22001–22018); null fuera de Querétaro. */
   municipioClave: string | null;
+  /** Colonia (catálogo SEPOMEX o alta manual por validar); null o ausente = sin colonia. */
+  colonia?: ColoniaFolio | null;
+  /** Cambios de colonia hechos por el operador. */
+  coloniaCorrecciones?: CorreccionColonia[];
   cadId: string;
   folioCad?: string;
   descripcion?: string;

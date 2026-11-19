@@ -25,7 +25,7 @@ const SELECT_REPORTE = `
          ST_Y(ubicacion::geometry) AS lat, ST_X(ubicacion::geometry) AS lng, precision_m, referencia,
          municipio_clave, cad_id, folio_cad, descripcion, respuestas, asistencia_directa, escenario_id, cuestionario, canalizacion,
          ocultar_identidad_a_unidad, estado, secuencia_salida, secuencia_entrada, creado_en, actualizado_en,
-         identidad, alias, opinion, cnie, cnie_correcciones, ruta, alta
+         identidad, alias, opinion, cnie, cnie_correcciones, ruta, alta, colonia, colonia_correcciones
     FROM reporte`;
 
 /**
@@ -197,6 +197,8 @@ export class AlmacenPostgres extends Almacen {
           ...(f.referencia != null && { referencia: f.referencia }),
         },
         municipioClave: claveCompleta(f.municipio_clave),
+        colonia: f.colonia ?? null,
+        coloniaCorrecciones: f.colonia_correcciones ?? [],
         cadId: f.cad_id,
         folioCad: f.folio_cad ?? undefined,
         descripcion: f.descripcion ?? undefined,
@@ -281,14 +283,15 @@ export class AlmacenPostgres extends Almacen {
         `INSERT INTO reporte (folio, ciudadano_id, incidente_id, codigo_cnie, prioridad, corporacion_sugerida, ubicacion,
             precision_m, referencia, municipio_clave, cad_id, folio_cad, descripcion, respuestas, asistencia_directa,
             ocultar_identidad_a_unidad, estado, secuencia_salida, secuencia_entrada, creado_en, actualizado_en,
-            escenario_id, cuestionario, canalizacion, identidad, alias, opinion, cnie, cnie_correcciones, ruta, alta)
-         VALUES ($1, $2, $3, $4, $5, $6, ${PUNTO('$7', '$8')}, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
+            escenario_id, cuestionario, canalizacion, identidad, alias, opinion, cnie, cnie_correcciones, ruta, alta, colonia, colonia_correcciones)
+         VALUES ($1, $2, $3, $4, $5, $6, ${PUNTO('$7', '$8')}, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34)
          ON CONFLICT (folio) DO UPDATE SET
             respuestas = EXCLUDED.respuestas, cuestionario = EXCLUDED.cuestionario, canalizacion = EXCLUDED.canalizacion,
             prioridad = EXCLUDED.prioridad, cad_id = EXCLUDED.cad_id, folio_cad = EXCLUDED.folio_cad,
             estado = EXCLUDED.estado, secuencia_salida = EXCLUDED.secuencia_salida,
             secuencia_entrada = EXCLUDED.secuencia_entrada, actualizado_en = EXCLUDED.actualizado_en,
-            opinion = EXCLUDED.opinion, codigo_cnie = EXCLUDED.codigo_cnie, cnie = EXCLUDED.cnie, cnie_correcciones = EXCLUDED.cnie_correcciones, ruta = EXCLUDED.ruta`,
+            opinion = EXCLUDED.opinion, codigo_cnie = EXCLUDED.codigo_cnie, cnie = EXCLUDED.cnie, cnie_correcciones = EXCLUDED.cnie_correcciones, ruta = EXCLUDED.ruta,
+            colonia = EXCLUDED.colonia, colonia_correcciones = EXCLUDED.colonia_correcciones`,
         [
           r.folio, r.ciudadanoId, r.incidenteId, r.codigoCnie, r.prioridad, r.corporacionSugerida, r.ubicacion.lng, r.ubicacion.lat,
           r.ubicacion.precisionMetros ?? null, r.ubicacion.referencia ?? null, r.municipioClave, r.cadId, r.folioCad ?? null,
@@ -299,6 +302,7 @@ export class AlmacenPostgres extends Almacen {
           r.cnie ? JSON.stringify(r.cnie) : null, JSON.stringify(r.correccionesCnie ?? []),
           r.ruta ? JSON.stringify(r.ruta) : null,
           r.origen === '911' ? JSON.stringify({ origen: r.origen, tipoTelefono: r.tipoTelefono ?? null, altaPor: r.altaPor ?? null }) : null,
+          r.colonia ? JSON.stringify(r.colonia) : null, JSON.stringify(r.coloniaCorrecciones ?? []),
         ],
       );
 

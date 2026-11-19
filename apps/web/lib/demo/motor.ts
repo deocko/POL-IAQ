@@ -27,6 +27,7 @@ import {
   agruparPorCnie, aplica, candidatasPorCercania, canalizar, puedeDespachar, clasificacionDe, clasificarCnie, distanciaMetros, etiquetaCnie, subtipoCnie, validarCodigoCnie, enrutarPorUbicacion, esQueja, estimarRuta, generarFolio, incidentePorId, medirTiempos,
   minutosDe, permiteAnonimo, preguntasPara as preguntasProtocolo, preguntasPendientes, protocoloDe, puedeTransicionar, reportanteVisible, resolverEntradas,
   respuestasDe, resumirTiempos, transcripcion, esMalUso, tipoCnie, UMBRALES_SEMAFORO_PREDETERMINADOS, validarUmbrales, filaFolio,
+  coloniaDeTexto, coloniaDerivada, coloniaPorId, resolverColonia, textoColonia, type ColoniaEntrada, type ColoniaFolio, type CorreccionColonia,
   type UmbralesSemaforo, type OrigenFolio, type TipoTelefono, type FilaFolio, type Prioridad,
   type Canalizacion, type ClasificacionCnie, type Cuestionario, type EntradaCuestionario, type EstadoIncidente, type Identidad, type Opinion, type OpinionGuardada,
   type PreguntaProtocolo, type Punto, type UnidadAvl, type ValorRespuesta,
@@ -58,12 +59,16 @@ export const UNIDADES_DEMO = UNIDADES_EJEMPLO;
  * de cada uno de los otros 14 municipios (calculado de su polígono de INEGI 2022).
  */
 const LUGARES_FIJOS = [
-  { id: 'qro', nombre: 'Centro de Querétaro', lat: 20.5888, lng: -100.3899, referencia: 'Jardín Zenea (ubicación de prueba)', clave: '22014' },
-  { id: 'corr', nombre: 'El Pueblito, Corregidora', lat: 20.539, lng: -100.442, referencia: 'Plaza principal (ubicación de prueba)', clave: '22006' },
-  { id: 'marq', nombre: 'La Cañada, El Marqués', lat: 20.61, lng: -100.32, referencia: 'Jardín principal (ubicación de prueba)', clave: '22011' },
-  { id: 'sjr', nombre: 'San Juan del Río', lat: 20.389, lng: -99.996, referencia: 'Centro (ubicación de prueba)', clave: '22016' },
+  { id: 'qro', nombre: 'Centro de Querétaro', lat: 20.5888, lng: -100.3899, referencia: 'Jardín Zenea (ubicación de prueba)', clave: '22014', coloniaId: '76000-centro' },
+  { id: 'corr', nombre: 'El Pueblito, Corregidora', lat: 20.539, lng: -100.442, referencia: 'Plaza principal (ubicación de prueba)', clave: '22006', coloniaId: '76900-el-pueblito-centro' },
+  { id: 'marq', nombre: 'La Cañada, El Marqués', lat: 20.61, lng: -100.32, referencia: 'Jardín principal (ubicación de prueba)', clave: '22011', coloniaId: '76240-la-canada-centro' },
+  { id: 'sjr', nombre: 'San Juan del Río', lat: 20.389, lng: -99.996, referencia: 'Centro (ubicación de prueba)', clave: '22016', coloniaId: '76800-centro' },
 ];
-export const LUGARES_DEMO: { id: string; nombre: string; lat: number; lng: number; referencia: string; clave: string; destacado: boolean }[] = [
+/**
+ * `coloniaId`: colonia del catálogo SEPOMEX donde está el lugar de prueba (solo los 4 lugares fijos). Los puntos de
+ * los demás municipios no la tienen: sus folios entran «Sin colonia», como uno de la app sin mención de colonia.
+ */
+export const LUGARES_DEMO: { id: string; nombre: string; lat: number; lng: number; referencia: string; clave: string; destacado: boolean; coloniaId?: string }[] = [
   ...LUGARES_FIJOS.map((l) => ({ ...l, destacado: true })),
   ...MUNICIPIOS_QRO.filter((m) => !LUGARES_FIJOS.some((l) => l.clave === m.clave)).flatMap((m) => {
     const p = puntoInterior(m.geocerca);
@@ -135,6 +140,9 @@ export interface ReporteDemo {
   tipoTelefono?: TipoTelefono | null;
   /** Operador que capturó la llamada al 911. */
   altaPor?: string | null;
+  /** Colonia (catálogo SEPOMEX o alta manual por validar); null o ausente = sin colonia. */
+  colonia?: ColoniaFolio | null;
+  coloniaCorrecciones?: CorreccionColonia[];
 }
 
 export interface CorreccionCnie {
@@ -372,6 +380,19 @@ export interface NuevoReporte {
   prioridad?: Prioridad;
   /** Solo alta por 911: código CNIE que eligió el operador (cualquier opción, salvo Mal Uso). */
   codigoCnieOperador?: string;
+  /** Solo alta por 911: colonia del catálogo o alta manual (CP + ubicación). */
+  colonia?: ColoniaEntrada;
+}
+
+/** Colonia de un reporte nuevo: la elegida por el operador, la del lugar de prueba o una mención explícita en el texto. */
+function coloniaNueva(d: NuevoReporte, lugar: { referencia?: string; coloniaId?: string }, clave: string | null, iso: string): ColoniaFolio | null {
+  if (d.colonia) {
+    const r = resolverColonia(d.colonia, clave, { actor: `operador:${d.altaPor ?? OPERADOR_DEMO.usuario}`, en: iso });
+    if ('error' in r) throw new ErrorDemo(400, r.error, r.mensaje);
+    return r.colonia;
+  }
+  const c = (lugar.coloniaId && coloniaPorId(lugar.coloniaId)) || coloniaDeTexto(lugar.referencia, clave) || coloniaDeTexto(d.descripcion, clave);
+  return c && c.municipioClave === clave ? coloniaDerivada(c, iso) : null;
 }
 
 /** Los 10 dígitos de un teléfono mexicano (acepta +52, espacios y guiones). null si no son 10. */
@@ -429,11 +450,14 @@ export function crearReporte(d: NuevoReporte): ReporteDemo {
     const canalizacion = d.prioridad ? { ...canalizada, prioridad: d.prioridad } : canalizada;
     const por911 = d.origen === '911';
     const notaAlta = por911 ? `Alta por llamada al 911 (${d.tipoTelefono === 'fijo' ? 'teléfono fijo' : 'celular'}), capturada por ${d.altaPor ?? OPERADOR_DEMO.nombre}` : null;
+    const colonia = coloniaNueva(d, lugar, clave, iso);
     const r: ReporteDemo = {
       folio,
       folioCad: null,
       cadId: ruta.cadId,
       municipioClave: clave,
+      colonia,
+      coloniaCorrecciones: [],
       incidenteId: incidente.id,
       cnie,
       correccionesCnie: [],
@@ -662,6 +686,8 @@ export function vistaOperador(r: ReporteDemo) {
     folioCad: r.folioCad,
     cadId: r.cadId,
     municipioClave: claveCompleta(r.municipioClave),
+    colonia: r.colonia ?? null,
+    coloniaCorrecciones: r.coloniaCorrecciones ?? [],
     incidenteId: r.incidenteId,
     incidente: incidente?.nombreCorto ?? r.incidenteId,
     categoria: incidente?.categoria ?? null,
@@ -712,6 +738,7 @@ export interface Alta911 {
   respuestas: EntradaCuestionario[];
   prioridad?: Prioridad;
   codigoCnie?: string;
+  colonia?: ColoniaEntrada;
 }
 
 export const operador = {
@@ -774,9 +801,26 @@ export const operador = {
     const r = crearReporte({
       incidenteId: d.incidenteId, lugarId: d.lugarId, ubicacion: d.ubicacion, descripcion: d.descripcion, respuestas: d.respuestas,
       nombre, telefono: tel, identidad: 'completa', cadSimulado: false, origen: '911', tipoTelefono: d.tipoTelefono, altaPor: OPERADOR_DEMO.nombre,
-      ...(d.prioridad && { prioridad: d.prioridad }), ...(d.codigoCnie && { codigoCnieOperador: d.codigoCnie }),
+      ...(d.prioridad && { prioridad: d.prioridad }), ...(d.codigoCnie && { codigoCnieOperador: d.codigoCnie }), ...(d.colonia && { colonia: d.colonia }),
     });
     return { reporte: vistaOperador(r), reportanteNuevo: !previo };
+  },
+  /** Asigna o corrige la colonia del folio (catálogo SEPOMEX o manual por validar); queda en sus correcciones. */
+  colonia(token: string | null, folio: string, entrada: ColoniaEntrada, motivo?: string) {
+    exigirToken(token);
+    return cambiar((e) => {
+      const r = delFolio(e, folio);
+      if (!operaEnConsola(e, r.cadId)) throw new ErrorDemo(409, 'cad_con_sistema_propio');
+      const en = ahoraIso();
+      const x = resolverColonia(entrada, claveCompleta(r.municipioClave), { actor: `operador:${OPERADOR_DEMO.usuario}`, en });
+      if ('error' in x) throw new ErrorDemo(400, x.error, x.mensaje);
+      const antes = r.colonia ?? null;
+      if (antes && antes.id === x.colonia.id && antes.cp === x.colonia.cp && antes.nombre === x.colonia.nombre) throw new ErrorDemo(409, 'misma_colonia', 'El folio ya tiene esa colonia.');
+      r.colonia = x.colonia;
+      r.coloniaCorrecciones = [...(r.coloniaCorrecciones ?? []), { en, actor: `operador:${OPERADOR_DEMO.usuario}`, de: antes ? textoColonia(antes) : null, a: textoColonia(x.colonia), motivo: motivo?.trim() || null }];
+      r.actualizadoEn = en;
+      return { resultado: vistaOperador(r), folios: [folio] };
+    });
   },
   umbrales(token: string | null) {
     exigirToken(token);
@@ -1105,7 +1149,7 @@ export const reportes = {
     return {
       filas: filas.map((x) => {
         const r = porFolio.get(x.folio)!;
-        return filaFolio({ ...x, cnie: r.cnie, unidad: r.unidad, origen: r.origen ?? 'app', ruta: r.ruta, tipoTelefono: r.tipoTelefono ?? null, reportante: reportanteVisible(r, r.ciudadano) }, ahoraMs);
+        return filaFolio({ ...x, cnie: r.cnie, colonia: r.colonia ?? null, unidad: r.unidad, origen: r.origen ?? 'app', ruta: r.ruta, tipoTelefono: r.tipoTelefono ?? null, reportante: reportanteVisible(r, r.ciudadano) }, ahoraMs);
       }),
     };
   },
